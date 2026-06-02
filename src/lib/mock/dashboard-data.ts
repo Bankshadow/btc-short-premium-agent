@@ -84,7 +84,7 @@ export function getMockDashboardFallback(): AnalyzeApiResponse {
     {
       source: "Fallback Data",
       message:
-        "Live analysis failed — showing placeholder data. Click Analyze Now to retry.",
+        "Live analysis unavailable — placeholder data shown. Click Analyze Now to retry.",
     },
   ]);
 }

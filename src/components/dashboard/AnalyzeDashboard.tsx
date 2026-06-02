@@ -9,6 +9,7 @@ import {
 import { formValuesToOverrides } from "@/lib/decision/derivatives-overrides";
 import { macroSelectionToStatus } from "@/lib/decision/macro-event";
 import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
+import { getMockDashboardFallback } from "@/lib/mock/dashboard-data";
 import { useCallback, useState } from "react";
 import AnalysisAlerts from "./AnalysisAlerts";
 import DashboardEmptyState from "./DashboardEmptyState";
@@ -35,12 +36,17 @@ function isAnalyzeApiResponse(
   );
 }
 
+function isLiveAnalysis(payload: AnalyzeApiResponse): boolean {
+  return payload.marketSnapshot.spotPrice > 0;
+}
+
 export default function AnalyzeDashboard({
   macroView = "bearish",
 }: AnalyzeDashboardProps) {
   const [data, setData] = useState<AnalyzeApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
   const { values, setValues } = useDerivativesOverrideForm();
   const { value: macroEventSelection, setValue: setMacroEventSelection } =
     useMacroEventSelection();
@@ -48,21 +54,21 @@ export default function AnalyzeDashboard({
   const handleAnalyze = useCallback(async () => {
     setLoading(true);
     setFetchError(null);
+    setUsingFallback(false);
 
     const derivativesOverrides = formValuesToOverrides(values);
     const macroEvent = macroSelectionToStatus(macroEventSelection);
+    const analyzeRequest = {
+      macroView,
+      derivativesOverrides,
+      macroEvent,
+    };
 
-    try {
-      const engineInput = await fetchLiveDecisionInput({
-        macroView,
-        derivativesOverrides,
-        macroEvent,
-      });
-
+    const postAnalyze = async (body: unknown) => {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(engineInput),
+        body: JSON.stringify(body),
       });
 
       const payload = (await response.json()) as
@@ -73,9 +79,7 @@ export default function AnalyzeDashboard({
         const message =
           "error" in payload ? payload.error : `HTTP ${response.status}`;
         throw new Error(
-          response.status === 503 || isBybitFetchError(message)
-            ? BYBIT_API_FAILED_MESSAGE
-            : message,
+          isBybitFetchError(message) ? BYBIT_API_FAILED_MESSAGE : message,
         );
       }
 
@@ -87,31 +91,67 @@ export default function AnalyzeDashboard({
         throw new Error("Invalid analysis response from server.");
       }
 
-      setData(payload);
+      return payload;
+    };
 
-      if (
-        isBybitCriticalFailure(payload.marketSnapshot, payload.dataSourceIssues)
-      ) {
-        setFetchError(BYBIT_API_FAILED_MESSAGE);
+    try {
+      // 1) Server-side fetch via /api/analyze (works on localhost)
+      let result: AnalyzeApiResponse | null = null;
+
+      try {
+        const serverResult = await postAnalyze(analyzeRequest);
+        if (isLiveAnalysis(serverResult)) {
+          result = serverResult;
+        }
+      } catch {
+        // Server-side Bybit fetch may fail on cloud hosts (HTTP 403)
       }
+
+      // 2) Browser-side Bybit fetch, then run engine on server (works on Vercel)
+      if (!result) {
+        const engineInput = await fetchLiveDecisionInput(analyzeRequest);
+        const clientResult = await postAnalyze(engineInput);
+        if (isLiveAnalysis(clientResult)) {
+          result = clientResult;
+        } else if (isBybitCriticalFailure(clientResult.marketSnapshot, clientResult.dataSourceIssues)) {
+          throw new Error(BYBIT_API_FAILED_MESSAGE);
+        } else {
+          result = clientResult;
+        }
+      }
+
+      if (result && isLiveAnalysis(result)) {
+        setData(result);
+        setFetchError(null);
+        setUsingFallback(false);
+        return;
+      }
+
+      throw new Error(BYBIT_API_FAILED_MESSAGE);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to run analysis";
-      setFetchError(
-        isBybitFetchError(message) ? BYBIT_API_FAILED_MESSAGE : message,
-      );
+      const bybitFailed = isBybitFetchError(message);
+
+      setFetchError(bybitFailed ? BYBIT_API_FAILED_MESSAGE : message);
+      setData(getMockDashboardFallback());
+      setUsingFallback(true);
     } finally {
       setLoading(false);
     }
   }, [macroView, values, macroEventSelection]);
 
-  const sourceIssues = (data?.dataSourceIssues ?? data?.sourceErrors ?? []).filter(
-    (issue) =>
-      !(
-        fetchError === BYBIT_API_FAILED_MESSAGE &&
-        issue.message === BYBIT_API_FAILED_MESSAGE
-      ),
-  );
+  const sourceIssues = (
+    data?.dataSourceIssues ?? data?.sourceErrors ?? []
+  ).filter((issue) => {
+    if (fetchError === BYBIT_API_FAILED_MESSAGE && issue.message === BYBIT_API_FAILED_MESSAGE) {
+      return false;
+    }
+    if (usingFallback && /fallback data|demo mode|mock data only/i.test(`${issue.source} ${issue.message}`)) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <div className="relative flex flex-col gap-6">
@@ -147,6 +187,8 @@ export default function AnalyzeDashboard({
 
       {loading && !data && <DashboardLoadingSkeleton />}
 
+      {!loading && !data && !fetchError && <DashboardEmptyState />}
+
       {data && (
         <div
           className={`flex flex-col gap-6 transition-opacity ${loading ? "pointer-events-none opacity-50" : ""}`}
@@ -154,10 +196,6 @@ export default function AnalyzeDashboard({
         >
           <DashboardView data={data} />
         </div>
-      )}
-
-      {!loading && !data && fetchError && (
-        <DashboardEmptyState />
       )}
     </div>
   );
