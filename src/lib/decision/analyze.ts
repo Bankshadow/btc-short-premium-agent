@@ -16,6 +16,7 @@ import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
 import { hasAnyOverride } from "./derivatives-overrides";
 import {
+  BYBIT_API_FAILED_MESSAGE,
   isBybitCriticalFailure,
   MANUAL_DERIVATIVES_MESSAGE,
 } from "./bybit-health";
@@ -244,10 +245,27 @@ export async function runAnalysisEngine(
 ): Promise<AnalyzeApiResponse> {
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
-  return buildAnalyzeApiResponse(output, sourceErrors);
+  const response = buildAnalyzeApiResponse(output, sourceErrors);
+
+  if (isBybitCriticalFailure(response.marketSnapshot, response.dataSourceIssues)) {
+    const issues = [
+      { source: "Bybit API", message: BYBIT_API_FAILED_MESSAGE },
+      ...response.dataSourceIssues,
+    ];
+    return {
+      ...response,
+      sourceErrors: issues,
+      dataSourceIssues: issues,
+    };
+  }
+
+  return response;
 }
 
-export { isBybitCriticalFailure, BYBIT_API_FAILED_MESSAGE } from "./bybit-health";
+export {
+  isBybitCriticalFailure,
+  BYBIT_API_FAILED_MESSAGE,
+} from "./bybit-health";
 
 /**
  * @deprecated Use runAnalysisEngine for full 6-step output.

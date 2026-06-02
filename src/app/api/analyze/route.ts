@@ -1,16 +1,17 @@
 import {
   runAnalysisEngine,
   runDecisionEngine,
-  BYBIT_API_FAILED_MESSAGE,
-  isBybitCriticalFailure,
 } from "@/lib/decision/analyze";
 import { buildAnalyzeApiResponse } from "@/lib/decision/analyze-response";
+import { BYBIT_API_FAILED_MESSAGE } from "@/lib/decision/bybit-health";
 import type {
   AnalysisInput,
   AnalyzeApiResponse,
   DecisionEngineInput,
 } from "@/lib/types/market";
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
@@ -39,13 +40,6 @@ export async function POST(request: Request) {
         )
       : await runAnalysisEngine(body);
 
-    if (isBybitCriticalFailure(result.marketSnapshot, result.dataSourceIssues)) {
-      return NextResponse.json(
-        { error: BYBIT_API_FAILED_MESSAGE },
-        { status: 503 },
-      );
-    }
-
     return NextResponse.json(result);
   } catch (error) {
     const message =
@@ -55,7 +49,7 @@ export async function POST(request: Request) {
       message.includes("BTCUSDT ticker");
     return NextResponse.json(
       { error: isBybit ? BYBIT_API_FAILED_MESSAGE : message },
-      { status: isBybit ? 503 : 500 },
+      { status: 500 },
     );
   }
 }

@@ -31,9 +31,9 @@ export type {
 export async function fetchMarketSnapshot(
   symbol = "BTCUSDT",
 ): Promise<MarketSnapshot> {
-  const ticker = await getBtcTicker().catch(() => null);
+  const ticker = await getBtcTicker();
 
-  const spotPrice = ticker?.price ?? 0;
+  const spotPrice = ticker.price;
   const hv30 = 21.5;
   const iv = 32.4;
 
@@ -50,9 +50,9 @@ export async function fetchMarketSnapshot(
     openInterestBtc: 312_000,
     oiChange24hPct: null,
     oiChange1hPct: null,
-    volume24hBtc: ticker?.volume24h ?? 0,
-    volumeChange24hPct: ticker ? ticker.price24hPcnt * 100 : null,
-    priceChange24hPct: ticker ? ticker.price24hPcnt * 100 : null,
+    volume24hBtc: ticker.volume24h,
+    volumeChange24hPct: ticker.price24hPcnt * 100,
+    priceChange24hPct: ticker.price24hPcnt * 100,
   };
 }
 
@@ -68,10 +68,10 @@ export async function fetchOptionCandidates(
   try {
     const [tickers, btcTicker] = await Promise.all([
       getOptionTickers(),
-      getBtcTicker().catch(() => null),
+      getBtcTicker(),
     ]);
 
-    const spotPrice = btcTicker?.price ?? 0;
+    const spotPrice = btcTicker.price;
     const chain = parseOptionChain(tickers);
 
     return chain.candidates.map((item) => ({
@@ -90,7 +90,7 @@ export async function fetchOptionCandidates(
       otmPct: otmPct(item.strike, spotPrice, item.side),
       sdDistance: sdDistance(item.strike, spotPrice, item.iv),
     }));
-  } catch {
-    return [];
+  } catch (error) {
+    throw error instanceof Error ? error : new Error("Bybit options fetch failed");
   }
 }

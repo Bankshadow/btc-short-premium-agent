@@ -3,6 +3,7 @@
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import {
   BYBIT_API_FAILED_MESSAGE,
+  isBybitCriticalFailure,
   isBybitFetchError,
 } from "@/lib/decision/bybit-health";
 import { formValuesToOverrides } from "@/lib/decision/derivatives-overrides";
@@ -84,6 +85,12 @@ export default function AnalyzeDashboard({
       }
 
       setData(payload);
+
+      if (
+        isBybitCriticalFailure(payload.marketSnapshot, payload.dataSourceIssues)
+      ) {
+        setFetchError(BYBIT_API_FAILED_MESSAGE);
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to run analysis";
@@ -95,8 +102,13 @@ export default function AnalyzeDashboard({
     }
   }, [macroView, values, macroEventSelection]);
 
-  const sourceIssues =
-    data?.dataSourceIssues ?? data?.sourceErrors ?? [];
+  const sourceIssues = (data?.dataSourceIssues ?? data?.sourceErrors ?? []).filter(
+    (issue) =>
+      !(
+        fetchError === BYBIT_API_FAILED_MESSAGE &&
+        issue.message === BYBIT_API_FAILED_MESSAGE
+      ),
+  );
 
   return (
     <div className="relative flex flex-col gap-6">
@@ -132,8 +144,6 @@ export default function AnalyzeDashboard({
 
       {loading && !data && <DashboardLoadingSkeleton />}
 
-      {!loading && !data && !fetchError && <DashboardEmptyState />}
-
       {data && (
         <div
           className={`flex flex-col gap-6 transition-opacity ${loading ? "pointer-events-none opacity-50" : ""}`}
@@ -141,6 +151,10 @@ export default function AnalyzeDashboard({
         >
           <DashboardView data={data} />
         </div>
+      )}
+
+      {!loading && !data && fetchError && (
+        <DashboardEmptyState />
       )}
     </div>
   );

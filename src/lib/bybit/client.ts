@@ -53,10 +53,16 @@ export async function bybitGet<T>(
 
   try {
     response = await fetch(url.toString(), {
-      next: { revalidate: 30 },
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(20_000),
     });
   } catch (error) {
-    throw new BybitApiError(`Bybit request failed: ${normalizedPath}`, {
+    const detail =
+      error instanceof Error ? error.message : "Network request failed";
+    throw new BybitApiError(`Bybit request failed: ${normalizedPath} (${detail})`, {
       path: normalizedPath,
       cause: error,
     });
