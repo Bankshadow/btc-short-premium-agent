@@ -1,4 +1,7 @@
-const BYBIT_BASE_URL = "https://api.bybit.com";
+const DEFAULT_BYBIT_BASE_URLS = [
+  "https://api.bybit.com",
+  "https://api.bytick.com",
+];
 
 export interface BybitResponse<T> {
   retCode: number;
@@ -12,6 +15,7 @@ export class BybitApiError extends Error {
   readonly retCode?: number;
   readonly retMsg?: string;
   readonly path: string;
+  readonly baseUrl?: string;
 
   constructor(
     message: string,
@@ -20,6 +24,7 @@ export class BybitApiError extends Error {
       retCode?: number;
       retMsg?: string;
       path: string;
+      baseUrl?: string;
       cause?: unknown;
     },
   ) {
@@ -29,19 +34,42 @@ export class BybitApiError extends Error {
     this.retCode = options.retCode;
     this.retMsg = options.retMsg;
     this.path = options.path;
+    this.baseUrl = options.baseUrl;
   }
 }
 
-/**
- * Read-only Bybit public API client.
- * Analysis-only — no authenticated or trading endpoints.
- */
-export async function bybitGet<T>(
+function resolveBybitBaseUrls(): string[] {
+  const fromEnv = process.env.BYBIT_API_BASE_URL?.trim();
+  const urls = fromEnv
+    ? [fromEnv, ...DEFAULT_BYBIT_BASE_URLS]
+    : DEFAULT_BYBIT_BASE_URLS;
+
+  return [...new Set(urls)];
+}
+
+function isNetworkRetryError(error: unknown): boolean {
+  if (!(error instanceof BybitApiError)) return false;
+
+  const cause = error.cause;
+  if (!(cause instanceof Error)) return true;
+
+  const code = (cause as NodeJS.ErrnoException).code;
+  return (
+    code === "ENOTFOUND" ||
+    code === "ECONNREFUSED" ||
+    code === "ETIMEDOUT" ||
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    cause.message.toLowerCase().includes("fetch failed")
+  );
+}
+
+async function bybitGetFromBase<T>(
+  baseUrl: string,
   path: string,
   params?: Record<string, string | number>,
 ): Promise<T> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(normalizedPath, BYBIT_BASE_URL);
+  const url = new URL(normalizedPath, baseUrl);
 
   if (params) {
     for (const [key, value] of Object.entries(params)) {
@@ -62,10 +90,14 @@ export async function bybitGet<T>(
   } catch (error) {
     const detail =
       error instanceof Error ? error.message : "Network request failed";
-    throw new BybitApiError(`Bybit request failed: ${normalizedPath} (${detail})`, {
-      path: normalizedPath,
-      cause: error,
-    });
+    throw new BybitApiError(
+      `Bybit request failed: ${normalizedPath} (${detail})`,
+      {
+        path: normalizedPath,
+        baseUrl,
+        cause: error,
+      },
+    );
   }
 
   if (!response.ok) {
@@ -74,6 +106,7 @@ export async function bybitGet<T>(
       {
         status: response.status,
         path: normalizedPath,
+        baseUrl,
       },
     );
   }
@@ -86,6 +119,7 @@ export async function bybitGet<T>(
     throw new BybitApiError(`Bybit invalid JSON: ${normalizedPath}`, {
       status: response.status,
       path: normalizedPath,
+      baseUrl,
       cause: error,
     });
   }
@@ -98,9 +132,45 @@ export async function bybitGet<T>(
         retCode: body.retCode,
         retMsg: body.retMsg,
         path: normalizedPath,
+        baseUrl,
       },
     );
   }
 
   return body.result;
+}
+
+/**
+ * Read-only Bybit public API client with automatic domain fallback.
+ * Analysis-only — no authenticated or trading endpoints.
+ */
+export async function bybitGet<T>(
+  path: string,
+  params?: Record<string, string | number>,
+): Promise<T> {
+  const baseUrls = resolveBybitBaseUrls();
+  let lastError: BybitApiError | undefined;
+
+  for (let index = 0; index < baseUrls.length; index += 1) {
+    const baseUrl = baseUrls[index];
+    const isLast = index === baseUrls.length - 1;
+
+    try {
+      return await bybitGetFromBase<T>(baseUrl, path, params);
+    } catch (error) {
+      if (!(error instanceof BybitApiError)) {
+        throw error;
+      }
+
+      lastError = error;
+
+      if (!isLast && isNetworkRetryError(error)) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError ?? new BybitApiError("Bybit request failed", { path });
 }
