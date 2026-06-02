@@ -3,6 +3,7 @@ import type { CombinationReadResult, VerdictOutput } from "@/lib/types/market";
 interface VerdictCardProps {
   verdict: VerdictOutput;
   combinationRead: CombinationReadResult;
+  showCombinationRead?: boolean;
 }
 
 const verdictStyles: Record<VerdictOutput["recommendation"], string> = {
@@ -21,6 +22,7 @@ const verdictTextStyles: Record<VerdictOutput["recommendation"], string> = {
 export default function VerdictCard({
   verdict,
   combinationRead,
+  showCombinationRead = true,
 }: VerdictCardProps) {
   const label = verdict.recommendation.toUpperCase();
 
@@ -43,19 +45,22 @@ export default function VerdictCard({
         {verdict.summary}
       </p>
 
-      <div className="mt-5 rounded-lg border border-zinc-200/70 bg-white/60 p-4 dark:border-zinc-700 dark:bg-black/20">
-        <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-          {combinationRead.label}
-        </p>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          {combinationRead.actionHint}
-        </p>
-        {combinationRead.dataStatus === "partial_data" && (
-          <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
-            PARTIAL_DATA — missing: {combinationRead.missingFields.join(", ")}
+      {showCombinationRead && (
+        <div className="mt-5 rounded-lg border border-zinc-200/70 bg-white/60 p-4 dark:border-zinc-700 dark:bg-black/20">
+          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+            {combinationRead.label}
           </p>
-        )}
-      </div>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            {combinationRead.actionHint}
+          </p>
+          {combinationRead.dataStatus === "partial_data" && (
+            <p className="mt-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+              PARTIAL_DATA — missing:{" "}
+              {combinationRead.missingFields.join(", ")}
+            </p>
+          )}
+        </div>
+      )}
 
       {verdict.risks.length > 0 && (
         <ul className="mt-4 space-y-1 text-sm text-zinc-600 dark:text-zinc-400">
