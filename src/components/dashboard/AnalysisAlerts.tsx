@@ -1,11 +1,12 @@
 import type { DataSourceError } from "@/lib/types/market";
+import { BYBIT_API_FAILED_MESSAGE } from "@/lib/decision/bybit-health";
 
 interface AnalysisAlertsProps {
   fetchError: string | null;
   sourceErrors: DataSourceError[];
 }
 
-const DEMO_MODE_PATTERN = /demo mode|mock data only|homepage uses mock/i;
+const DEMO_MODE_PATTERN = /demo mode|mock data only|homepage uses mock|fallback data/i;
 
 function filterSourceErrors(errors: DataSourceError[]): DataSourceError[] {
   return errors.filter(
@@ -29,7 +30,9 @@ export default function AnalysisAlerts({
           className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950/50"
         >
           <p className="text-sm font-semibold text-red-800 dark:text-red-200">
-            Analysis failed
+            {fetchError === BYBIT_API_FAILED_MESSAGE
+              ? "Bybit API failed"
+              : "Analysis failed"}
           </p>
           <p className="mt-1 text-sm text-red-700 dark:text-red-300">
             {fetchError}

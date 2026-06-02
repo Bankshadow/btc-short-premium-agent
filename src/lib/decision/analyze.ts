@@ -8,13 +8,17 @@ import type {
   DataSourceError,
   DecisionEngineInput,
   DecisionEngineOutput,
-  DerivativesOverrides,
   LiquidationData,
   MacroEventStatus,
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
 import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
+import { hasAnyOverride } from "./derivatives-overrides";
+import {
+  isBybitCriticalFailure,
+  MANUAL_DERIVATIVES_MESSAGE,
+} from "./bybit-health";
 
 export { runDecisionEngine } from "./engine";
 
@@ -155,39 +159,43 @@ async function buildEngineInput(
 
   const symbol = market.symbol;
 
-  const hasManualLiq = hasManualLiquidation(overrides.derivativesOverrides);
+  const hasManualDerivatives = hasAnyOverride(
+    overrides.derivativesOverrides ?? {},
+  );
 
-  if (hasManualLiq) {
+  if (hasManualDerivatives) {
     sourceErrors.push({
-      source: "Liquidation",
-      message: "Liquidation data is manually provided.",
+      source: "Manual Overrides",
+      message: MANUAL_DERIVATIVES_MESSAGE,
     });
-  } else if (liquidation.liquidation24h === null) {
-    sourceErrors.push({
-      source: "Liquidation",
-      message:
-        "Liquidation data unavailable — enter liquidation24h in Manual Overrides.",
-    });
-  }
+  } else {
+    if (liquidation.liquidation24h === null) {
+      sourceErrors.push({
+        source: "Liquidation",
+        message:
+          "Liquidation data unavailable — enter liquidation24h in Manual Overrides.",
+      });
+    }
 
-  const missingOi = [
-    market.oiChange24hPct === null && "oi24hChange",
-    market.oiChange1hPct === null && "oi1hChange",
-  ].filter(Boolean) as string[];
+    const missingOi = [
+      market.oiChange24hPct === null && "oi24hChange",
+      market.oiChange1hPct === null && "oi1hChange",
+    ].filter(Boolean) as string[];
 
-  if (missingOi.length > 0) {
-    sourceErrors.push({
-      source: "Open Interest",
-      message: `Combination Read is partial because OI data is missing (${missingOi.join(", ")}).`,
-    });
-  }
+    if (missingOi.length > 0) {
+      sourceErrors.push({
+        source: "Open Interest",
+        message: `Combination Read is partial because OI data is missing (${missingOi.join(", ")}).`,
+      });
+    }
 
-  if (market.volumeChange24hPct === null) {
-    sourceErrors.push({
-      source: "Volume",
-      message:
-        "Combination Read is partial because volume24hChange is missing.",
-    });
+    if (market.volumeChange24hPct === null) {
+      sourceErrors.push({
+        source: "Volume",
+        message:
+          "Combination Read is partial because volume24hChange is missing.",
+      });
+    }
   }
 
   return {
@@ -205,10 +213,6 @@ async function buildEngineInput(
     },
     sourceErrors,
   };
-}
-
-function hasManualLiquidation(overrides?: DerivativesOverrides): boolean {
-  return overrides?.liquidation24h != null;
 }
 
 /** Map 6-step output to legacy AnalysisResult for dashboard components. */
@@ -242,6 +246,8 @@ export async function runAnalysisEngine(
   const output = runDecisionEngine(input);
   return buildAnalyzeApiResponse(output, sourceErrors);
 }
+
+export { isBybitCriticalFailure, BYBIT_API_FAILED_MESSAGE } from "./bybit-health";
 
 /**
  * @deprecated Use runAnalysisEngine for full 6-step output.

@@ -1,6 +1,10 @@
 "use client";
 
 import type { AnalyzeApiResponse } from "@/lib/types/market";
+import {
+  BYBIT_API_FAILED_MESSAGE,
+  isBybitFetchError,
+} from "@/lib/decision/bybit-health";
 import { formValuesToOverrides } from "@/lib/decision/derivatives-overrides";
 import { macroSelectionToStatus } from "@/lib/decision/macro-event";
 import { useCallback, useState } from "react";
@@ -64,7 +68,11 @@ export default function AnalyzeDashboard({
       if (!response.ok) {
         const message =
           "error" in payload ? payload.error : `HTTP ${response.status}`;
-        throw new Error(message);
+        throw new Error(
+          response.status === 503 || isBybitFetchError(message)
+            ? BYBIT_API_FAILED_MESSAGE
+            : message,
+        );
       }
 
       if ("error" in payload && !isAnalyzeApiResponse(payload)) {
@@ -77,8 +85,10 @@ export default function AnalyzeDashboard({
 
       setData(payload);
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to run analysis";
       setFetchError(
-        error instanceof Error ? error.message : "Failed to run analysis",
+        isBybitFetchError(message) ? BYBIT_API_FAILED_MESSAGE : message,
       );
     } finally {
       setLoading(false);
