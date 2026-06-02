@@ -190,6 +190,24 @@ export interface DataSourceError {
 
 export interface AnalyzeApiResponse extends DecisionEngineOutput {
   sourceErrors: DataSourceError[];
+  /** Friendly alias for step1_marketSnapshot */
+  marketSnapshot: MarketSnapshot;
+  /** Friendly alias for technical (daily / 4h / 1h) */
+  technicalSnapshot: DecisionEngineOutput["technical"];
+  /** Friendly alias for step2_eightCheckFramework */
+  checks: CheckResult[];
+  /** Friendly alias for step3_noTradeRules */
+  noTradeRules: NoTradeRuleResult[];
+  /** Friendly alias for step4_combinationRead */
+  combinationRead: CombinationReadResult;
+  /** Friendly alias for step5_verdict */
+  verdict: VerdictOutput;
+  /** Friendly alias for step6_actionPlan */
+  actionPlan: ActionPlan;
+  /** ISO timestamp of when analysis completed */
+  dataTimestamp: string;
+  /** Friendly alias for sourceErrors */
+  dataSourceIssues: DataSourceError[];
 }
 
 /** @deprecated Use DecisionEngineInput */

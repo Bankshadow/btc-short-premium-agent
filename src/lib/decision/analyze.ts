@@ -13,6 +13,7 @@ import type {
   MacroEventStatus,
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
+import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
 
 export { runDecisionEngine } from "./engine";
@@ -154,27 +155,38 @@ async function buildEngineInput(
 
   const symbol = market.symbol;
 
-  const missingForCombination = [
-    liquidation.liquidation24h === null && "liquidation24h",
-    market.oiChange24hPct === null && "oi24hChange",
-    market.oiChange1hPct === null && "oi1hChange",
-    market.volumeChange24hPct === null && "volume24hChange",
-  ].filter(Boolean) as string[];
+  const hasManualLiq = hasManualLiquidation(overrides.derivativesOverrides);
 
-  if (
-    liquidation.source === "mock" &&
-    !hasManualLiquidation(overrides.derivativesOverrides)
-  ) {
+  if (hasManualLiq) {
     sourceErrors.push({
-      source: "CoinGlass Liquidation",
-      message: "Using mock liquidation data (live feed not connected).",
+      source: "Liquidation",
+      message: "Liquidation data is manually provided.",
+    });
+  } else if (liquidation.liquidation24h === null) {
+    sourceErrors.push({
+      source: "Liquidation",
+      message:
+        "Liquidation data unavailable — enter liquidation24h in Manual Overrides.",
     });
   }
 
-  if (missingForCombination.length > 0) {
+  const missingOi = [
+    market.oiChange24hPct === null && "oi24hChange",
+    market.oiChange1hPct === null && "oi1hChange",
+  ].filter(Boolean) as string[];
+
+  if (missingOi.length > 0) {
     sourceErrors.push({
-      source: "Derivatives Data",
-      message: `Missing inputs: ${missingForCombination.join(", ")}. Combination Read will be PARTIAL_DATA.`,
+      source: "Open Interest",
+      message: `Combination Read is partial because OI data is missing (${missingOi.join(", ")}).`,
+    });
+  }
+
+  if (market.volumeChange24hPct === null) {
+    sourceErrors.push({
+      source: "Volume",
+      message:
+        "Combination Read is partial because volume24hChange is missing.",
     });
   }
 
@@ -228,7 +240,7 @@ export async function runAnalysisEngine(
 ): Promise<AnalyzeApiResponse> {
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
-  return { ...output, sourceErrors };
+  return buildAnalyzeApiResponse(output, sourceErrors);
 }
 
 /**

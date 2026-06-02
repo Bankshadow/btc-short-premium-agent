@@ -5,6 +5,8 @@ import { formValuesToOverrides } from "@/lib/decision/derivatives-overrides";
 import { macroSelectionToStatus } from "@/lib/decision/macro-event";
 import { useCallback, useState } from "react";
 import AnalysisAlerts from "./AnalysisAlerts";
+import DashboardEmptyState from "./DashboardEmptyState";
+import DashboardLoadingSkeleton from "./DashboardLoadingSkeleton";
 import DashboardView from "./DashboardView";
 import MacroEventToggle, {
   useMacroEventSelection,
@@ -14,15 +16,23 @@ import ManualOverridesPanel, {
 } from "./ManualOverridesPanel";
 
 interface AnalyzeDashboardProps {
-  initialData: AnalyzeApiResponse;
   macroView?: "bearish" | "bullish" | "neutral";
 }
 
+function isAnalyzeApiResponse(
+  payload: unknown,
+): payload is AnalyzeApiResponse {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    ("step1_marketSnapshot" in payload || "marketSnapshot" in payload)
+  );
+}
+
 export default function AnalyzeDashboard({
-  initialData,
   macroView = "bearish",
 }: AnalyzeDashboardProps) {
-  const [data, setData] = useState<AnalyzeApiResponse>(initialData);
+  const [data, setData] = useState<AnalyzeApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const { values, setValues } = useDerivativesOverrideForm();
@@ -57,11 +67,15 @@ export default function AnalyzeDashboard({
         throw new Error(message);
       }
 
-      if ("error" in payload && !("step1_marketSnapshot" in payload)) {
+      if ("error" in payload && !isAnalyzeApiResponse(payload)) {
         throw new Error(payload.error);
       }
 
-      setData(payload as AnalyzeApiResponse);
+      if (!isAnalyzeApiResponse(payload)) {
+        throw new Error("Invalid analysis response from server.");
+      }
+
+      setData(payload);
     } catch (error) {
       setFetchError(
         error instanceof Error ? error.message : "Failed to run analysis",
@@ -71,11 +85,14 @@ export default function AnalyzeDashboard({
     }
   }, [macroView, values, macroEventSelection]);
 
+  const sourceIssues =
+    data?.dataSourceIssues ?? data?.sourceErrors ?? [];
+
   return (
     <div className="relative flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Run a fresh analysis against live Bybit data.
+          Run a fresh analysis against live Bybit public data.
         </p>
         <button
           type="button"
@@ -101,17 +118,20 @@ export default function AnalyzeDashboard({
         <ManualOverridesPanel values={values} onChange={setValues} />
       </div>
 
-      <AnalysisAlerts
-        fetchError={fetchError}
-        sourceErrors={data.sourceErrors ?? []}
-      />
+      <AnalysisAlerts fetchError={fetchError} sourceErrors={sourceIssues} />
 
-      <div
-        className={`flex flex-col gap-6 transition-opacity ${loading ? "pointer-events-none opacity-50" : ""}`}
-        aria-busy={loading}
-      >
-        <DashboardView data={data} />
-      </div>
+      {loading && !data && <DashboardLoadingSkeleton />}
+
+      {!loading && !data && !fetchError && <DashboardEmptyState />}
+
+      {data && (
+        <div
+          className={`flex flex-col gap-6 transition-opacity ${loading ? "pointer-events-none opacity-50" : ""}`}
+          aria-busy={loading}
+        >
+          <DashboardView data={data} />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { buildAnalyzeApiResponse } from "@/lib/decision/analyze-response";
 import { runDecisionEngine } from "@/lib/decision/engine";
 import type {
   AnalyzeApiResponse,
@@ -75,17 +76,15 @@ function buildMockEngineInput(): DecisionEngineInput {
   };
 }
 
-/** Static mock dashboard payload — no external API calls. */
-export function getMockDashboardData(): AnalyzeApiResponse {
+/** Fallback payload when live /api/analyze fails — not used on initial page load. */
+export function getMockDashboardFallback(): AnalyzeApiResponse {
   const output = runDecisionEngine(buildMockEngineInput());
 
-  return {
-    ...output,
-    sourceErrors: [
-      {
-        source: "Demo Mode",
-        message: "Homepage uses mock data only.",
-      },
-    ],
-  };
+  return buildAnalyzeApiResponse(output, [
+    {
+      source: "Fallback Data",
+      message:
+        "Live analysis failed — showing placeholder data. Click Analyze Now to retry.",
+    },
+  ]);
 }

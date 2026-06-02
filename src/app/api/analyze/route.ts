@@ -2,6 +2,7 @@ import {
   runAnalysisEngine,
   runDecisionEngine,
 } from "@/lib/decision/analyze";
+import { buildAnalyzeApiResponse } from "@/lib/decision/analyze-response";
 import type {
   AnalysisInput,
   AnalyzeApiResponse,
@@ -30,10 +31,10 @@ export async function POST(request: Request) {
       body.liquidation;
 
     const result: AnalyzeApiResponse = hasFullInput
-      ? {
-          ...runDecisionEngine(body as DecisionEngineInput),
-          sourceErrors: [],
-        }
+      ? buildAnalyzeApiResponse(
+          runDecisionEngine(body as DecisionEngineInput),
+          [],
+        )
       : await runAnalysisEngine(body);
 
     return NextResponse.json(result);

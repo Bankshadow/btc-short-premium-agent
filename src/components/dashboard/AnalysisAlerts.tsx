@@ -1,15 +1,25 @@
-import type { AnalyzeApiResponse, DataSourceError } from "@/lib/types/market";
+import type { DataSourceError } from "@/lib/types/market";
 
 interface AnalysisAlertsProps {
   fetchError: string | null;
   sourceErrors: DataSourceError[];
 }
 
+const DEMO_MODE_PATTERN = /demo mode|mock data only|homepage uses mock/i;
+
+function filterSourceErrors(errors: DataSourceError[]): DataSourceError[] {
+  return errors.filter(
+    (item) => !DEMO_MODE_PATTERN.test(`${item.source} ${item.message}`),
+  );
+}
+
 export default function AnalysisAlerts({
   fetchError,
   sourceErrors,
 }: AnalysisAlertsProps) {
-  if (!fetchError && sourceErrors.length === 0) return null;
+  const issues = filterSourceErrors(sourceErrors);
+
+  if (!fetchError && issues.length === 0) return null;
 
   return (
     <div className="space-y-3">
@@ -27,16 +37,16 @@ export default function AnalysisAlerts({
         </div>
       )}
 
-      {sourceErrors.length > 0 && (
+      {issues.length > 0 && (
         <div
           role="alert"
           className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/50"
         >
           <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-            Data source issues ({sourceErrors.length})
+            Data source issues ({issues.length})
           </p>
           <ul className="mt-2 space-y-1.5">
-            {sourceErrors.map((item) => (
+            {issues.map((item) => (
               <li
                 key={`${item.source}-${item.message}`}
                 className="text-sm text-amber-900 dark:text-amber-100"

@@ -25,9 +25,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       telegramMessageId: messageId,
-      verdict: analysis.step5_verdict.recommendation,
-      confidence: analysis.step5_verdict.confidence,
-      analyzedAt: analysis.step5_verdict.analyzedAt,
+      verdict: analysis.verdict.recommendation,
+      confidence: analysis.verdict.confidence,
+      analyzedAt: analysis.dataTimestamp,
+      dataSourceIssues: analysis.dataSourceIssues,
       sourceErrors: analysis.sourceErrors,
     });
   } catch (error) {
