@@ -10,6 +10,7 @@ import type {
   DecisionEngineOutput,
   LiquidationData,
   MacroEventStatus,
+  DerivativesOverrides,
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
 import { buildAnalyzeApiResponse } from "./analyze-response";
@@ -154,15 +155,44 @@ async function buildEngineInput(
   );
   liquidation = mergedLiquidation;
 
+  sourceErrors.push(
+    ...collectDerivativesSourceErrors(
+      market,
+      liquidation,
+      overrides.derivativesOverrides,
+    ),
+  );
+
   const dailyCandles = klineToCandle(dailyKlines);
   const h4Candles = klineToCandle(h4Klines);
   const h1Candles = klineToCandle(h1Klines);
 
   const symbol = market.symbol;
 
-  const hasManualDerivatives = hasAnyOverride(
-    overrides.derivativesOverrides ?? {},
-  );
+  return {
+    input: {
+      market,
+      optionCandidates: candidates,
+      technicalDaily: buildTechnicalSnapshot(symbol, dailyCandles, []),
+      technical4h: buildTechnicalSnapshot(symbol, h4Candles, h4Candles),
+      technical1h: buildTechnicalSnapshot(symbol, h1Candles, []),
+      macroEvent,
+      liquidation,
+      macroView: overrides.macroView ?? "neutral",
+      consecutiveLosses: overrides.consecutiveLosses,
+      priorDayRallyPct: overrides.priorDayRallyPct,
+    },
+    sourceErrors,
+  };
+}
+
+function collectDerivativesSourceErrors(
+  market: DecisionEngineInput["market"],
+  liquidation: LiquidationData,
+  derivativesOverrides?: DerivativesOverrides,
+): DataSourceError[] {
+  const sourceErrors: DataSourceError[] = [];
+  const hasManualDerivatives = hasAnyOverride(derivativesOverrides ?? {});
 
   if (hasManualDerivatives) {
     sourceErrors.push({
@@ -199,21 +229,36 @@ async function buildEngineInput(
     }
   }
 
-  return {
-    input: {
-      market,
-      optionCandidates: candidates,
-      technicalDaily: buildTechnicalSnapshot(symbol, dailyCandles, []),
-      technical4h: buildTechnicalSnapshot(symbol, h4Candles, h4Candles),
-      technical1h: buildTechnicalSnapshot(symbol, h1Candles, []),
-      macroEvent,
-      liquidation,
-      macroView: overrides.macroView ?? "neutral",
-      consecutiveLosses: overrides.consecutiveLosses,
-      priorDayRallyPct: overrides.priorDayRallyPct,
-    },
-    sourceErrors,
-  };
+  return sourceErrors;
+}
+
+/** Run engine on pre-fetched input (e.g. browser-side Bybit fetch on Vercel). */
+export function runDecisionEngineFromInput(
+  input: DecisionEngineInput,
+  derivativesOverrides?: DerivativesOverrides,
+): AnalyzeApiResponse {
+  const sourceErrors = collectDerivativesSourceErrors(
+    input.market,
+    input.liquidation,
+    derivativesOverrides,
+  );
+
+  if (input.optionCandidates.length === 0) {
+    sourceErrors.push({
+      source: "Bybit Options",
+      message: "No option candidates returned from chain.",
+    });
+  }
+
+  if (input.market.spotPrice <= 0) {
+    sourceErrors.push({
+      source: "Bybit Ticker",
+      message: "BTC spot price unavailable or zero.",
+    });
+  }
+
+  const output = runDecisionEngine(input);
+  return buildAnalyzeApiResponse(output, sourceErrors);
 }
 
 /** Map 6-step output to legacy AnalysisResult for dashboard components. */

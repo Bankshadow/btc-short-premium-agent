@@ -8,6 +8,7 @@ import {
 } from "@/lib/decision/bybit-health";
 import { formValuesToOverrides } from "@/lib/decision/derivatives-overrides";
 import { macroSelectionToStatus } from "@/lib/decision/macro-event";
+import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
 import { useCallback, useState } from "react";
 import AnalysisAlerts from "./AnalysisAlerts";
 import DashboardEmptyState from "./DashboardEmptyState";
@@ -52,14 +53,16 @@ export default function AnalyzeDashboard({
     const macroEvent = macroSelectionToStatus(macroEventSelection);
 
     try {
+      const engineInput = await fetchLiveDecisionInput({
+        macroView,
+        derivativesOverrides,
+        macroEvent,
+      });
+
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          macroView,
-          derivativesOverrides,
-          macroEvent,
-        }),
+        body: JSON.stringify(engineInput),
       });
 
       const payload = (await response.json()) as

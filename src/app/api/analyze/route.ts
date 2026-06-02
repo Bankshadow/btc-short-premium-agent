@@ -1,8 +1,7 @@
 import {
   runAnalysisEngine,
-  runDecisionEngine,
+  runDecisionEngineFromInput,
 } from "@/lib/decision/analyze";
-import { buildAnalyzeApiResponse } from "@/lib/decision/analyze-response";
 import { BYBIT_API_FAILED_MESSAGE } from "@/lib/decision/bybit-health";
 import type {
   AnalysisInput,
@@ -12,6 +11,8 @@ import type {
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -34,9 +35,9 @@ export async function POST(request: Request) {
       body.liquidation;
 
     const result: AnalyzeApiResponse = hasFullInput
-      ? buildAnalyzeApiResponse(
-          runDecisionEngine(body as DecisionEngineInput),
-          [],
+      ? runDecisionEngineFromInput(
+          body as DecisionEngineInput,
+          body.derivativesOverrides,
         )
       : await runAnalysisEngine(body);
 

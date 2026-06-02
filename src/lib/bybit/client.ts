@@ -1,7 +1,10 @@
 const DEFAULT_BYBIT_BASE_URLS = [
-  "https://api.bybit.com",
   "https://api.bytick.com",
+  "https://api.bybit.com",
 ];
+
+const BYBIT_USER_AGENT =
+  "Mozilla/5.0 (compatible; BTCShortPremiumAgent/1.0; analysis-only)";
 
 export interface BybitResponse<T> {
   retCode: number;
@@ -51,7 +54,7 @@ function isNetworkRetryError(error: unknown): boolean {
   if (!(error instanceof BybitApiError)) return false;
 
   const cause = error.cause;
-  if (!(cause instanceof Error)) return true;
+  if (!(cause instanceof Error)) return false;
 
   const code = (cause as NodeJS.ErrnoException).code;
   return (
@@ -60,6 +63,19 @@ function isNetworkRetryError(error: unknown): boolean {
     code === "ETIMEDOUT" ||
     code === "UND_ERR_CONNECT_TIMEOUT" ||
     cause.message.toLowerCase().includes("fetch failed")
+  );
+}
+
+/** Retry next Bybit domain on CDN/WAF blocks common on cloud hosts (e.g. Vercel). */
+function isRetryableBybitError(error: unknown): boolean {
+  if (!(error instanceof BybitApiError)) return false;
+  if (isNetworkRetryError(error)) return true;
+
+  return (
+    error.status === 403 ||
+    error.status === 429 ||
+    error.status === 502 ||
+    error.status === 503
   );
 }
 
@@ -84,6 +100,7 @@ async function bybitGetFromBase<T>(
       cache: "no-store",
       headers: {
         Accept: "application/json",
+        "User-Agent": BYBIT_USER_AGENT,
       },
       signal: AbortSignal.timeout(20_000),
     });
@@ -164,7 +181,7 @@ export async function bybitGet<T>(
 
       lastError = error;
 
-      if (!isLast && isNetworkRetryError(error)) {
+      if (!isLast && isRetryableBybitError(error)) {
         continue;
       }
 
