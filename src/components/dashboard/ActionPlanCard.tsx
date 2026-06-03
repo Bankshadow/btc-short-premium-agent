@@ -16,7 +16,8 @@ export default function ActionPlanCard({
   actionPlan,
   noTradeRules,
 }: ActionPlanCardProps) {
-  const isTrade = verdict.recommendation === "trade";
+  const isTrade =
+    verdict.recommendation === "trade" && actionPlan.action !== "no_trade";
   const candidate = verdict.candidate;
 
   const triggeredHard = noTradeRules.filter(

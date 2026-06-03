@@ -1,6 +1,8 @@
 import type {
+  CheckResult,
   DecisionEngineInput,
   DecisionEngineOutput,
+  LiquidationData,
   OptionCandidate,
   TradeRecommendation,
 } from "@/lib/types/market";
@@ -9,17 +11,26 @@ import {
   isLiquidationCaution,
 } from "./combination-read";
 import {
+  evaluateDeltaVerdict,
   evaluateNoTradeRules,
   hasHardNoTradeTrigger,
   hasSoftCaution,
+  isAtrCaution,
+  isLiquidationCascadeTriggered,
 } from "./no-trade-rules";
 import {
-  allCriticalChecksPass,
   computeSlIndexPrice,
   evaluateEightChecks,
+  hasCoreCheckFailure,
   resolveHypotheticalAction,
   scoreChecks,
 } from "./rules";
+
+const HARD_RULE_CONFIDENCE = 100;
+const LIQUIDATION_CASCADE_SUMMARY =
+  "Liquidation above $200M hard no-trade rule";
+const LIQUIDATION_CASCADE_ACTION =
+  "No order. Wait for liquidation to normalize below $50M.";
 
 const ANALYSIS_DISCLAIMER =
   "Analysis only. Co-pilot — not auto-pilot. This agent does not place or route real orders.";
@@ -49,16 +60,46 @@ function detectMissingRequiredData(input: DecisionEngineInput): string[] {
   return missing;
 }
 
+function resolveDeltaRecommendation(
+  candidate: OptionCandidate | undefined,
+): TradeRecommendation | null {
+  if (!candidate) return null;
+
+  const verdict = evaluateDeltaVerdict(Math.abs(candidate.delta));
+  if (verdict === "skip") return "skip";
+  if (verdict === "wait") return "wait";
+  return null;
+}
+
+function countActiveCautions(
+  atrCaution: boolean,
+  liquidation: LiquidationData,
+  checks: CheckResult[],
+): number {
+  return [
+    atrCaution,
+    isLiquidationCaution(liquidation),
+    checks.find((c) => c.id === "check-6-confluence")?.status === "warn",
+    checks.find((c) => c.id === "check-4-funding")?.status === "warn",
+  ].filter(Boolean).length;
+}
+
 function resolveVerdict(
   hardSkip: boolean,
   missingData: string[],
-  checksPass: boolean,
   combinationPattern: string,
+  deltaRecommendation: TradeRecommendation | null,
+  coreCheckFailure: boolean,
+  atrCaution: boolean,
+  activeCautionCount: number,
 ): TradeRecommendation {
   if (hardSkip) return "skip";
   if (missingData.length > 0) return "wait";
   if (combinationPattern === "long_capitulation") return "skip";
-  if (!checksPass) return "skip";
+  if (deltaRecommendation === "skip") return "skip";
+  if (coreCheckFailure) return "skip";
+  if (deltaRecommendation === "wait") return "wait";
+  if (atrCaution && activeCautionCount >= 2) return "wait";
   return "trade";
 }
 
@@ -66,10 +107,14 @@ function buildSummary(
   recommendation: TradeRecommendation,
   confidence: number,
   hardSkip: boolean,
+  liquidationCascade: boolean,
   missingData: string[],
-  checksPass: boolean,
+  coreCheckFailure: boolean,
   combinationReadLabel: string,
+  deltaRecommendation: TradeRecommendation | null,
+  atrCaution: boolean,
 ): string {
+  if (liquidationCascade) return LIQUIDATION_CASCADE_SUMMARY;
   if (hardSkip) return "Hard No-Trade Rule triggered — SKIP.";
   if (missingData.length > 0) {
     return `Required data missing (${missingData.join(", ")}) — WAIT.`;
@@ -77,10 +122,24 @@ function buildSummary(
   if (combinationReadLabel.includes("Long Capitulation")) {
     return "Combination Read: Long Capitulation — SKIP.";
   }
-  if (!checksPass) {
-    return `Critical checks not passed — SKIP (${confidence}/100 score).`;
+  if (deltaRecommendation === "skip") {
+    return "|Delta| outside 0.08–0.18 — SKIP.";
   }
-  return `All critical checks passed — TRADE (${confidence}/100 score).`;
+  if (coreCheckFailure) {
+    return `Core checks not passed — SKIP (${confidence}/100 score).`;
+  }
+  if (deltaRecommendation === "wait") {
+    return "|Delta| outside 0.13–0.15 sweet spot — WAIT.";
+  }
+  if (recommendation === "wait" && atrCaution) {
+    return "ATR filter too close with multiple caution flags — WAIT.";
+  }
+  if (recommendation === "trade") {
+    return atrCaution
+      ? `Core checks passed — TRADE with caution (${confidence}/100 score, reduced size).`
+      : `All critical checks passed — TRADE (${confidence}/100 score).`;
+  }
+  return `Verdict: ${recommendation.toUpperCase()}.`;
 }
 
 /**
@@ -102,13 +161,16 @@ export function runDecisionEngine(
   const noTradeRules = evaluateNoTradeRules(input.market, candidate, {
     macroEvent: input.macroEvent,
     liquidation: input.liquidation,
+    macroView,
+    technical4h: input.technical4h,
     consecutiveLosses: input.consecutiveLosses,
     priorDayRallyPct: input.priorDayRallyPct,
   });
 
   const hardSkip = hasHardNoTradeTrigger(noTradeRules);
-  const caution =
-    hasSoftCaution(noTradeRules) || isLiquidationCaution(input.liquidation);
+  const liquidationCascade = isLiquidationCascadeTriggered(noTradeRules);
+  const deltaRecommendation = resolveDeltaRecommendation(candidate);
+  const atrCaution = isAtrCaution(noTradeRules);
 
   const checks = evaluateEightChecks(
     input.market,
@@ -122,21 +184,37 @@ export function runDecisionEngine(
     },
   );
 
-  const confidence = scoreChecks(checks);
-  const checksPass = allCriticalChecksPass(checks);
+  const confidence = liquidationCascade
+    ? HARD_RULE_CONFIDENCE
+    : scoreChecks(checks);
+  const coreCheckFailure = hasCoreCheckFailure(checks);
+  const activeCautionCount = countActiveCautions(
+    atrCaution,
+    input.liquidation,
+    checks,
+  );
 
   const recommendation = resolveVerdict(
     hardSkip,
     missingData,
-    checksPass,
     combinationRead.pattern,
+    deltaRecommendation,
+    coreCheckFailure,
+    atrCaution,
+    activeCautionCount,
   );
 
-  const action = resolveHypotheticalAction(
-    macroView,
-    recommendation,
-    candidate,
-  );
+  const caution =
+    recommendation === "trade" &&
+    (hasSoftCaution(noTradeRules) ||
+      isLiquidationCaution(input.liquidation) ||
+      atrCaution);
+
+  const action =
+    recommendation === "trade"
+      ? resolveHypotheticalAction(macroView, "trade", candidate)
+      : "no_trade";
+
   const slIndexPrice = computeSlIndexPrice(candidate);
 
   const suggestedSizePct =
@@ -151,24 +229,32 @@ export function runDecisionEngine(
     ...(combinationRead.dataStatus === "partial_data"
       ? ["Combination Read incomplete — liquidation/OI data pending."]
       : []),
-    ...(caution ? ["Liquidation in CAUTION zone ($50M–$200M) — reduced size."] : []),
+    ...(caution
+      ? [
+          atrCaution
+            ? "Strike within 1.5× 4H ATR — reduced size or WAIT."
+            : "Caution zone active — reduced hypothetical size.",
+        ]
+      : []),
   ];
 
   const actionPlan = {
     action,
     suggestedSizePct,
     entryNotes:
-      recommendation === "trade" && candidate
-        ? `Hypothetical limit near bid $${candidate.bid.toFixed(0)} / mark $${candidate.markPrice.toFixed(0)} — |delta| ${Math.abs(candidate.delta).toFixed(2)}.`
-        : recommendation === "wait"
-          ? "WAIT — resolve missing inputs before hypothetical entry."
-          : "No hypothetical entry — SKIP.",
+      liquidationCascade
+        ? LIQUIDATION_CASCADE_ACTION
+        : recommendation === "trade" && candidate
+          ? `Hypothetical limit near bid $${candidate.bid.toFixed(0)} / mark $${candidate.markPrice.toFixed(0)} — |delta| ${Math.abs(candidate.delta).toFixed(2)}.`
+          : recommendation === "wait"
+            ? "WAIT — resolve caution flags or missing inputs before hypothetical entry."
+            : "No hypothetical entry — SKIP.",
     exitNotes: `Hypothetical exit: 50–70% premium decay or forced pin exit ${PIN_EXIT_TIME_TH} TH (settlement ${SETTLEMENT_TIME_TH} TH).`,
     slIndexPrice,
     slMethod: "index_price" as const,
     pinExitTimeTh: PIN_EXIT_TIME_TH,
     settlementTimeTh: SETTLEMENT_TIME_TH,
-    targetPremiumCapturePct: 60,
+    targetPremiumCapturePct: recommendation === "trade" ? 60 : 0,
     disclaimer: ANALYSIS_DISCLAIMER,
   };
 
@@ -179,9 +265,12 @@ export function runDecisionEngine(
       recommendation,
       confidence,
       hardSkip,
+      liquidationCascade,
       missingData,
-      checksPass,
+      coreCheckFailure,
       combinationRead.label,
+      deltaRecommendation,
+      atrCaution,
     ),
     candidate,
     risks,

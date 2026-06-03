@@ -1,4 +1,5 @@
 import type { DerivativesOverrides } from "@/lib/types/market";
+import { parseManualNumber } from "./parse-manual-number";
 
 export const DERIVATIVES_OVERRIDES_STORAGE_KEY =
   "btc-short-premium-agent:derivatives-overrides";
@@ -17,20 +18,70 @@ export const EMPTY_OVERRIDE_FORM: DerivativesOverrideFormValues = {
   volume24hChange: "",
 };
 
-function parseOptionalNumber(raw: string): number | null {
-  const trimmed = raw.trim();
-  if (trimmed === "") return null;
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : null;
+const OVERRIDE_KEYS = [
+  "liquidation24h",
+  "oi24hChange",
+  "oi1hChange",
+  "volume24hChange",
+] as const satisfies ReadonlyArray<keyof DerivativesOverrides>;
+
+export { parseManualNumber } from "./parse-manual-number";
+
+export function parseOptionalNumberFromUnknown(value: unknown): number | null {
+  return parseManualNumber(value);
+}
+
+/** Parse flat or nested override fields; coerce formatted strings to numbers. */
+export function parseDerivativesOverrides(raw: unknown): DerivativesOverrides {
+  if (!raw || typeof raw !== "object") return {};
+
+  const record = raw as Record<string, unknown>;
+  const overrides: DerivativesOverrides = {};
+
+  for (const key of OVERRIDE_KEYS) {
+    if (!(key in record)) continue;
+    const parsed = parseManualNumber(record[key]);
+    if (parsed !== null) {
+      overrides[key] = parsed;
+    }
+  }
+
+  return overrides;
+}
+
+export function mergeDerivativesOverrides(
+  ...sources: Array<DerivativesOverrides | undefined>
+): DerivativesOverrides {
+  const merged: DerivativesOverrides = {};
+
+  for (const source of sources) {
+    if (!source) continue;
+    for (const key of OVERRIDE_KEYS) {
+      if (source[key] != null) {
+        merged[key] = source[key]!;
+      }
+    }
+  }
+
+  return merged;
+}
+
+/** Prefer in-form values; fall back to localStorage at analyze time. */
+export function resolveDerivativesOverrides(
+  values: DerivativesOverrideFormValues,
+): DerivativesOverrides {
+  const fromStorage = formValuesToOverrides(loadOverridesFromStorage());
+  const fromForm = formValuesToOverrides(values);
+  return mergeDerivativesOverrides(fromStorage, fromForm);
 }
 
 export function formValuesToOverrides(
   values: DerivativesOverrideFormValues,
 ): DerivativesOverrides {
-  const liquidation24h = parseOptionalNumber(values.liquidation24h);
-  const oi24hChange = parseOptionalNumber(values.oi24hChange);
-  const oi1hChange = parseOptionalNumber(values.oi1hChange);
-  const volume24hChange = parseOptionalNumber(values.volume24hChange);
+  const liquidation24h = parseManualNumber(values.liquidation24h);
+  const oi24hChange = parseManualNumber(values.oi24hChange);
+  const oi1hChange = parseManualNumber(values.oi1hChange);
+  const volume24hChange = parseManualNumber(values.volume24hChange);
 
   const overrides: DerivativesOverrides = {};
   if (liquidation24h !== null) overrides.liquidation24h = liquidation24h;
@@ -83,4 +134,11 @@ export function hasAnyOverride(overrides: DerivativesOverrides): boolean {
     overrides.oi1hChange != null ||
     overrides.volume24hChange != null
   );
+}
+
+export function hasOverrideForField(
+  overrides: DerivativesOverrides,
+  field: keyof DerivativesOverrides,
+): boolean {
+  return overrides[field] != null;
 }

@@ -6,21 +6,25 @@ import {
   isBybitCriticalFailure,
   isBybitFetchError,
 } from "@/lib/decision/bybit-health";
-import { formValuesToOverrides } from "@/lib/decision/derivatives-overrides";
+import { resolveDerivativesOverrides } from "@/lib/decision/derivatives-overrides";
 import { macroSelectionToStatus } from "@/lib/decision/macro-event";
 import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
 import { getMockDashboardFallback } from "@/lib/mock/dashboard-data";
 import { useCallback, useState } from "react";
+import AnalysisJournal from "./AnalysisJournal";
 import AnalysisAlerts from "./AnalysisAlerts";
 import DashboardEmptyState from "./DashboardEmptyState";
 import DashboardLoadingSkeleton from "./DashboardLoadingSkeleton";
 import DashboardView from "./DashboardView";
+import LiveSpotPrices from "./LiveSpotPrices";
 import MacroEventToggle, {
   useMacroEventSelection,
 } from "./MacroEventToggle";
 import ManualOverridesPanel, {
   useDerivativesOverrideForm,
 } from "./ManualOverridesPanel";
+import TestAutomationPanel from "./TestAutomationPanel";
+import { useAnalysisJournal } from "./useAnalysisJournal";
 
 interface AnalyzeDashboardProps {
   macroView?: "bearish" | "bullish" | "neutral";
@@ -50,18 +54,28 @@ export default function AnalyzeDashboard({
   const { values, setValues } = useDerivativesOverrideForm();
   const { value: macroEventSelection, setValue: setMacroEventSelection } =
     useMacroEventSelection();
+  const { entries: journalEntries, saveFromAnalysis } = useAnalysisJournal();
+
+  const persistAnalysis = useCallback(
+    (result: AnalyzeApiResponse) => {
+      setData(result);
+      saveFromAnalysis(result);
+    },
+    [saveFromAnalysis],
+  );
 
   const handleAnalyze = useCallback(async () => {
     setLoading(true);
     setFetchError(null);
     setUsingFallback(false);
 
-    const derivativesOverrides = formValuesToOverrides(values);
+    const derivativesOverrides = resolveDerivativesOverrides(values);
     const macroEvent = macroSelectionToStatus(macroEventSelection);
     const analyzeRequest = {
       macroView,
-      derivativesOverrides,
       macroEvent,
+      ...derivativesOverrides,
+      derivativesOverrides,
     };
 
     const postAnalyze = async (body: unknown) => {
@@ -110,7 +124,11 @@ export default function AnalyzeDashboard({
       // 2) Browser-side Bybit fetch, then run engine on server (works on Vercel)
       if (!result) {
         const engineInput = await fetchLiveDecisionInput(analyzeRequest);
-        const clientResult = await postAnalyze(engineInput);
+        const clientResult = await postAnalyze({
+          ...engineInput,
+          ...derivativesOverrides,
+          derivativesOverrides,
+        });
         if (isLiveAnalysis(clientResult)) {
           result = clientResult;
         } else if (isBybitCriticalFailure(clientResult.marketSnapshot, clientResult.dataSourceIssues)) {
@@ -121,7 +139,7 @@ export default function AnalyzeDashboard({
       }
 
       if (result && isLiveAnalysis(result)) {
-        setData(result);
+        persistAnalysis(result);
         setFetchError(null);
         setUsingFallback(false);
         return;
@@ -134,12 +152,13 @@ export default function AnalyzeDashboard({
       const bybitFailed = isBybitFetchError(message);
 
       setFetchError(bybitFailed ? BYBIT_API_FAILED_MESSAGE : message);
-      setData(getMockDashboardFallback());
+      const fallback = getMockDashboardFallback();
+      persistAnalysis(fallback);
       setUsingFallback(true);
     } finally {
       setLoading(false);
     }
-  }, [macroView, values, macroEventSelection]);
+  }, [macroView, values, macroEventSelection, persistAnalysis]);
 
   const sourceIssues = (
     data?.dataSourceIssues ?? data?.sourceErrors ?? []
@@ -155,6 +174,8 @@ export default function AnalyzeDashboard({
 
   return (
     <div className="relative flex flex-col gap-6">
+      <LiveSpotPrices />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Run a fresh analysis against live Bybit public data.
@@ -195,8 +216,11 @@ export default function AnalyzeDashboard({
           aria-busy={loading}
         >
           <DashboardView data={data} />
+          <AnalysisJournal entries={journalEntries} />
         </div>
       )}
+
+      <TestAutomationPanel />
     </div>
   );
 }

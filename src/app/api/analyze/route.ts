@@ -1,11 +1,7 @@
-import {
-  runAnalysisEngine,
-  runDecisionEngineFromInput,
-} from "@/lib/decision/analyze";
+import { runAnalyzeRequest } from "@/lib/decision/run-analyze";
 import { BYBIT_API_FAILED_MESSAGE } from "@/lib/decision/bybit-health";
 import type {
   AnalysisInput,
-  AnalyzeApiResponse,
   DecisionEngineInput,
 } from "@/lib/types/market";
 import { NextResponse } from "next/server";
@@ -20,27 +16,13 @@ export async function POST(request: Request) {
 
     try {
       body = (await request.json()) as Partial<DecisionEngineInput> &
-        AnalysisInput;
+        AnalysisInput &
+        Record<string, unknown>;
     } catch {
       // Empty body — use fetched defaults
     }
 
-    const hasFullInput =
-      body.market &&
-      body.optionCandidates &&
-      body.technicalDaily &&
-      body.technical4h &&
-      body.technical1h &&
-      body.macroEvent &&
-      body.liquidation;
-
-    const result: AnalyzeApiResponse = hasFullInput
-      ? runDecisionEngineFromInput(
-          body as DecisionEngineInput,
-          body.derivativesOverrides,
-        )
-      : await runAnalysisEngine(body);
-
+    const result = await runAnalyzeRequest(body);
     return NextResponse.json(result);
   } catch (error) {
     const message =

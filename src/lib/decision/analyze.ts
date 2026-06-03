@@ -15,7 +15,7 @@ import type {
 import { applyDerivativesOverrides } from "./apply-overrides";
 import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
-import { hasAnyOverride } from "./derivatives-overrides";
+import { hasAnyOverride, hasOverrideForField } from "./derivatives-overrides";
 import {
   BYBIT_API_FAILED_MESSAGE,
   isBybitCriticalFailure,
@@ -68,10 +68,34 @@ async function fetchKlinesWithReport(
   }
 }
 
+function withAppliedOverrides(
+  input: DecisionEngineInput,
+  derivativesOverrides?: DerivativesOverrides,
+): DecisionEngineInput {
+  const resolved = derivativesOverrides ?? input.derivativesOverrides;
+  if (!resolved || !hasAnyOverride(resolved)) {
+    return input;
+  }
+
+  const { market, liquidation } = applyDerivativesOverrides(
+    input.market,
+    input.liquidation,
+    resolved,
+  );
+
+  return {
+    ...input,
+    market,
+    liquidation,
+    derivativesOverrides: resolved,
+  };
+}
+
 async function buildEngineInput(
   overrides: Partial<DecisionEngineInput> & AnalysisInput = {},
 ): Promise<{ input: DecisionEngineInput; sourceErrors: DataSourceError[] }> {
   const sourceErrors: DataSourceError[] = [];
+  const derivativesOverrides = overrides.derivativesOverrides;
 
   let marketRaw = overrides.market;
   if (!marketRaw) {
@@ -151,7 +175,7 @@ async function buildEngineInput(
   const { market, liquidation: mergedLiquidation } = applyDerivativesOverrides(
     marketBase,
     liquidation,
-    overrides.derivativesOverrides,
+    derivativesOverrides,
   );
   liquidation = mergedLiquidation;
 
@@ -159,7 +183,7 @@ async function buildEngineInput(
     ...collectDerivativesSourceErrors(
       market,
       liquidation,
-      overrides.derivativesOverrides,
+      derivativesOverrides,
     ),
   );
 
@@ -181,6 +205,7 @@ async function buildEngineInput(
       macroView: overrides.macroView ?? "neutral",
       consecutiveLosses: overrides.consecutiveLosses,
       priorDayRallyPct: overrides.priorDayRallyPct,
+      derivativesOverrides,
     },
     sourceErrors,
   };
@@ -192,41 +217,52 @@ function collectDerivativesSourceErrors(
   derivativesOverrides?: DerivativesOverrides,
 ): DataSourceError[] {
   const sourceErrors: DataSourceError[] = [];
-  const hasManualDerivatives = hasAnyOverride(derivativesOverrides ?? {});
+  const overrides = derivativesOverrides ?? {};
+  const hasManualDerivatives = hasAnyOverride(overrides);
 
   if (hasManualDerivatives) {
     sourceErrors.push({
       source: "Manual Overrides",
       message: MANUAL_DERIVATIVES_MESSAGE,
     });
-  } else {
-    if (liquidation.liquidation24h === null) {
-      sourceErrors.push({
-        source: "Liquidation",
-        message:
-          "Liquidation data unavailable — enter liquidation24h in Manual Overrides.",
-      });
-    }
+  }
 
-    const missingOi = [
-      market.oiChange24hPct === null && "oi24hChange",
-      market.oiChange1hPct === null && "oi1hChange",
-    ].filter(Boolean) as string[];
+  if (
+    !hasOverrideForField(overrides, "liquidation24h") &&
+    liquidation.liquidation24h === null
+  ) {
+    sourceErrors.push({
+      source: "Liquidation",
+      message:
+        "Liquidation data unavailable — enter liquidation24h in Manual Overrides.",
+    });
+  }
 
-    if (missingOi.length > 0) {
-      sourceErrors.push({
-        source: "Open Interest",
-        message: `Combination Read is partial because OI data is missing (${missingOi.join(", ")}).`,
-      });
-    }
+  const missingOi = [
+    !hasOverrideForField(overrides, "oi24hChange") &&
+      market.oiChange24hPct === null &&
+      "oi24hChange",
+    !hasOverrideForField(overrides, "oi1hChange") &&
+      market.oiChange1hPct === null &&
+      "oi1hChange",
+  ].filter(Boolean) as string[];
 
-    if (market.volumeChange24hPct === null) {
-      sourceErrors.push({
-        source: "Volume",
-        message:
-          "Combination Read is partial because volume24hChange is missing.",
-      });
-    }
+  if (missingOi.length > 0) {
+    sourceErrors.push({
+      source: "Open Interest",
+      message: `Combination Read is partial because OI data is missing (${missingOi.join(", ")}).`,
+    });
+  }
+
+  if (
+    !hasOverrideForField(overrides, "volume24hChange") &&
+    market.volumeChange24hPct === null
+  ) {
+    sourceErrors.push({
+      source: "Volume",
+      message:
+        "Combination Read is partial because volume24hChange is missing.",
+    });
   }
 
   return sourceErrors;
@@ -237,27 +273,30 @@ export function runDecisionEngineFromInput(
   input: DecisionEngineInput,
   derivativesOverrides?: DerivativesOverrides,
 ): AnalyzeApiResponse {
+  const engineInput = withAppliedOverrides(input, derivativesOverrides);
+  const resolvedOverrides = engineInput.derivativesOverrides;
+
   const sourceErrors = collectDerivativesSourceErrors(
-    input.market,
-    input.liquidation,
-    derivativesOverrides,
+    engineInput.market,
+    engineInput.liquidation,
+    resolvedOverrides,
   );
 
-  if (input.optionCandidates.length === 0) {
+  if (engineInput.optionCandidates.length === 0) {
     sourceErrors.push({
       source: "Bybit Options",
       message: "No option candidates returned from chain.",
     });
   }
 
-  if (input.market.spotPrice <= 0) {
+  if (engineInput.market.spotPrice <= 0) {
     sourceErrors.push({
       source: "Bybit Ticker",
       message: "BTC spot price unavailable or zero.",
     });
   }
 
-  const output = runDecisionEngine(input);
+  const output = runDecisionEngine(engineInput);
   return buildAnalyzeApiResponse(output, sourceErrors);
 }
 

@@ -31,6 +31,9 @@ export default function HomeDashboard({ data }: HomeDashboardProps) {
       <div className="grid gap-6 lg:grid-cols-2">
         <VerdictCard
           verdict={data.step5_verdict}
+          actionPlan={data.step6_actionPlan}
+          checks={data.step2_eightCheckFramework}
+          noTradeRules={data.step3_noTradeRules}
           combinationRead={data.step4_combinationRead}
           showCombinationRead={false}
         />

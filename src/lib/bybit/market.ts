@@ -1,6 +1,11 @@
-import type { MarketSnapshot, OptionCandidate } from "@/lib/types/market";
+import type {
+  LiveMarketResponse,
+  MarketSnapshot,
+  OptionCandidate,
+  SpotQuote,
+} from "@/lib/types/market";
 import { findOptionCandidates, parseOptionChain } from "./option-chain";
-import { getBtcTicker, getOptionTickers } from "./tickers";
+import { getBtcTicker, getEthTicker, getOptionTickers } from "./tickers";
 
 function annualizedYieldPct(premiumUsd: number, spotPrice: number): number {
   if (spotPrice <= 0 || premiumUsd <= 0) return 0;
@@ -32,7 +37,6 @@ export async function fetchMarketSnapshot(
   symbol = "BTCUSDT",
 ): Promise<MarketSnapshot> {
   const ticker = await getBtcTicker();
-
   const spotPrice = ticker.price;
   const hv30 = 21.5;
   const iv = 32.4;
@@ -54,6 +58,26 @@ export async function fetchMarketSnapshot(
     volumeChange24hPct: ticker.price24hPcnt * 100,
     priceChange24hPct: ticker.price24hPcnt * 100,
   };
+}
+
+export async function fetchEthSpotQuote(): Promise<SpotQuote> {
+  const ticker = await getEthTicker();
+
+  return {
+    symbol: "ETHUSDT",
+    price: ticker.price,
+    priceChange24hPct: ticker.price24hPcnt * 100,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+export async function fetchLiveMarket(): Promise<LiveMarketResponse> {
+  const [btc, eth] = await Promise.all([
+    fetchMarketSnapshot(),
+    fetchEthSpotQuote(),
+  ]);
+
+  return { btc, eth };
 }
 
 /**

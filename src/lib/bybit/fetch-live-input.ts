@@ -1,4 +1,9 @@
 import { applyDerivativesOverrides } from "@/lib/decision/apply-overrides";
+import {
+  hasAnyOverride,
+  mergeDerivativesOverrides,
+  parseDerivativesOverrides,
+} from "@/lib/decision/derivatives-overrides";
 import { buildTechnicalSnapshot, type Candle } from "@/lib/indicators/technical";
 import type {
   AnalysisInput,
@@ -166,10 +171,15 @@ export async function fetchLiveDecisionInput(
     hasEventBeforeSettlement: options.macroEventToday ?? false,
   };
 
+  const derivativesOverrides = mergeDerivativesOverrides(
+    parseDerivativesOverrides(options.derivativesOverrides),
+    parseDerivativesOverrides(options),
+  );
+
   const { market, liquidation } = applyDerivativesOverrides(
     marketBase,
     DEFAULT_LIQUIDATION,
-    options.derivativesOverrides,
+    derivativesOverrides,
   );
 
   const dailyCandles = dailyKlines;
@@ -187,5 +197,8 @@ export async function fetchLiveDecisionInput(
     macroView: options.macroView ?? "neutral",
     consecutiveLosses: options.consecutiveLosses,
     priorDayRallyPct: options.priorDayRallyPct,
+    derivativesOverrides: hasAnyOverride(derivativesOverrides)
+      ? derivativesOverrides
+      : undefined,
   };
 }

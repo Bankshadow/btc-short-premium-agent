@@ -7,9 +7,21 @@ import type {
   TechnicalSnapshot,
 } from "@/lib/types/market";
 import { combinationPatternOpposesTrade } from "./combination-read";
+import {
+  ATR_MULTIPLIER,
+  DELTA_SWEET_MAX,
+  DELTA_SWEET_MIN,
+  IV_HV_SKIP_THRESHOLD,
+  SD_SKIP_THRESHOLD,
+} from "./thresholds";
 
-const DELTA_MIN = 0.13;
-const DELTA_MAX = 0.15;
+/** Checks that must pass (not fail) for a TRADE verdict. ATR/confluence/funding warns are non-blocking. */
+const CORE_TRADE_CHECK_IDS = new Set([
+  "check-1-macro",
+  "check-2-iv-hv",
+  "check-3-sd",
+  "check-8-combination",
+]);
 
 /** 8-Check Framework from Playbook §2.3 */
 export function evaluateEightChecks(
@@ -34,9 +46,11 @@ export function evaluateEightChecks(
           : "sell_call";
 
   const absDelta = candidate ? Math.abs(candidate.delta) : 0;
-  const sdPass = candidate != null && candidate.sdDistance >= 1.5;
+  const sdPass = candidate != null && candidate.sdDistance >= SD_SKIP_THRESHOLD;
   const deltaPass =
-    candidate != null && absDelta >= DELTA_MIN && absDelta <= DELTA_MAX;
+    candidate != null &&
+    absDelta >= DELTA_SWEET_MIN &&
+    absDelta <= DELTA_SWEET_MAX;
   const fundingNeutral = Math.abs(market.fundingRate) <= 0.0001;
   const ivHvPass = market.ivHvRatio >= 1.15;
 
@@ -50,7 +64,7 @@ export function evaluateEightChecks(
   const atrPass =
     candidate != null && technical4h.atr4h > 0
       ? Math.abs(candidate.strike - market.spotPrice) >
-        1.5 * technical4h.atr4h
+        ATR_MULTIPLIER * technical4h.atr4h
       : false;
 
   const combinationPass =
@@ -75,8 +89,8 @@ export function evaluateEightChecks(
       category: "macro",
       status: options.macroEventBeforeSettlement ? "fail" : "pass",
       message: options.macroEventBeforeSettlement
-        ? "FOMC/CPI/NFP before 15:00 TH settlement."
-        : "No macro event before settlement.",
+        ? "FOMC/CPI/NFP before 15:00 TH settlement — SKIP."
+        : "No FOMC/CPI/NFP event before settlement.",
       weight: 1,
     },
     {
@@ -84,7 +98,7 @@ export function evaluateEightChecks(
       name: "2. IV/HV Ratio",
       category: "market",
       status: ivHvPass ? "pass" : "fail",
-      message: `IV/HV ${market.ivHvRatio.toFixed(2)} (need ≥ 1.15, ideal > 1.5).`,
+      message: `IV/HV ${market.ivHvRatio.toFixed(2)} (need ≥ ${IV_HV_SKIP_THRESHOLD}, ideal > 1.5).`,
       weight: 1,
     },
     {
@@ -93,7 +107,7 @@ export function evaluateEightChecks(
       category: "premium",
       status: candidate ? (sdPass ? "pass" : "fail") : "skip",
       message: candidate
-        ? `${candidate.sdDistance.toFixed(2)} SD from spot (need ≥ 1.5).`
+        ? `${candidate.sdDistance.toFixed(2)} SD from spot (need ≥ ${SD_SKIP_THRESHOLD}).`
         : "No candidate strike selected.",
       weight: 1,
     },
@@ -111,7 +125,7 @@ export function evaluateEightChecks(
       category: "premium",
       status: candidate ? (deltaPass ? "pass" : "fail") : "skip",
       message: candidate
-        ? `|Delta| ${absDelta.toFixed(2)} (target 0.13–0.15).`
+        ? `|Delta| ${absDelta.toFixed(2)} (target ${DELTA_SWEET_MIN}–${DELTA_SWEET_MAX}).`
         : "No candidate strike selected.",
       weight: 1,
     },
@@ -135,7 +149,7 @@ export function evaluateEightChecks(
       message: candidate
         ? atrPass
           ? "Strike beyond 1.5× 4H ATR."
-          : "Strike within 1.5× 4H ATR — too close."
+          : "Strike within 1.5× 4H ATR — CAUTION, reduce size or WAIT."
         : "No candidate strike selected.",
       weight: 0.75,
     },
@@ -182,6 +196,12 @@ export function scoreChecks(checks: CheckResult[]): number {
   }
 
   return total === 0 ? 0 : Math.round((earned / total) * 100);
+}
+
+export function hasCoreCheckFailure(checks: CheckResult[]): boolean {
+  return checks.some(
+    (c) => CORE_TRADE_CHECK_IDS.has(c.id) && c.status === "fail",
+  );
 }
 
 export function allCriticalChecksPass(checks: CheckResult[]): boolean {

@@ -1,0 +1,12 @@
+{
+  "derivativesOverrides": {
+    "liquidation24h": "$629.00M",
+    "oi24hChange": "-2.08%",
+    "oi1hChange": "+0.12%",
+    "volume24hChange": "+33.45%"
+  },
+  "macroEvent": {
+    "type": "none"
+  },
+  "macroView": "bearish"
+}

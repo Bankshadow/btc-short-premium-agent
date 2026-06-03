@@ -45,6 +45,19 @@ export interface MarketSnapshot {
   priceChange24hPct: number | null;
 }
 
+/** Live spot quote from public market API (display only). */
+export interface SpotQuote {
+  symbol: string;
+  price: number;
+  priceChange24hPct: number;
+  timestamp: string;
+}
+
+export interface LiveMarketResponse {
+  btc: MarketSnapshot;
+  eth: SpotQuote;
+}
+
 export interface LiquidationData {
   liquidation24h: number | null;
   source: "mock" | "manual" | "live";
