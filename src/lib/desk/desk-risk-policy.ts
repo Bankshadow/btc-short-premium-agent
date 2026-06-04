@@ -1,48 +1,55 @@
 import type { TradeRecommendation } from "@/lib/types/market";
 
-/** Desk-wide risk posture — aggressive favors TRADE when playbook is constructive. */
-export const DESK_RISK_PROFILE = "aggressive" as const;
+export type DeskRiskProfile = "balanced" | "aggressive";
 
-export function isAggressiveDeskRisk(): boolean {
-  return DESK_RISK_PROFILE === "aggressive";
+let activeProfile: DeskRiskProfile =
+  process.env.DESK_RISK_PROFILE === "balanced" ? "balanced" : "aggressive";
+
+export function getDeskRiskProfile(): DeskRiskProfile {
+  return activeProfile;
 }
 
-/** Minimum data-quality score before committee downgrades to WAIT. */
+export function setDeskRiskProfile(profile: DeskRiskProfile): void {
+  activeProfile = profile;
+}
+
+export function applyDeskRiskProfile(profile?: DeskRiskProfile): DeskRiskProfile {
+  if (profile) setDeskRiskProfile(profile);
+  return getDeskRiskProfile();
+}
+
+export function isAggressiveDeskRisk(): boolean {
+  return getDeskRiskProfile() === "aggressive";
+}
+
 export function committeeMinDataQualityScore(): number {
   return isAggressiveDeskRisk() ? 25 : 45;
 }
 
-/** IV/HV floor for short-premium risk veto (playbook default 1.15). */
 export function riskIvHvFloor(): number {
   return isAggressiveDeskRisk() ? 1.05 : 1.15;
 }
 
-/** SD distance floor for options risk veto (playbook default 1.5). */
 export function riskSdFloor(): number {
   return isAggressiveDeskRisk() ? 1.2 : 1.5;
 }
 
-/** Missing critical fields before risk hard-veto (aggressive allows partial tape). */
 export function riskMissingFieldVetoCount(): number {
   return isAggressiveDeskRisk() ? 4 : 1;
 }
 
-/** Consecutive losses before desk pause veto. */
 export function riskConsecutiveLossVeto(): number {
   return isAggressiveDeskRisk() ? 4 : 3;
 }
 
-/** Daily loss streak before dailyLossLimitHit flag. */
 export function riskDailyLossStreakFlag(): number {
   return isAggressiveDeskRisk() ? 3 : 2;
 }
 
-/** Bear thesis reasons required to force SKIP. */
 export function bearSkipReasonThreshold(): number {
   return isAggressiveDeskRisk() ? 4 : 3;
 }
 
-/** Bull thesis reasons required to advocate TRADE. */
 export function bullTradeReasonThreshold(): number {
   return isAggressiveDeskRisk() ? 2 : 3;
 }

@@ -1,3 +1,4 @@
+import { applyDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import { runAnalysisEngine, runDecisionEngineFromInput } from "./analyze";
 import { normalizeAnalyzeRequest } from "./analyze-request";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
@@ -37,6 +38,11 @@ export async function runAnalyzeRequest(
     | DeskMemoryClientPayload
     | undefined;
   const ethQuote = (raw as AnalyzeRequestBody).ethQuote as SpotQuote | undefined;
+  const deskRiskProfile = (raw as AnalyzeRequestBody).deskRiskProfile as
+    | "balanced"
+    | "aggressive"
+    | undefined;
+  applyDeskRiskProfile(deskRiskProfile);
 
   if (hasFullEngineInput(body)) {
     return runDecisionEngineFromInput(

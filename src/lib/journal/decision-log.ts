@@ -108,6 +108,10 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
       raw.replaySnapshot && typeof raw.replaySnapshot === "object"
         ? (raw.replaySnapshot as DecisionLogEntry["replaySnapshot"])
         : null,
+    operatorOverride:
+      raw.operatorOverride && typeof raw.operatorOverride === "object"
+        ? (raw.operatorOverride as DecisionLogEntry["operatorOverride"])
+        : null,
   };
 }
 

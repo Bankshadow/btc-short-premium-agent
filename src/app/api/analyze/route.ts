@@ -1,3 +1,4 @@
+import { enrichAnalyzeWithMvp9 } from "@/lib/desk/enrich-analyze-mvp9";
 import { runAnalyzeRequest } from "@/lib/decision/run-analyze";
 import { BYBIT_API_FAILED_MESSAGE } from "@/lib/decision/bybit-health";
 import type {
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
       // Empty body — use fetched defaults
     }
 
-    const result = await runAnalyzeRequest(body);
+    const result = await enrichAnalyzeWithMvp9(await runAnalyzeRequest(body));
     return NextResponse.json(result);
   } catch (error) {
     const message =

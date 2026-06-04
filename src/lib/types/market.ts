@@ -179,6 +179,8 @@ export interface DecisionEngineInput {
   consecutiveLosses?: number;
   priorDayRallyPct?: number;
   derivativesOverrides?: DerivativesOverrides;
+  /** MVP 9 — balanced | aggressive */
+  deskRiskProfile?: "balanced" | "aggressive";
 }
 
 /** Structured 6-step JSON output */
@@ -226,10 +228,17 @@ export interface AnalyzeApiResponse extends DecisionEngineOutput {
   dataTimestamp: string;
   /** Friendly alias for sourceErrors */
   dataSourceIssues: DataSourceError[];
+  /** MVP 9 — template or LLM desk note (does not change verdict) */
+  deskNarrator?: {
+    text: string;
+    source: "template" | "llm";
+    locale: "th" | "en";
+  };
 }
 
 /** @deprecated Use DecisionEngineInput */
 export interface AnalysisInput {
+  deskRiskProfile?: "balanced" | "aggressive";
   macroView?: MacroView;
   macroEventToday?: boolean;
   macroEvent?: MacroEventStatus;

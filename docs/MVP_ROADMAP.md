@@ -11,6 +11,34 @@ Analysis-only desk — no live exchange execution unless explicitly scoped in a 
 | 4 | Desk memory (journal → agents, advisory only) |
 | 5 | Research layer (market data, regime, data quality, macro, ETH/BTC) |
 | 6 | Portfolio milestones, session replay, journal Supabase sync, cron desk briefing |
+| 9 | Operator hub: alerts, risk profile, narrator, backtest, desk APIs, webhooks |
+
+---
+
+## MVP 9 — Operator Hub & Desk Signals ✅
+
+**Goal:** Operations layer — alerts, external signals, narrator, and rule backtest without live execution.
+
+### Delivered
+
+1. **Alert routing** — verdict templates; cron quiet hours 22:00–08:00 BKK; TRADE/veto full briefing
+2. **Risk profile** — `balanced` | `aggressive` (UI + `deskRiskProfile` on analyze)
+3. **Operator override** — audit-only disagree + reason → decision log
+4. **Desk APIs** — `GET /api/desk/status`, `GET /api/desk/health`, `POST /api/alerts/test`
+5. **Webhooks** — `DESK_WEBHOOK_URL` on TRADE/analyze; optional `DISCORD_WEBHOOK_URL`
+6. **LLM narrator** — `OPENAI_API_KEY` optional; template fallback (Thai default)
+7. **Rule backtest** — client replay of last N logs vs current rules
+
+### Env (MVP 9)
+
+| Variable | Purpose |
+|----------|---------|
+| `DESK_RISK_PROFILE` | Server default `balanced` \| `aggressive` |
+| `DESK_WEBHOOK_URL` | POST JSON on cron analyze |
+| `DISCORD_WEBHOOK_URL` | Optional Discord on cron |
+| `DESK_ALERT_QUIET_HOURS` | Set `false` to disable BKK quiet hours |
+| `OPENAI_API_KEY` | Optional desk narrator |
+| `OPENAI_MODEL` | Default `gpt-4o-mini` |
 
 ---
 
@@ -88,8 +116,10 @@ Analysis-only desk — no live exchange execution unless explicitly scoped in a 
 ## Suggested order after MVP 6
 
 ```
-MVP 7 (ops)  →  MVP 8 (LLM/backtest)
+MVP 9 (operator hub)  →  MVP 7 (presets polish)  →  MVP 8 (deep LLM/backtest)
 ```
+
+MVP 9 ships core pieces of MVP 7–8; remaining 7–8 scope is presets UI, calibration export, ETH correlation v2.
 
 Supabase migrations to plan for MVP 7–8:
 

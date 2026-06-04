@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
 import { attachTradingDesk } from "@/lib/agents/run-trading-desk";
+import { applyDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import type { SpotQuote } from "@/lib/types/market";
 import { buildAnalyzeApiResponse } from "./analyze-response";
@@ -278,6 +279,7 @@ export function runDecisionEngineFromInput(
   deskMemory?: DeskMemoryClientPayload,
   ethQuote?: SpotQuote | null,
 ): AnalyzeApiResponse {
+  applyDeskRiskProfile(input.deskRiskProfile);
   const engineInput = withAppliedOverrides(input, derivativesOverrides);
   const resolvedOverrides = engineInput.derivativesOverrides;
 

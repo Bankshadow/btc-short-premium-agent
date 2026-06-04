@@ -36,6 +36,12 @@ export interface DecisionLogEntry {
   resolution?: PaperResolution;
   /** MVP 6 — frozen desk state for replay panel */
   replaySnapshot?: DeskReplaySnapshot | null;
+  /** MVP 9 — operator audit (does not change engine) */
+  operatorOverride?: {
+    disagreeWithVerdict: AgentRecommendation;
+    reason: string;
+    createdAt: string;
+  } | null;
 }
 
 export interface ResolveOutcomeInput {

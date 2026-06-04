@@ -22,6 +22,8 @@ export interface CronAnalyzeResponse {
   actionSummary: string;
   dataSourceIssues: AnalyzeApiResponse["dataSourceIssues"];
   telegramSent?: boolean;
+  discordSent?: boolean;
+  webhookSent?: boolean;
   supabaseSaved?: boolean;
   supabaseRunId?: string;
   warnings?: string[];

@@ -46,6 +46,9 @@ import {
 } from "@/lib/journal/journal-cloud-sync";
 import { loadDeskSettings, saveDeskSettings } from "@/lib/desk/desk-settings";
 import type { ResolveOutcomeInput } from "@/lib/journal/decision-log-types";
+import OperatorDeskPanel from "./operator/OperatorDeskPanel";
+import DeskNarratorPanel from "./operator/DeskNarratorPanel";
+import BacktestDeskPanel from "./operator/BacktestDeskPanel";
 
 const DEFAULT_MACRO_EVENT_STATUS = macroSelectionToStatus(DEFAULT_MACRO_EVENT);
 const DEFAULT_DERIVATIVES_OVERRIDES = resolveDerivativesOverrides(
@@ -92,6 +95,7 @@ export default function AnalyzeDashboard({
   const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(
     DESK_REFRESH_OPTIONS[1].ms,
   );
+  const [lastLogId, setLastLogId] = useState<string | null>(null);
   const {
     entries: logEntries,
     draftRules,
@@ -135,6 +139,7 @@ export default function AnalyzeDashboard({
     async (result: AnalyzeApiResponse) => {
       setData(result);
       const entry = saveFromAnalysis(result);
+      setLastLogId(entry.id);
       await paper.afterAnalysis(result, entry.id);
       refreshLog();
       await syncJournalIfEnabled();
@@ -157,11 +162,13 @@ export default function AnalyzeDashboard({
       loadPinnedNotes(),
     );
     const ethQuote = await fetchEthQuoteForDesk();
+    const deskSettings = loadDeskSettings();
     const analyzeRequest = {
       macroView,
       macroEvent,
       deskMemory,
       ethQuote,
+      deskRiskProfile: deskSettings.riskProfile,
       ...derivativesOverrides,
       derivativesOverrides,
     };
@@ -350,19 +357,27 @@ export default function AnalyzeDashboard({
             onSync={() => void paper.syncToServer()}
             onPull={() => void paper.pullFromServer()}
           />
+          <DeskNarratorPanel data={data} />
           <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
           <ReplayDeskPanel entries={logEntries} />
+          <BacktestDeskPanel entries={logEntries} />
           <DecisionLogPreview entries={logEntries} />
         </div>
       )}
 
       <details className="desk-panel group">
         <summary className="cursor-pointer list-none px-4 py-3 text-xs font-medium text-zinc-400 [&::-webkit-details-marker]:hidden">
-          Operations · journal sync · scoreboard · rules
+          Operations · operator · journal · scoreboard
           <span className="ml-2 opacity-50 group-open:hidden">▸</span>
           <span className="ml-2 hidden opacity-50 group-open:inline">▾</span>
         </summary>
         <div className="flex flex-col gap-4 border-t border-zinc-800 px-4 pb-4 pt-3">
+          <OperatorDeskPanel
+            data={data}
+            lastLogId={lastLogId}
+            openPaperCount={paper.openOrders.length}
+            onRiskProfileChange={() => trigger()}
+          />
           <label className="flex items-center gap-2 px-1 text-xs text-zinc-400">
             <input
               type="checkbox"
