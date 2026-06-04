@@ -1,6 +1,10 @@
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { DeskReplaySnapshot } from "@/lib/replay/replay-types";
+import type {
+  OrderTicket,
+  TradeControlState,
+} from "@/lib/trade-control/trade-control-types";
 
 export type OutcomeStatus = "PENDING" | "RESOLVED";
 
@@ -44,7 +48,13 @@ export interface DecisionLogEntry {
     disagreeWithVerdict: AgentRecommendation;
     reason: string;
     createdAt: string;
+    operatorName?: string;
+    originalVerdict?: AgentRecommendation;
+    riskVetoState?: boolean;
   } | null;
+  /** MVP 11 — semi-live trade ticket */
+  orderTicket?: OrderTicket | null;
+  tradeControl?: TradeControlState | null;
 }
 
 export interface ResolveOutcomeInput {

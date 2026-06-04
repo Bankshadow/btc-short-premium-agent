@@ -20,6 +20,8 @@ interface DeskTopBarProps {
   onToggleAutoRefresh: () => void;
   onRefreshNow: () => void;
   usingFallback?: boolean;
+  profileLabel?: string;
+  environmentModeLabel?: string;
 }
 
 export default function DeskTopBar({
@@ -33,6 +35,8 @@ export default function DeskTopBar({
   onToggleAutoRefresh,
   onRefreshNow,
   usingFallback,
+  profileLabel,
+  environmentModeLabel,
 }: DeskTopBarProps) {
   const lastLabel = lastAnalyzedAt
     ? new Date(lastAnalyzedAt).toLocaleString()
@@ -46,10 +50,13 @@ export default function DeskTopBar({
         </div>
         <div className="min-w-0">
           <h1 className="truncate font-semibold tracking-tight text-zinc-50">
-            BTC Premium Trading Desk
+            {profileLabel ?? "BTC Premium Trading Desk"}
           </h1>
           <p className="text-xs text-zinc-500">
-            Multi-agent committee · Bybit public data · analysis only
+            {environmentModeLabel
+              ? `${environmentModeLabel} · `
+              : ""}
+            Multi-agent committee · analysis only
           </p>
         </div>
       </div>
@@ -94,11 +101,52 @@ export default function DeskTopBar({
           <p className="font-mono text-xs text-zinc-300">{lastLabel}</p>
         </div>
 
-        <Link
-          href="/validation"
-          className="rounded-lg border border-teal-900/50 bg-teal-950/40 px-3 py-1.5 text-xs font-medium text-teal-300/90 hover:bg-teal-900/40"
+        <nav
+          className="hidden items-center gap-0.5 rounded-lg border border-zinc-800/90 bg-zinc-950/60 p-0.5 lg:flex"
+          aria-label="Ops modules"
         >
-          Validation
+          <Link
+            href="/council"
+            className="rounded-md border border-amber-900/40 bg-amber-950/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300/95 hover:bg-amber-900/45"
+          >
+            Council
+          </Link>
+          <Link
+            href="/capital"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-400/90 hover:bg-violet-950/50"
+          >
+            Capital
+          </Link>
+          <Link
+            href="/strategies"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400/90 hover:bg-indigo-950/50"
+          >
+            Strategies
+          </Link>
+          <Link
+            href="/validation"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-teal-400/90 hover:bg-teal-950/50"
+          >
+            Validation
+          </Link>
+          <Link
+            href="/governance"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-rose-400/90 hover:bg-rose-950/50"
+          >
+            Gov
+          </Link>
+          <Link
+            href="/workspace"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-400/90 hover:bg-cyan-950/50"
+          >
+            OS
+          </Link>
+        </nav>
+        <Link
+          href="/summary"
+          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800"
+        >
+          Public
         </Link>
 
         <div className="flex items-center gap-2">

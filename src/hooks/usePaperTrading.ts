@@ -22,6 +22,8 @@ import {
   syncOpenedPaperOrder,
   syncPaperOrdersToServer,
 } from "@/lib/paper/paper-sync";
+import { isHumanApprovalRequired } from "@/lib/trade-control/trade-control-settings";
+import { loadGovernanceState } from "@/lib/governance/governance-state";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export function usePaperTrading() {
@@ -90,7 +92,11 @@ export function usePaperTrading() {
   }, [refresh]);
 
   const afterAnalysis = useCallback(
-    async (data: AnalyzeApiResponse, decisionLogId: string) => {
+    async (
+      data: AnalyzeApiResponse,
+      decisionLogId: string,
+      options?: { skipAutoOpen?: boolean },
+    ) => {
       const btc = data.step1_marketSnapshot.spotPrice;
       const currentSettings = loadPaperSettings();
 
@@ -99,7 +105,13 @@ export function usePaperTrading() {
       }
 
       tryAutoClosePaperOnSkip(data);
-      const opened = tryAutoOpenPaperOrder(data, decisionLogId);
+      const gov = loadGovernanceState();
+      const skipOpen =
+        options?.skipAutoOpen ??
+        (isHumanApprovalRequired() || gov.pausePaperAutoOpen);
+      const opened = skipOpen
+        ? null
+        : tryAutoOpenPaperOrder(data, decisionLogId);
 
       refresh();
 

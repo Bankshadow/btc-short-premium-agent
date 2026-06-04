@@ -12,6 +12,11 @@ import {
   getOverrideForLog,
   saveOperatorOverride,
 } from "@/lib/operator/operator-override";
+import { saveOperatorOverrideLogEntry } from "@/lib/governance/operator-override-log";
+import { canOverrideVerdict, evaluateHardRuleLocks } from "@/lib/governance/hard-rule-lock";
+import { loadDecisionLog } from "@/lib/journal/decision-log";
+import { loadPaperOrders } from "@/lib/paper/paper-orders";
+import { loadGovernanceState } from "@/lib/governance/governance-state";
 import { buildDeskHealth } from "@/lib/operator/desk-health";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -60,14 +65,39 @@ export default function OperatorDeskPanel({
   };
 
   const saveOverride = () => {
-    if (!lastLogId || !overrideReason.trim()) return;
+    if (!lastLogId || !overrideReason.trim() || !data?.tradingDesk) return;
+    const hardRules = evaluateHardRuleLocks({
+      data,
+      entries: loadDecisionLog(),
+      orders: loadPaperOrders(),
+      riskProfile: settings.riskProfile,
+    });
+    if (!canOverrideVerdict(hardRules)) {
+      setAlertTestStatus(
+        `Override blocked: ${hardRules.activeRules.join(", ")}`,
+      );
+      return;
+    }
+    const result = saveOperatorOverrideLogEntry({
+      logEntryId: lastLogId,
+      originalVerdict: data.tradingDesk.committee.finalVerdict,
+      overriddenVerdict: overrideVerdict,
+      riskVetoState: data.tradingDesk.committee.riskVeto,
+      reason: overrideReason.trim(),
+    });
+    if (!result.ok) {
+      setAlertTestStatus(result.error ?? "Override failed");
+      return;
+    }
     saveOperatorOverride({
       logEntryId: lastLogId,
       disagreeWithVerdict: overrideVerdict,
       reason: overrideReason.trim(),
       createdAt: new Date().toISOString(),
+      originalVerdict: data.tradingDesk.committee.finalVerdict,
+      riskVetoState: data.tradingDesk.committee.riskVeto,
     });
-    setAlertTestStatus("Operator override saved (audit only).");
+    setAlertTestStatus("Operator override logged (audit only — engine unchanged).");
   };
 
   const fetchHealth = useCallback(async () => {
@@ -84,6 +114,10 @@ export default function OperatorDeskPanel({
   }, []);
 
   const testAlerts = async () => {
+    if (loadGovernanceState().disableAlerts) {
+      setAlertTestStatus("Alerts disabled by governance kill switch.");
+      return;
+    }
     setAlertTestStatus("Sending…");
     try {
       const res = await fetch("/api/alerts/test", {

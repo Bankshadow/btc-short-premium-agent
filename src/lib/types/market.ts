@@ -249,6 +249,10 @@ export interface AnalysisInput {
   deskMemory?: DeskMemoryClientPayload;
   /** MVP 5 — ETH spot for correlation read (browser /api/market). */
   ethQuote?: SpotQuote;
+  /** MVP 13 — strategy skill registry snapshot for committee gates */
+  strategyRegistry?: import("@/lib/strategy-registry/strategy-registry-types").StrategyRegistryAnalyzePayload;
+  /** MVP 14 — governance / safe mode / hard rules for committee */
+  governance?: import("@/lib/governance/governance-types").GovernanceAnalyzePayload;
 }
 
 /** @deprecated Use DecisionEngineOutput — kept for dashboard compatibility */

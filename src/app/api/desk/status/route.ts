@@ -23,10 +23,14 @@ export async function GET() {
     },
     apis: {
       analyze: "POST /api/analyze",
+      market: "GET /api/market",
       paperOrders: "GET /api/paper/orders?status=open",
       paperSync: "POST /api/paper/sync",
       journalSync: "GET|POST /api/journal/sync",
       deskHealth: "GET /api/desk/health",
+      alertsTest: "POST /api/alerts/test",
+      apiDocs: "/api-docs",
+      tradingOs: "GET /api/trading-os",
     },
   });
 }

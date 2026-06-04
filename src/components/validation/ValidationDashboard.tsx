@@ -79,6 +79,12 @@ export default function ValidationDashboard() {
           >
             ← Trading desk
           </Link>
+          <Link
+            href="/capital"
+            className="rounded-lg border border-violet-900/50 px-3 py-1.5 text-xs text-violet-300/90 hover:bg-violet-950/40"
+          >
+            Capital
+          </Link>
           <button
             type="button"
             onClick={() => setRefreshKey((k) => k + 1)}

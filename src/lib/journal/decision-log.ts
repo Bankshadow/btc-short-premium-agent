@@ -2,6 +2,7 @@ import { runReflectionAgent } from "@/lib/agents/reflection-agent";
 import { buildReplaySnapshot } from "@/lib/replay/build-replay-snapshot";
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
+import { attachTradeControlToEntry } from "@/lib/trade-control/trade-control-log";
 import { createDraftRuleFromReflection } from "./draft-rules";
 import { computePaperPnl } from "./paper-pnl";
 import type {
@@ -116,6 +117,14 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
       raw.operatorOverride && typeof raw.operatorOverride === "object"
         ? (raw.operatorOverride as DecisionLogEntry["operatorOverride"])
         : null,
+    orderTicket:
+      raw.orderTicket && typeof raw.orderTicket === "object"
+        ? (raw.orderTicket as DecisionLogEntry["orderTicket"])
+        : null,
+    tradeControl:
+      raw.tradeControl && typeof raw.tradeControl === "object"
+        ? (raw.tradeControl as DecisionLogEntry["tradeControl"])
+        : null,
   };
 }
 
@@ -192,7 +201,8 @@ export function appendDecisionLogFromAnalysis(
     entry.deskRiskProfile = meta.deskRiskProfile;
   }
   const entries = saveDecisionLogEntry(entry);
-  return { entries, entry };
+  const attached = attachTradeControlToEntry(entry, data, entries);
+  return { entries: loadDecisionLog(), entry: attached ?? entry };
 }
 
 export function updateDecisionLogEntry(

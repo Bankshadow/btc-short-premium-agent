@@ -13,6 +13,115 @@ Analysis-only desk — no live exchange execution unless explicitly scoped in a 
 | 6 | Portfolio milestones, session replay, journal Supabase sync, cron desk briefing |
 | 9 | Operator hub: alerts, risk profile, narrator, backtest, desk APIs, webhooks |
 | 10 | Profit validation, capital allocation v2, regime router, kill switch (`/validation`) |
+| 11 | Semi-live trade control — order ticket, human approval gate, execution modes |
+| 12 | Capital scaling & account loop — $1k→$20k stages, split engine, scale rules (`/capital`) |
+| 13 | Strategy skill registry — promote/demote, committee gates (`/strategies`) |
+| 14 | Safety, governance, incident review, hard rule lock (`/governance`, `/incidents`) |
+| 15 | Trading OS productization — workspace, modes, API docs, reports, public view |
+| 16 | AI Strategy Council — multi-agent debate, proposals, council memo (`/council`) |
+
+---
+
+## MVP 16 — AI Strategy Council ✅
+
+**Goal:** Self-improving desk council — agents debate $1k→$20k pace with risk control; no auto live trading.
+
+### Delivered
+
+1. **Six council agents** — goal, performance, optimizer, risk critic, capital allocator, moderator
+2. **POST /api/council/run** — full session response schema
+3. **UI `/council`** — debate, proposals, risk review, memo, proposal status board
+4. **Guardrails** — DRAFT proposals, hard rules locked, human approval only
+
+### API
+
+- `POST /api/council/run` — pass `entries`, `orders`, `topic`, equity params from client
+
+---
+
+## MVP 15 — Trading OS Productization ✅
+
+**Goal:** Reusable AI Trading Desk OS — workspace profiles, environment modes, API contract, exports.
+
+### Delivered
+
+1. **Workspace / desk config** — 4 profiles (`/workspace`)
+2. **Environment modes** — DEMO, PAPER, SEMI_LIVE, SAFE_MODE with wired effects
+3. **API contract** — `/api-docs` for core desk APIs
+4. **Report export** — daily, weekly, scoreboard, incidents (`/reports`)
+5. **Public vs private** — `/summary` public · private operator tools on `/`
+
+### API
+
+- `GET /api/trading-os` — product metadata
+
+---
+
+## MVP 14 — Safety, Governance & Incident Review ✅
+
+**Goal:** Governance and safety controls for semi-live operations — no auto live trading.
+
+### Delivered
+
+1. **User roles placeholder** — Viewer, Operator, Risk Manager, Admin (local audit attribution)
+2. **Operator override log** — timestamp, verdicts, veto, reason, operator, outcome
+3. **Kill switch panel** — pause analysis, paper auto-open, aggressive, alerts, safe mode
+4. **Incident review** — `/incidents` with full incident schema + status workflow
+5. **Hard rule lock** — stale data, daily loss, data quality, missing risk data (non-overridable)
+6. **Safe mode** — forces committee TRADE → WAIT/SKIP; logged to governance audit
+
+### API
+
+- `GET /api/governance` — roles, hard rules, kill switch actions
+
+---
+
+## MVP 13 — Strategy Skill Registry ✅
+
+**Goal:** Registry for trading strategies/skills — scored, promoted, or disabled; gates committee and tickets.
+
+### Delivered
+
+1. **Strategy schema** — id, version, product type, regimes, risk, metrics, draft rule links
+2. **Registry UI** — `/strategies` list + detail, promote/demote/disable, link draft rules
+3. **Version history** — placeholder log on status changes
+4. **Committee integration** — DISABLED/DEPRECATED agents cannot propose TRADE; payload on analyze
+5. **Trade tickets** — PAPER_TESTING / DRAFT / WATCHLIST block semi-live order tickets
+
+### API
+
+- `GET /api/strategies` — seeds and gate rules
+
+---
+
+## MVP 12 — Capital Scaling & Account Loop ✅
+
+**Goal:** Capital stage manager for the $1k → $20k mission — planning and simulation only.
+
+### Delivered
+
+1. **Portfolio milestone tracker** — stages 1k → 2k → 4k → 8k → 16k → 20k+
+2. **Capital split engine** — protected reserve, core, growth, experimental (rebalance on 2× stage floor)
+3. **Scale permission rules** — sample size, avg R, drawdown, operator overrides, data quality
+4. **Capital dashboard** — `/capital` with stage, milestone, split, allocation, scale gate, ruin warning
+
+### API
+
+- `GET /api/capital` — mission ladder + scale rule thresholds
+
+---
+
+## MVP 11 — Semi-Live Trade Control ✅
+
+**Goal:** Human-approved trade layer — no automatic live exchange orders.
+
+### Delivered
+
+1. **Order ticket** on committee TRADE (strategy, SL, TP, size, invalidation, reasons)
+2. **Approval gate** — Approve / Reject / Modify / Paper only + operator notes → decision log
+3. **Pre-trade checklist** — data quality, veto, loss limits, size, macro, kill switch
+4. **Execution modes** — `COPY_ONLY`, `PAPER_EXECUTE`, `MANUAL_APPROVED_LIVE_PLACEHOLDER`
+5. Auto paper on TRADE **disabled** when human approval required
 
 ---
 

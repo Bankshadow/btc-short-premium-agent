@@ -45,7 +45,28 @@ import {
   syncJournalToServer,
 } from "@/lib/journal/journal-cloud-sync";
 import { loadDeskSettings, saveDeskSettings } from "@/lib/desk/desk-settings";
-import type { ResolveOutcomeInput } from "@/lib/journal/decision-log-types";
+import type {
+  DecisionLogEntry,
+  ResolveOutcomeInput,
+} from "@/lib/journal/decision-log-types";
+import { loadDecisionLog } from "@/lib/journal/decision-log";
+import { isHumanApprovalRequired } from "@/lib/trade-control/trade-control-settings";
+import { buildRegistryPayloadForAnalyze } from "@/lib/strategy-registry/build-strategy-registry";
+import { loadPaperOrders } from "@/lib/paper/paper-orders";
+import { buildStrategyRegistry } from "@/lib/strategy-registry/build-strategy-registry";
+import { loadGovernanceState } from "@/lib/governance/governance-state";
+import { buildGovernancePayloadForAnalyze } from "@/lib/governance/build-governance-payload";
+import TradeControlPanel from "@/components/trade-control/TradeControlPanel";
+import {
+  applyWorkspaceSideEffects,
+  loadWorkspaceConfig,
+} from "@/lib/trading-os/workspace-store";
+import {
+  allowMockFallbackInCurrentMode,
+  getTradingOsModeEffects,
+} from "@/lib/trading-os/trading-os-runtime";
+import { getDeskProfile } from "@/lib/trading-os/desk-profiles";
+import { ENVIRONMENT_MODE_LABELS } from "@/lib/trading-os/environment-modes";
 import OperatorDeskPanel from "./operator/OperatorDeskPanel";
 import DeskNarratorPanel from "./operator/DeskNarratorPanel";
 import BacktestDeskPanel from "./operator/BacktestDeskPanel";
@@ -96,6 +117,13 @@ export default function AnalyzeDashboard({
     DESK_REFRESH_OPTIONS[1].ms,
   );
   const [lastLogId, setLastLogId] = useState<string | null>(null);
+  const [tradeControlEntry, setTradeControlEntry] =
+    useState<DecisionLogEntry | null>(null);
+  const [workspace, setWorkspace] = useState(loadWorkspaceConfig);
+
+  useEffect(() => {
+    applyWorkspaceSideEffects(workspace);
+  }, [workspace]);
   const {
     entries: logEntries,
     draftRules,
@@ -140,8 +168,16 @@ export default function AnalyzeDashboard({
       setData(result);
       const entry = saveFromAnalysis(result);
       setLastLogId(entry.id);
-      await paper.afterAnalysis(result, entry.id);
+      const fresh =
+        loadDecisionLog().find((e) => e.id === entry.id) ?? entry;
+      setTradeControlEntry(fresh);
+      await paper.afterAnalysis(result, entry.id, {
+        skipAutoOpen: isHumanApprovalRequired(),
+      });
       refreshLog();
+      setTradeControlEntry(
+        loadDecisionLog().find((e) => e.id === entry.id) ?? fresh,
+      );
       await syncJournalIfEnabled();
     },
     [saveFromAnalysis, paper.afterAnalysis, refreshLog, syncJournalIfEnabled],
@@ -149,6 +185,14 @@ export default function AnalyzeDashboard({
 
   const handleAnalyze = useCallback(async () => {
     if (!controlsReady) return;
+
+    const govState = loadGovernanceState();
+    if (govState.pauseAnalysis) {
+      setFetchError(
+        "Analysis paused by governance — clear “Pause all analysis” on /governance.",
+      );
+      return;
+    }
 
     setLoading(true);
     setFetchError(null);
@@ -163,12 +207,29 @@ export default function AnalyzeDashboard({
     );
     const ethQuote = await fetchEthQuoteForDesk();
     const deskSettings = loadDeskSettings();
+    const logSnapshot = loadDecisionLog();
+    const ordersSnapshot = loadPaperOrders();
+    const strategyRegistry = buildRegistryPayloadForAnalyze(
+      buildStrategyRegistry({
+        entries: logSnapshot,
+        orders: ordersSnapshot,
+        riskProfile: deskSettings.riskProfile,
+      }),
+    );
+    const governance = buildGovernancePayloadForAnalyze({
+      entries: logSnapshot,
+      orders: ordersSnapshot,
+      riskProfile: deskSettings.riskProfile,
+    });
+
     const analyzeRequest = {
       macroView,
       macroEvent,
       deskMemory,
       ethQuote,
       deskRiskProfile: deskSettings.riskProfile,
+      strategyRegistry,
+      governance,
       ...derivativesOverrides,
       derivativesOverrides,
     };
@@ -221,6 +282,8 @@ export default function AnalyzeDashboard({
           ...engineInput,
           deskMemory,
           ethQuote,
+          strategyRegistry,
+          governance,
           ...derivativesOverrides,
           derivativesOverrides,
         });
@@ -252,8 +315,10 @@ export default function AnalyzeDashboard({
       const bybitFailed = isBybitFetchError(message);
 
       setFetchError(bybitFailed ? BYBIT_API_FAILED_MESSAGE : message);
-      await persistAnalysis(getMockDashboardFallback());
-      setUsingFallback(true);
+      if (allowMockFallbackInCurrentMode()) {
+        await persistAnalysis(getMockDashboardFallback());
+        setUsingFallback(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -308,6 +373,10 @@ export default function AnalyzeDashboard({
   const lastAnalyzedAt =
     data?.step5_verdict.analyzedAt ?? data?.tradingDesk?.analyzedAt ?? null;
 
+  const activeProfile = getDeskProfile(workspace.activeProfileId);
+  const modeEffects = getTradingOsModeEffects();
+  const isPrivateView = workspace.viewMode === "private";
+
   return (
     <TradingDeskLayout
       data={data}
@@ -324,6 +393,8 @@ export default function AnalyzeDashboard({
       statusById={statusById}
       activeIndex={activeIndex}
       pipelineRunning={pipelineRunning}
+      profileLabel={activeProfile.name}
+      environmentModeLabel={ENVIRONMENT_MODE_LABELS[workspace.environmentMode]}
       sidebar={
         <DeskControlsSidebar
           fetchError={fetchError}
@@ -340,6 +411,27 @@ export default function AnalyzeDashboard({
           className={`flex flex-col gap-4 transition-opacity ${loading ? "pointer-events-none opacity-60" : ""}`}
           aria-busy={loading}
         >
+          <p className="rounded-lg border border-cyan-900/30 bg-cyan-950/20 px-3 py-2 text-[11px] text-cyan-200/80">
+            Trading OS · {activeProfile.name} · {ENVIRONMENT_MODE_LABELS[workspace.environmentMode]} —{" "}
+            {modeEffects.analysisOnlyLabel}
+            {" · "}
+            <a href="/workspace" className="underline hover:text-cyan-100">
+              Change workspace
+            </a>
+          </p>
+          {modeEffects.allowOrderTickets && (
+            <TradeControlPanel
+              data={data}
+              logEntry={tradeControlEntry}
+              onComplete={() => {
+                refreshLog();
+                paper.refresh();
+                setTradeControlEntry(
+                  loadDecisionLog().find((e) => e.id === lastLogId) ?? null,
+                );
+              }}
+            />
+          )}
           <PortfolioMilestonesPanel portfolio={portfolio} />
           <PaperTradingPanel
             orders={paper.orders}
@@ -357,10 +449,14 @@ export default function AnalyzeDashboard({
             onSync={() => void paper.syncToServer()}
             onPull={() => void paper.pullFromServer()}
           />
-          <DeskNarratorPanel data={data} />
+          {isPrivateView && <DeskNarratorPanel data={data} />}
           <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
-          <ReplayDeskPanel entries={logEntries} />
-          <BacktestDeskPanel entries={logEntries} />
+          {isPrivateView && (
+            <>
+              <ReplayDeskPanel entries={logEntries} />
+              <BacktestDeskPanel entries={logEntries} />
+            </>
+          )}
           <DecisionLogPreview entries={logEntries} />
         </div>
       )}
@@ -372,12 +468,25 @@ export default function AnalyzeDashboard({
           <span className="ml-2 hidden opacity-50 group-open:inline">▾</span>
         </summary>
         <div className="flex flex-col gap-4 border-t border-zinc-800 px-4 pb-4 pt-3">
-          <OperatorDeskPanel
-            data={data}
-            lastLogId={lastLogId}
-            openPaperCount={paper.openOrders.length}
-            onRiskProfileChange={() => trigger()}
-          />
+          {isPrivateView ? (
+            <OperatorDeskPanel
+              data={data}
+              lastLogId={lastLogId}
+              openPaperCount={paper.openOrders.length}
+              onRiskProfileChange={() => trigger()}
+            />
+          ) : (
+            <p className="text-xs text-zinc-500">
+              Operator controls are on the{" "}
+              <a href="/" className="text-cyan-400 underline">
+                private desk
+              </a>
+              . Public stats:{" "}
+              <a href="/summary" className="text-cyan-400 underline">
+                /summary
+              </a>
+            </p>
+          )}
           <label className="flex items-center gap-2 px-1 text-xs text-zinc-400">
             <input
               type="checkbox"

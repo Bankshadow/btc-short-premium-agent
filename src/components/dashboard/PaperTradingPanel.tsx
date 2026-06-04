@@ -60,7 +60,13 @@ function OrderRow({
             {order.instrument.replace(/_/g, " ")} · {order.symbol}
           </p>
           <p className="text-[10px] text-zinc-500">
-            {order.status} · {order.openedBy === "committee_auto" ? "AI desk" : "Manual"} ·
+            {order.status} ·{" "}
+            {order.openedBy === "committee_auto"
+              ? "AI desk"
+              : order.openedBy === "operator_approved"
+                ? "Operator approved"
+                : "Manual"}{" "}
+            ·
             size {order.sizePct}%
           </p>
         </div>

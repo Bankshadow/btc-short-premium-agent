@@ -3,6 +3,8 @@ import { runAnalysisEngine, runDecisionEngineFromInput } from "./analyze";
 import { normalizeAnalyzeRequest } from "./analyze-request";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import type { SpotQuote } from "@/lib/types/market";
+import type { StrategyRegistryAnalyzePayload } from "@/lib/strategy-registry/strategy-registry-types";
+import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
 import type {
   AnalysisInput,
   AnalyzeApiResponse,
@@ -42,6 +44,12 @@ export async function runAnalyzeRequest(
     | "balanced"
     | "aggressive"
     | undefined;
+  const strategyRegistry = (raw as AnalyzeRequestBody).strategyRegistry as
+    | StrategyRegistryAnalyzePayload
+    | undefined;
+  const governance = (raw as AnalyzeRequestBody).governance as
+    | GovernanceAnalyzePayload
+    | undefined;
   applyDeskRiskProfile(deskRiskProfile);
 
   if (hasFullEngineInput(body)) {
@@ -50,8 +58,16 @@ export async function runAnalyzeRequest(
       body.derivativesOverrides,
       deskMemory,
       ethQuote,
+      strategyRegistry,
+      governance,
     );
   }
 
-  return runAnalysisEngine({ ...body, deskMemory, ethQuote });
+  return runAnalysisEngine({
+    ...body,
+    deskMemory,
+    ethQuote,
+    strategyRegistry,
+    governance,
+  });
 }

@@ -66,3 +66,98 @@ body {
   );
   animation: desk-scan 2s ease-in-out infinite;
 }
+
+/* Ops / satellite command pages */
+.ops-panel-accent {
+  background: linear-gradient(
+    135deg,
+    rgba(15, 17, 23, 0.98) 0%,
+    rgba(9, 11, 15, 0.98) 100%
+  );
+  border: 1px solid var(--desk-border);
+  border-radius: 0.625rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.ops-kpi {
+  border-radius: 0.5rem;
+  border: 1px solid #1a2030;
+  background: rgba(9, 11, 15, 0.65);
+  padding: 0.75rem 1rem;
+}
+
+.ops-kpi-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+.ops-kpi-value {
+  margin-top: 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #f4f4f5;
+  line-height: 1.2;
+}
+
+.ops-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  border: 1px solid #27272a;
+  background: rgba(9, 9, 11, 0.8);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+
+.ops-chip-live {
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+.ops-verdict {
+  border-radius: 0.625rem;
+  border: 1px solid;
+  padding: 1rem 1.25rem;
+}
+
+.ops-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.ops-agent-card {
+  border-radius: 0.5rem;
+  border: 1px solid #27272a;
+  background: linear-gradient(180deg, rgba(9, 11, 15, 0.9) 0%, rgba(15, 17, 23, 0.5) 100%);
+  padding: 0.875rem 1rem;
+  transition: border-color 0.15s ease;
+}
+
+.ops-agent-card:hover {
+  border-color: #3f3f46;
+}
+
+.ops-memo {
+  border-radius: 0.5rem;
+  border: 1px solid #1e2430;
+  background: #06070a;
+  padding: 1rem 1.125rem;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.55;
+  color: #a1a1aa;
+  max-height: 18rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}

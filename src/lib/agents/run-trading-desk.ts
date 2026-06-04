@@ -20,13 +20,42 @@ import {
   TRADING_DESK_DISCLAIMER,
   type TradingDeskContext,
 } from "./shared";
+import { applyRegistryToStrategyAgents } from "@/lib/strategy-registry/strategy-registry-gates";
+import type { StrategyRegistryAnalyzePayload } from "@/lib/strategy-registry/strategy-registry-types";
+import { applyGovernanceToVerdict } from "@/lib/governance/apply-governance-verdict";
+import { applyGovernanceRuntime } from "@/lib/governance/governance-runtime";
+import {
+  evaluateHardRuleLocks,
+  mergeHardRuleResults,
+} from "@/lib/governance/hard-rule-lock";
+import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
 
 export function runTradingDesk(
   input: DecisionEngineInput,
   response: AnalyzeApiResponse,
   memoryPayload?: DeskMemoryClientPayload,
   ethQuote?: SpotQuote | null,
+  strategyRegistry?: StrategyRegistryAnalyzePayload | null,
+  governance?: GovernanceAnalyzePayload | null,
 ): TradingDeskOutput {
+  const serverRules = evaluateHardRuleLocks({ data: response });
+  const hardRules = governance?.hardRules
+    ? mergeHardRuleResults(governance.hardRules, serverRules)
+    : serverRules;
+
+  const effectiveGovernance: GovernanceAnalyzePayload = {
+    safeMode: governance?.safeMode ?? false,
+    disableAggressiveMode: governance?.disableAggressiveMode ?? false,
+    pauseAnalysis: governance?.pauseAnalysis ?? false,
+    hardRules,
+  };
+
+  applyGovernanceRuntime({
+    safeMode: effectiveGovernance.safeMode,
+    disableAggressiveMode: effectiveGovernance.disableAggressiveMode,
+    hardRules: effectiveGovernance.hardRules,
+  });
+
   const baseCtx = buildTradingDeskContext(input, response);
   const marketRegime = resolveMarketRegime(baseCtx);
 
@@ -45,12 +74,18 @@ export function runTradingDesk(
 
   const bullThesis = runBullThesisAgent(ctx);
   const bearThesis = runBearThesisAgent(ctx);
-  const spot = runSpotStrategyAgent(ctx);
-  const futures = runFuturesStrategyAgent(ctx);
-  const options = runOptionsStrategyAgent(ctx);
+  const spotRaw = runSpotStrategyAgent(ctx);
+  const futuresRaw = runFuturesStrategyAgent(ctx);
+  const optionsRaw = runOptionsStrategyAgent(ctx);
+  const { spot, futures, options } = applyRegistryToStrategyAgents({
+    spot: spotRaw,
+    futures: futuresRaw,
+    options: optionsRaw,
+    payload: strategyRegistry,
+  });
   const riskManager = runRiskManagerAgent(ctx, bullThesis, bearThesis);
 
-  const { verdict: committee, debate } = runCommitteeAgent({
+  const { verdict: committeeRaw, debate } = runCommitteeAgent({
     ctx,
     spot,
     futures,
@@ -61,6 +96,7 @@ export function runTradingDesk(
     deskMemory,
     research,
   });
+  const committee = applyGovernanceToVerdict(committeeRaw, effectiveGovernance);
 
   const agents = [
     ...research.agents,
@@ -93,10 +129,19 @@ export function attachTradingDesk(
   response: AnalyzeApiResponse,
   memoryPayload?: DeskMemoryClientPayload,
   ethQuote?: SpotQuote | null,
+  strategyRegistry?: StrategyRegistryAnalyzePayload | null,
+  governance?: GovernanceAnalyzePayload | null,
 ): AnalyzeApiResponse {
   return {
     ...response,
-    tradingDesk: runTradingDesk(input, response, memoryPayload, ethQuote),
+    tradingDesk: runTradingDesk(
+      input,
+      response,
+      memoryPayload,
+      ethQuote,
+      strategyRegistry,
+      governance,
+    ),
   };
 }
 

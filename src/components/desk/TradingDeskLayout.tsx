@@ -27,6 +27,8 @@ interface TradingDeskLayoutProps {
   statusById: (id: DeskAgentId) => AgentPipelineStatus;
   activeIndex: number;
   pipelineRunning: boolean;
+  profileLabel?: string;
+  environmentModeLabel?: string;
 }
 
 export default function TradingDeskLayout({
@@ -46,6 +48,8 @@ export default function TradingDeskLayout({
   statusById,
   activeIndex,
   pipelineRunning,
+  profileLabel,
+  environmentModeLabel,
 }: TradingDeskLayoutProps) {
   const deskLive = Boolean(desk && !loading);
 
@@ -62,6 +66,8 @@ export default function TradingDeskLayout({
         onToggleAutoRefresh={onToggleAutoRefresh}
         onRefreshNow={onRefreshNow}
         usingFallback={usingFallback}
+        profileLabel={profileLabel}
+        environmentModeLabel={environmentModeLabel}
       />
 
       <MarketTapeBar data={data} />

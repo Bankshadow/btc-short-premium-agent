@@ -27,7 +27,7 @@ export interface PaperOrder {
   unrealizedPnlPct: number | null;
   lastMarkAt: string | null;
   lastMarkBtcPrice: number | null;
-  openedBy: "committee_auto" | "manual";
+  openedBy: "committee_auto" | "manual" | "operator_approved";
   notes: string;
   supabaseId?: string;
 }

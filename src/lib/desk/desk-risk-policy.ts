@@ -1,4 +1,5 @@
 import type { TradeRecommendation } from "@/lib/types/market";
+import { isGovernanceAggressiveDisabled } from "@/lib/governance/governance-runtime";
 
 export type DeskRiskProfile = "balanced" | "aggressive";
 
@@ -19,6 +20,7 @@ export function applyDeskRiskProfile(profile?: DeskRiskProfile): DeskRiskProfile
 }
 
 export function isAggressiveDeskRisk(): boolean {
+  if (isGovernanceAggressiveDisabled()) return false;
   return getDeskRiskProfile() === "aggressive";
 }
 

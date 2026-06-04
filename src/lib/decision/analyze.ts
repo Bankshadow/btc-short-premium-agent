@@ -14,6 +14,8 @@ import type {
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
 import { attachTradingDesk } from "@/lib/agents/run-trading-desk";
+import type { StrategyRegistryAnalyzePayload } from "@/lib/strategy-registry/strategy-registry-types";
+import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
 import { applyDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import type { SpotQuote } from "@/lib/types/market";
@@ -278,6 +280,8 @@ export function runDecisionEngineFromInput(
   derivativesOverrides?: DerivativesOverrides,
   deskMemory?: DeskMemoryClientPayload,
   ethQuote?: SpotQuote | null,
+  strategyRegistry?: StrategyRegistryAnalyzePayload | null,
+  governance?: GovernanceAnalyzePayload | null,
 ): AnalyzeApiResponse {
   applyDeskRiskProfile(input.deskRiskProfile);
   const engineInput = withAppliedOverrides(input, derivativesOverrides);
@@ -305,7 +309,14 @@ export function runDecisionEngineFromInput(
 
   const output = runDecisionEngine(engineInput);
   const response = buildAnalyzeApiResponse(output, sourceErrors);
-  return attachTradingDesk(engineInput, response, deskMemory, ethQuote);
+  return attachTradingDesk(
+    engineInput,
+    response,
+    deskMemory,
+    ethQuote,
+    strategyRegistry,
+    governance,
+  );
 }
 
 /** Map 6-step output to legacy AnalysisResult for dashboard components. */
@@ -337,10 +348,19 @@ export async function runAnalysisEngine(
 ): Promise<AnalyzeApiResponse> {
   const deskMemory = overrides.deskMemory;
   const ethQuote = overrides.ethQuote ?? null;
+  const strategyRegistry = overrides.strategyRegistry ?? null;
+  const governance = overrides.governance ?? null;
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
   const base = buildAnalyzeApiResponse(output, sourceErrors);
-  const response = attachTradingDesk(input, base, deskMemory, ethQuote);
+  const response = attachTradingDesk(
+    input,
+    base,
+    deskMemory,
+    ethQuote,
+    strategyRegistry,
+    governance,
+  );
 
   if (isBybitCriticalFailure(response.marketSnapshot, response.dataSourceIssues)) {
     const issues = [
@@ -356,6 +376,8 @@ export async function runAnalysisEngine(
       },
       deskMemory,
       ethQuote,
+      strategyRegistry,
+      governance,
     );
   }
 

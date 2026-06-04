@@ -17,6 +17,8 @@ export interface DraftRule {
   title: string;
   description: string;
   fromReflection: boolean;
+  /** MVP 13 — linked strategy skill id */
+  linkedStrategyId?: string;
 }
 
 export function loadDraftRules(): DraftRule[] {
