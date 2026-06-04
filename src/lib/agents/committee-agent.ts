@@ -8,9 +8,14 @@ import { collectTopReasons } from "@/lib/decision/verdict-display";
 import type { DeskMemorySnapshot } from "@/lib/memory/types";
 import type { ResearchBrief } from "@/lib/research/research-types";
 import {
+  committeeMinDataQualityScore,
+  isAggressiveDeskRisk,
+} from "@/lib/desk/desk-risk-policy";
+import {
   majorityRecommendation,
   type TradingDeskContext,
 } from "./shared";
+import { tradeRecToAgent } from "./types";
 
 export interface CommitteeInput {
   ctx: TradingDeskContext;
@@ -74,19 +79,57 @@ export function runCommitteeAgent(input: CommitteeInput): {
     finalVerdict = "SKIP";
   } else if (bear.recommendation === "SKIP" && bull.recommendation !== "TRADE") {
     finalVerdict = "SKIP";
-  } else if (research.dataQuality.recommendation === "SKIP") {
+  } else if (
+    research.dataQuality.recommendation === "SKIP" &&
+    research.dataQualityScore < committeeMinDataQualityScore()
+  ) {
     finalVerdict = "WAIT";
     disagreementNotes.push(
       "Data Quality Agent: incomplete tape — committee waits.",
     );
-  } else if (research.dataQualityScore < 45) {
+  } else if (research.dataQualityScore < committeeMinDataQualityScore()) {
     finalVerdict = "WAIT";
-  } else if (options.missingData.length > 0 || strategyAgents.some((a) => a.missingData.length > 0)) {
+  } else if (
+    !isAggressiveDeskRisk() &&
+    (options.missingData.length > 0 ||
+      strategyAgents.some((a) => a.missingData.length > 0))
+  ) {
     finalVerdict = "WAIT";
-  } else if (majority === "TRADE" && options.recommendation !== "TRADE") {
+  } else if (
+    !isAggressiveDeskRisk() &&
+    majority === "TRADE" &&
+    options.recommendation !== "TRADE"
+  ) {
     finalVerdict = options.recommendation === "SKIP" ? "SKIP" : "WAIT";
-  } else if (majority === "TRADE" && bear.recommendation === "SKIP") {
+  } else if (
+    !isAggressiveDeskRisk() &&
+    majority === "TRADE" &&
+    bear.recommendation === "SKIP"
+  ) {
     finalVerdict = "WAIT";
+  }
+
+  const playbookAgent = tradeRecToAgent(ctx.response.step5_verdict.recommendation);
+  if (
+    !riskVeto &&
+    isAggressiveDeskRisk() &&
+    playbookAgent === "TRADE" &&
+    finalVerdict !== "TRADE"
+  ) {
+    finalVerdict = "TRADE";
+    agreementNotes.push(
+      "Aggressive desk: playbook engine TRADE — committee aligns for paper execution.",
+    );
+  } else if (
+    !riskVeto &&
+    isAggressiveDeskRisk() &&
+    majority === "TRADE" &&
+    finalVerdict === "WAIT"
+  ) {
+    finalVerdict = "TRADE";
+    agreementNotes.push(
+      "Strategy majority TRADE — aggressive desk approves with reduced size.",
+    );
   }
 
   const playbookReasons = collectTopReasons(

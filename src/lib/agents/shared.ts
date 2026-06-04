@@ -14,6 +14,7 @@ import type {
 import { tradeRecToAgent } from "./types";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import { LIQUIDATION_SKIP } from "@/lib/decision/thresholds";
+import { riskDailyLossStreakFlag } from "@/lib/desk/desk-risk-policy";
 
 export const TRADING_DESK_DISCLAIMER =
   "TradingAgents-style crypto desk (Bybit) — analysis only. Human approval required. No auto execution.";
@@ -54,7 +55,7 @@ export function buildTradingDeskContext(
     input,
     response,
     sourceErrors: response.sourceErrors ?? response.dataSourceIssues ?? [],
-    dailyLossLimitHit: consecutive >= 2,
+    dailyLossLimitHit: consecutive >= riskDailyLossStreakFlag(),
   };
 }
 

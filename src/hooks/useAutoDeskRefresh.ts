@@ -15,7 +15,7 @@ export function useAutoDeskRefresh(
   options?: {
     enabled?: boolean;
     intervalMs?: number;
-    /** Wait for localStorage macro/overrides before first run */
+    /** Wait for client journal hydration before first run */
     ready?: boolean;
   },
 ) {

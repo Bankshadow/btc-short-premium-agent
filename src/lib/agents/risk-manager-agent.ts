@@ -4,15 +4,20 @@ import {
   isIntendedShortCall,
 } from "@/lib/decision/no-trade-rules";
 import {
-  IV_HV_SKIP_THRESHOLD,
   LIQUIDATION_SKIP,
-  SD_SKIP_THRESHOLD,
 } from "@/lib/decision/thresholds";
+import {
+  isAggressiveDeskRisk,
+  riskConsecutiveLossVeto,
+  riskIvHvFloor,
+  riskMissingFieldVetoCount,
+  riskSdFloor,
+} from "@/lib/desk/desk-risk-policy";
+import { tradeRecToAgent } from "./types";
 import {
   buildAgentOutput,
   formatProposedAction,
   getMissingDataLabels,
-  MAX_CONSECUTIVE_LOSSES_SKIP,
   MAX_DAILY_LOSS_PCT,
   selectBestOptionCandidate,
   withDeskMemoryReasons,
@@ -49,9 +54,13 @@ export function runRiskManagerAgent(
     }
   }
 
-  if (missing.length > 0) {
+  if (missing.length >= riskMissingFieldVetoCount()) {
     vetoReasons.push(
       `Missing critical data (${missing.join(", ")}) — no TRADE.`,
+    );
+  } else if (missing.length > 0) {
+    reasons.push(
+      `Partial tape (${missing.join(", ")}) — size down, desk may still TRADE.`,
     );
   }
 
@@ -60,12 +69,22 @@ export function runRiskManagerAgent(
     vetoReasons.push(`Liquidation > $200M — SKIP.`);
   }
 
-  if (shortPremium && market.ivHvRatio > 0 && market.ivHvRatio < IV_HV_SKIP_THRESHOLD) {
-    vetoReasons.push(`IV/HV < ${IV_HV_SKIP_THRESHOLD} — SKIP short premium.`);
+  const ivFloor = riskIvHvFloor();
+  if (shortPremium && market.ivHvRatio > 0 && market.ivHvRatio < ivFloor) {
+    if (!isAggressiveDeskRisk()) {
+      vetoReasons.push(`IV/HV < ${ivFloor} — SKIP short premium.`);
+    } else {
+      reasons.push(`IV/HV ${market.ivHvRatio.toFixed(2)} below ideal — trade smaller.`);
+    }
   }
 
-  if (candidate && shortPremium && candidate.sdDistance < SD_SKIP_THRESHOLD) {
-    vetoReasons.push(`SD distance < ${SD_SKIP_THRESHOLD} — SKIP options.`);
+  const sdFloor = riskSdFloor();
+  if (candidate && shortPremium && candidate.sdDistance < sdFloor) {
+    if (!isAggressiveDeskRisk()) {
+      vetoReasons.push(`SD distance < ${sdFloor} — SKIP options.`);
+    } else {
+      reasons.push(`SD ${candidate.sdDistance.toFixed(2)} tight — reduced premium size.`);
+    }
   }
 
   if (macroEvent.hasEventBeforeSettlement) {
@@ -73,7 +92,7 @@ export function runRiskManagerAgent(
   }
 
   const consecutive = ctx.input.consecutiveLosses ?? 0;
-  if (consecutive >= MAX_CONSECUTIVE_LOSSES_SKIP) {
+  if (consecutive >= riskConsecutiveLossVeto()) {
     vetoReasons.push(
       `${consecutive} consecutive losses — SKIP (desk pause).`,
     );
@@ -94,12 +113,22 @@ export function runRiskManagerAgent(
       `Challenges bull thesis: ${bear.reasons[0] ?? "bear case dominant"}.`,
     );
   }
+  const playbookRec = tradeRecToAgent(ctx.response.step5_verdict.recommendation);
   if (bear.recommendation === "SKIP" && bull.recommendation === "TRADE") {
-    reasons.push("Bear thesis overrides bull — veto bias toward SKIP/WAIT.");
+    reasons.push(
+      isAggressiveDeskRisk()
+        ? "Bear challenges bull — committee may still TRADE with smaller size."
+        : "Bear thesis challenges bull — prefer WAIT.",
+    );
   }
 
   const veto = vetoReasons.length > 0;
-  const recommendation: AgentOutput["recommendation"] = veto ? "SKIP" : "WAIT";
+  let recommendation: AgentOutput["recommendation"] = veto ? "SKIP" : "WAIT";
+  if (!veto && playbookRec === "TRADE") {
+    recommendation = "TRADE";
+  } else if (!veto && isAggressiveDeskRisk() && playbookRec === "WAIT") {
+    recommendation = "WAIT";
+  }
 
   return buildAgentOutput(
     {

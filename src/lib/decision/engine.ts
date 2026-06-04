@@ -25,6 +25,12 @@ import {
   resolveHypotheticalAction,
   scoreChecks,
 } from "./rules";
+import {
+  engineAllowsCoreFailureTrade,
+  engineAllowsWaitAsTrade,
+  engineDeltaWaitAsTradeOk,
+  isAggressiveDeskRisk,
+} from "@/lib/desk/desk-risk-policy";
 
 const HARD_RULE_CONFIDENCE = 100;
 const LIQUIDATION_CASCADE_SUMMARY =
@@ -194,7 +200,7 @@ export function runDecisionEngine(
     checks,
   );
 
-  const recommendation = resolveVerdict(
+  let recommendation = resolveVerdict(
     hardSkip,
     missingData,
     combinationRead.pattern,
@@ -203,6 +209,25 @@ export function runDecisionEngine(
     atrCaution,
     activeCautionCount,
   );
+
+  if (isAggressiveDeskRisk() && !hardSkip && missingData.length <= 1) {
+    if (
+      recommendation === "wait" &&
+      deltaRecommendation === "wait" &&
+      engineDeltaWaitAsTradeOk()
+    ) {
+      recommendation = "trade";
+    }
+    if (engineAllowsWaitAsTrade(recommendation, confidence)) {
+      recommendation = "trade";
+    }
+    if (
+      recommendation === "skip" &&
+      engineAllowsCoreFailureTrade(coreCheckFailure, confidence)
+    ) {
+      recommendation = "trade";
+    }
+  }
 
   const caution =
     recommendation === "trade" &&

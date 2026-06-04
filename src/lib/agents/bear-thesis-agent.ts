@@ -7,6 +7,7 @@ import {
   type TradingDeskContext,
 } from "./shared";
 import { LIQUIDATION_SKIP } from "@/lib/decision/thresholds";
+import { bearSkipReasonThreshold } from "@/lib/desk/desk-risk-policy";
 
 /** Bear Thesis Agent — argues why the tape is dangerous (TradingAgents-style). */
 export function runBearThesisAgent(ctx: TradingDeskContext): AgentOutput {
@@ -40,7 +41,7 @@ export function runBearThesisAgent(ctx: TradingDeskContext): AgentOutput {
   let recommendation: AgentOutput["recommendation"] = "WAIT";
   let score = 55;
 
-  if (reasons.length >= 3) {
+  if (reasons.length >= bearSkipReasonThreshold()) {
     recommendation = "SKIP";
     score = 80;
   } else if (reasons.length >= 1) {

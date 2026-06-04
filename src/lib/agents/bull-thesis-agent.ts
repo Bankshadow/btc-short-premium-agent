@@ -1,5 +1,9 @@
 import type { AgentOutput } from "./types";
 import {
+  bullTradeReasonThreshold,
+  isAggressiveDeskRisk,
+} from "@/lib/desk/desk-risk-policy";
+import {
   buildAgentOutput,
   formatProposedAction,
   getMissingDataLabels,
@@ -42,7 +46,20 @@ export function runBullThesisAgent(ctx: TradingDeskContext): AgentOutput {
   let recommendation: AgentOutput["recommendation"] = "WAIT";
   let score = 50;
 
-  if (reasons.length >= 3 && missing.length === 0) {
+  const macroView = ctx.input.macroView ?? "neutral";
+  if (
+    isAggressiveDeskRisk() &&
+    macroView === "bearish" &&
+    market.ivHvRatio >= 1.05 &&
+    missing.length === 0
+  ) {
+    recommendation = "TRADE";
+    score = 68;
+    reasons.push("Bearish playbook short-premium — aggressive desk favors defined risk.");
+  } else if (
+    reasons.length >= bullTradeReasonThreshold() &&
+    missing.length === 0
+  ) {
     recommendation = "TRADE";
     score = 72;
   } else if (reasons.length >= 1) {

@@ -1,4 +1,5 @@
 import type { AgentOutput } from "./types";
+import { isAggressiveDeskRisk } from "@/lib/desk/desk-risk-policy";
 import {
   buildAgentOutput,
   formatProposedAction,
@@ -7,6 +8,7 @@ import {
   withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
+import { tradeRecToAgent } from "./types";
 
 export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   const daily = ctx.input.technicalDaily;
@@ -27,9 +29,15 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
     score = 70;
     reasons.push("Aligned bullish — tactical spot long on dips only.");
   } else if (macroView === "bearish" && daily.trend === "bearish") {
-    recommendation = "WAIT";
-    score = 60;
-    reasons.push("Bearish tape — no spot long; cash is a position.");
+    if (isAggressiveDeskRisk()) {
+      recommendation = "TRADE";
+      score = 62;
+      reasons.push("Bearish tape — spot desk aligns with short-premium playbook.");
+    } else {
+      recommendation = "WAIT";
+      score = 60;
+      reasons.push("Bearish tape — no spot long; cash is a position.");
+    }
   } else {
     recommendation = "SKIP";
     score = 55;
@@ -45,9 +53,14 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
     ctx.response.step5_verdict.recommendation,
     ctx.response.step5_verdict.confidence,
   );
+  const playbookRec = tradeRecToAgent(ctx.response.step5_verdict.recommendation);
   if (engine.recommendation === "SKIP" && recommendation === "TRADE") {
-    recommendation = "WAIT";
-    reasons.push("Options playbook SKIP — spot defers.");
+    recommendation = isAggressiveDeskRisk() && playbookRec === "TRADE" ? "TRADE" : "WAIT";
+    reasons.push(
+      isAggressiveDeskRisk() && playbookRec === "TRADE"
+        ? "Playbook TRADE — spot desk follows aggressive policy."
+        : "Options playbook SKIP — spot defers.",
+    );
   }
 
   return buildAgentOutput(

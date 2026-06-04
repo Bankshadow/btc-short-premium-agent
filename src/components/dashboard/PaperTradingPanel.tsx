@@ -18,6 +18,8 @@ interface PaperTradingPanelProps {
   };
   settings: PaperTradingSettings;
   syncStatus: string | null;
+  /** OPEN orders from GET /api/paper/orders after sync */
+  syncedOpenOrders?: PaperOrder[];
   currentBtcPrice: number;
   onSettingsChange: (patch: Partial<PaperTradingSettings>) => void;
   onCloseOrder: (
@@ -96,6 +98,7 @@ export default function PaperTradingPanel({
   summary,
   settings,
   syncStatus,
+  syncedOpenOrders = [],
   currentBtcPrice,
   onSettingsChange,
   onCloseOrder,
@@ -122,7 +125,7 @@ export default function PaperTradingPanel({
         <p className="desk-section-title text-emerald-500/80">Execution desk</p>
         <h2 className="text-sm font-semibold text-zinc-100">Paper trading · AI linked</h2>
         <p className="mt-0.5 text-[10px] text-zinc-500">
-          Committee TRADE opens a hypothetical order · close syncs PnL to decision log
+          Committee TRADE auto-opens paper · sync via POST /api/paper/sync · list via GET /api/paper/orders?status=open
         </p>
       </div>
 
@@ -202,6 +205,12 @@ export default function PaperTradingPanel({
       </div>
 
       <div className="space-y-2 px-4 pb-4">
+        {settings.syncSupabase && syncedOpenOrders.length > 0 && (
+          <p className="text-[10px] text-emerald-600/90">
+            API sync: {syncedOpenOrders.length} open order(s) on server
+          </p>
+        )}
+
         {openOrders.length === 0 ? (
           <p className="text-xs text-zinc-600">
             No open paper positions — next committee TRADE will open one (if auto-open enabled).

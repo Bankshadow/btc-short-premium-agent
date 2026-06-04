@@ -104,3 +104,20 @@ export async function fetchPaperOrdersFromSupabase(): Promise<PaperOrder[]> {
 
   return data.map((row) => orderFromRow(row as Record<string, unknown>));
 }
+
+export async function fetchOpenPaperOrdersFromSupabase(): Promise<PaperOrder[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("paper_orders")
+    .select("*")
+    .eq("status", "OPEN")
+    .order("opened_at", { ascending: false })
+    .limit(50);
+
+  if (error) throw new SupabasePaperError(error.message);
+  if (!data) return [];
+
+  return data.map((row) => orderFromRow(row as Record<string, unknown>));
+}

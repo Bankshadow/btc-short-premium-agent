@@ -6,8 +6,14 @@ import {
   isBybitCriticalFailure,
   isBybitFetchError,
 } from "@/lib/decision/bybit-health";
-import { resolveDerivativesOverrides } from "@/lib/decision/derivatives-overrides";
-import { macroSelectionToStatus } from "@/lib/decision/macro-event";
+import {
+  EMPTY_OVERRIDE_FORM,
+  resolveDerivativesOverrides,
+} from "@/lib/decision/derivatives-overrides";
+import {
+  DEFAULT_MACRO_EVENT,
+  macroSelectionToStatus,
+} from "@/lib/decision/macro-event";
 import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
 import { getMockDashboardFallback } from "@/lib/mock/dashboard-data";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -28,7 +34,6 @@ import {
   DESK_REFRESH_OPTIONS,
   useAutoDeskRefresh,
 } from "@/hooks/useAutoDeskRefresh";
-import { useDebouncedConfigRerun } from "@/hooks/useDebouncedConfigRerun";
 import { usePaperTrading } from "@/hooks/usePaperTrading";
 import PaperTradingPanel from "./PaperTradingPanel";
 import PortfolioMilestonesPanel from "./portfolio/PortfolioMilestonesPanel";
@@ -40,9 +45,12 @@ import {
   syncJournalToServer,
 } from "@/lib/journal/journal-cloud-sync";
 import { loadDeskSettings, saveDeskSettings } from "@/lib/desk/desk-settings";
-import { useMacroEventSelection } from "./MacroEventToggle";
-import { useDerivativesOverrideForm } from "./ManualOverridesPanel";
 import type { ResolveOutcomeInput } from "@/lib/journal/decision-log-types";
+
+const DEFAULT_MACRO_EVENT_STATUS = macroSelectionToStatus(DEFAULT_MACRO_EVENT);
+const DEFAULT_DERIVATIVES_OVERRIDES = resolveDerivativesOverrides(
+  EMPTY_OVERRIDE_FORM,
+);
 
 interface AnalyzeDashboardProps {
   macroView?: "bearish" | "bullish" | "neutral";
@@ -84,13 +92,6 @@ export default function AnalyzeDashboard({
   const [refreshIntervalMs, setRefreshIntervalMs] = useState<number>(
     DESK_REFRESH_OPTIONS[1].ms,
   );
-  const { values, setValues, hydrated: overridesHydrated } =
-    useDerivativesOverrideForm();
-  const {
-    value: macroEventSelection,
-    setValue: setMacroEventSelection,
-    hydrated: macroHydrated,
-  } = useMacroEventSelection();
   const {
     entries: logEntries,
     draftRules,
@@ -118,8 +119,7 @@ export default function AnalyzeDashboard({
     });
   }, [logHydrated]);
 
-  const controlsReady =
-    overridesHydrated && macroHydrated && logHydrated;
+  const controlsReady = logHydrated;
 
   const syncJournalIfEnabled = useCallback(async () => {
     if (!loadDeskSettings().syncJournalSupabase) return;
@@ -149,8 +149,8 @@ export default function AnalyzeDashboard({
     setFetchError(null);
     setUsingFallback(false);
 
-    const derivativesOverrides = resolveDerivativesOverrides(values);
-    const macroEvent = macroSelectionToStatus(macroEventSelection);
+    const derivativesOverrides = DEFAULT_DERIVATIVES_OVERRIDES;
+    const macroEvent = DEFAULT_MACRO_EVENT_STATUS;
     const deskMemory = buildClientMemoryPayload(
       logEntries,
       draftRules,
@@ -252,8 +252,6 @@ export default function AnalyzeDashboard({
     }
   }, [
     macroView,
-    values,
-    macroEventSelection,
     logEntries,
     draftRules,
     persistAnalysis,
@@ -264,16 +262,6 @@ export default function AnalyzeDashboard({
     enabled: autoRefreshEnabled,
     intervalMs: refreshIntervalMs,
     ready: controlsReady,
-  });
-
-  const configKey = useMemo(
-    () => JSON.stringify({ macroEventSelection, values }),
-    [macroEventSelection, values],
-  );
-
-  useDebouncedConfigRerun(configKey, trigger, {
-    ready: controlsReady,
-    debounceMs: 900,
   });
 
   const handleResolveOutcome = useCallback(
@@ -331,10 +319,6 @@ export default function AnalyzeDashboard({
       pipelineRunning={pipelineRunning}
       sidebar={
         <DeskControlsSidebar
-          macroEventSelection={macroEventSelection}
-          onMacroChange={setMacroEventSelection}
-          overrideValues={values}
-          onOverrideChange={setValues}
           fetchError={fetchError}
           sourceErrors={sourceIssues}
         />
@@ -356,6 +340,7 @@ export default function AnalyzeDashboard({
             summary={paper.summary}
             settings={paper.settings}
             syncStatus={paper.syncStatus}
+            syncedOpenOrders={paper.syncedOpenOrders}
             currentBtcPrice={data.step1_marketSnapshot.spotPrice}
             onSettingsChange={paper.updateSettings}
             onCloseOrder={async (id, input) => {

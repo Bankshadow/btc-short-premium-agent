@@ -17,7 +17,9 @@ import {
 import type { PaperOrder, PaperTradingSettings } from "@/lib/paper/paper-order-types";
 import { mergePaperOrdersFromRemote } from "@/lib/paper/paper-merge";
 import {
+  fetchOpenPaperOrdersFromApi,
   pullPaperOrdersFromServer,
+  syncOpenedPaperOrder,
   syncPaperOrdersToServer,
 } from "@/lib/paper/paper-sync";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,6 +29,7 @@ export function usePaperTrading() {
   const [settings, setSettings] = useState(loadPaperSettings);
   const [hydrated, setHydrated] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [syncedOpenOrders, setSyncedOpenOrders] = useState<PaperOrder[]>([]);
 
   const refresh = useCallback(() => {
     setOrders(loadPaperOrders());
@@ -36,6 +39,9 @@ export function usePaperTrading() {
   useEffect(() => {
     refresh();
     setHydrated(true);
+    if (loadPaperSettings().syncSupabase) {
+      void fetchOpenPaperOrdersFromApi().then(setSyncedOpenOrders);
+    }
   }, [refresh]);
 
   const summary = useMemo(() => summarizePaperPortfolio(orders), [orders]);
@@ -55,13 +61,21 @@ export function usePaperTrading() {
       orders: loadPaperOrders(),
       settings,
     });
+    const openFromApi = await fetchOpenPaperOrdersFromApi();
+    if (openFromApi.length > 0) {
+      mergePaperOrdersFromRemote(openFromApi);
+      refresh();
+      setSyncedOpenOrders(openFromApi);
+    } else if (result.openOrders?.length) {
+      setSyncedOpenOrders(result.openOrders);
+    }
     setSyncStatus(
       result.ok
-        ? `Synced ${result.synced} order(s)`
+        ? `Synced ${result.synced} order(s) · ${openFromApi.length || result.openOrders?.length || 0} open on server`
         : result.error ?? "Sync failed",
     );
     return result;
-  }, [settings]);
+  }, [settings, refresh]);
 
   const pullFromServer = useCallback(async () => {
     const remote = await pullPaperOrdersFromServer();
@@ -70,6 +84,8 @@ export function usePaperTrading() {
       refresh();
       setSyncStatus(`Pulled ${remote.length} order(s) from cloud`);
     }
+    const openFromApi = await fetchOpenPaperOrdersFromApi();
+    setSyncedOpenOrders(openFromApi);
     return remote;
   }, [refresh]);
 
@@ -83,15 +99,29 @@ export function usePaperTrading() {
       }
 
       tryAutoClosePaperOnSkip(data);
-      tryAutoOpenPaperOrder(data, decisionLogId);
+      const opened = tryAutoOpenPaperOrder(data, decisionLogId);
 
       refresh();
 
-      if (currentSettings.syncSupabase) {
+      if (opened && currentSettings.syncSupabase) {
+        const syncResult = await syncOpenedPaperOrder(opened, currentSettings);
+        if (syncResult.openOrders.length > 0) {
+          mergePaperOrdersFromRemote(syncResult.openOrders);
+          refresh();
+          setSyncedOpenOrders(syncResult.openOrders);
+        }
+        setSyncStatus(
+          syncResult.error
+            ? `Opened ${opened.instrument} · sync: ${syncResult.error}`
+            : `Opened & synced ${opened.instrument} · ${syncResult.openOrders.length} open on server`,
+        );
+      } else if (currentSettings.syncSupabase) {
         await syncPaperOrdersToServer({
           orders: loadPaperOrders(),
           settings: currentSettings,
         });
+        const openFromApi = await fetchOpenPaperOrdersFromApi();
+        setSyncedOpenOrders(openFromApi);
       }
     },
     [refresh],
@@ -128,6 +158,7 @@ export function usePaperTrading() {
     summary,
     hydrated,
     syncStatus,
+    syncedOpenOrders,
     refresh,
     updateSettings,
     afterAnalysis,

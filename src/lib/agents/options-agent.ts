@@ -5,6 +5,7 @@ import {
   IV_HV_SKIP_THRESHOLD,
   SD_SKIP_THRESHOLD,
 } from "@/lib/decision/thresholds";
+import { isAggressiveDeskRisk } from "@/lib/desk/desk-risk-policy";
 import {
   buildAgentOutput,
   formatProposedAction,
@@ -25,11 +26,18 @@ export function runOptionsStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   const reasons: string[] = [];
   const risks: string[] = [...verdict.risks];
 
-  const recommendation = tradeRecToAgent(verdict.recommendation);
-  const confidence = toConfidenceLevel(
-    verdict.confidence,
-    recommendation,
-  );
+  let recommendation = tradeRecToAgent(verdict.recommendation);
+  if (
+    isAggressiveDeskRisk() &&
+    recommendation === "WAIT" &&
+    verdict.confidence >= 52 &&
+    candidate &&
+    evaluateDeltaVerdict(Math.abs(candidate.delta)) !== "skip"
+  ) {
+    recommendation = "TRADE";
+    reasons.push("Aggressive desk: delta acceptable — options desk approves TRADE.");
+  }
+  const confidence = toConfidenceLevel(verdict.confidence, recommendation);
 
   if (candidate) {
     reasons.push(

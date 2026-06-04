@@ -1,5 +1,6 @@
 import type { PaperSyncPayload } from "@/lib/paper/paper-sync";
 import {
+  fetchOpenPaperOrdersFromSupabase,
   fetchPaperOrdersFromSupabase,
   upsertPaperOrdersToSupabase,
 } from "@/lib/supabase/paper-orders";
@@ -18,7 +19,8 @@ export async function GET() {
 
   try {
     const pulled = await fetchPaperOrdersFromSupabase();
-    return NextResponse.json({ ok: true, synced: 0, pulled });
+    const openOrders = pulled.filter((o) => o.status === "OPEN");
+    return NextResponse.json({ ok: true, synced: 0, pulled, openOrders });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Fetch failed";
     return NextResponse.json({ ok: false, synced: 0, error: message }, { status: 500 });
@@ -44,7 +46,13 @@ export async function POST(request: Request) {
 
   try {
     const synced = await upsertPaperOrdersToSupabase(orders);
-    return NextResponse.json({ ok: true, synced });
+    const openOrders = await fetchOpenPaperOrdersFromSupabase();
+    return NextResponse.json({
+      ok: true,
+      synced,
+      openOrders,
+      syncedAt: new Date().toISOString(),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upsert failed";
     return NextResponse.json({ ok: false, synced: 0, error: message }, { status: 500 });
