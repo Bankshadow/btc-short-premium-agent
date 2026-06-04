@@ -238,6 +238,8 @@ export interface AnalysisInput {
   derivativesOverrides?: DerivativesOverrides;
   /** MVP 4 — client-sent journal/rules/pins for desk memory (browser only). */
   deskMemory?: DeskMemoryClientPayload;
+  /** MVP 5 — ETH spot for correlation read (browser /api/market). */
+  ethQuote?: SpotQuote;
 }
 
 /** @deprecated Use DecisionEngineOutput — kept for dashboard compatibility */

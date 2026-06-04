@@ -6,6 +6,7 @@ import type {
 } from "./types";
 import { collectTopReasons } from "@/lib/decision/verdict-display";
 import type { DeskMemorySnapshot } from "@/lib/memory/types";
+import type { ResearchBrief } from "@/lib/research/research-types";
 import {
   majorityRecommendation,
   type TradingDeskContext,
@@ -20,6 +21,7 @@ export interface CommitteeInput {
   bear: AgentOutput;
   riskManager: AgentOutput;
   deskMemory: DeskMemorySnapshot;
+  research: ResearchBrief;
 }
 
 function buildDebateRows(
@@ -40,7 +42,7 @@ export function runCommitteeAgent(input: CommitteeInput): {
   verdict: CommitteeVerdict;
   debate: AgentDebateRow[];
 } {
-  const { ctx, spot, futures, options, bull, bear, riskManager, deskMemory } =
+  const { ctx, spot, futures, options, bull, bear, riskManager, deskMemory, research } =
     input;
   const strategyAgents = [spot, futures, options];
   const strategyRecs = strategyAgents.map((a) => a.recommendation);
@@ -72,6 +74,13 @@ export function runCommitteeAgent(input: CommitteeInput): {
     finalVerdict = "SKIP";
   } else if (bear.recommendation === "SKIP" && bull.recommendation !== "TRADE") {
     finalVerdict = "SKIP";
+  } else if (research.dataQuality.recommendation === "SKIP") {
+    finalVerdict = "WAIT";
+    disagreementNotes.push(
+      "Data Quality Agent: incomplete tape — committee waits.",
+    );
+  } else if (research.dataQualityScore < 45) {
+    finalVerdict = "WAIT";
   } else if (options.missingData.length > 0 || strategyAgents.some((a) => a.missingData.length > 0)) {
     finalVerdict = "WAIT";
   } else if (majority === "TRADE" && options.recommendation !== "TRADE") {
@@ -88,6 +97,9 @@ export function runCommitteeAgent(input: CommitteeInput): {
   );
 
   const topReasons: string[] = [];
+  if (research.summaryBullets.length > 0) {
+    topReasons.push(`Research: ${research.summaryBullets[0]}`);
+  }
   if (deskMemory.bullets.length > 0) {
     topReasons.push(`Desk memory: ${deskMemory.bullets[0]}`);
   }

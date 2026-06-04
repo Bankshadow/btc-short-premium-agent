@@ -1,4 +1,5 @@
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
+import type { DeskReplaySnapshot } from "@/lib/replay/replay-types";
 
 export type OutcomeStatus = "PENDING" | "RESOLVED";
 
@@ -33,6 +34,8 @@ export interface DecisionLogEntry {
   paperPnl: number | null;
   reflection: StructuredReflection | null;
   resolution?: PaperResolution;
+  /** MVP 6 — frozen desk state for replay panel */
+  replaySnapshot?: DeskReplaySnapshot | null;
 }
 
 export interface ResolveOutcomeInput {

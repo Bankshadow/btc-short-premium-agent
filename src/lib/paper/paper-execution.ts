@@ -16,6 +16,7 @@ import {
   savePaperOrder,
   updatePaperOrder,
 } from "./paper-orders";
+import type { AgentRecommendation } from "@/lib/agents/types";
 import type { PaperOrder } from "./paper-order-types";
 import { PAPER_ACCOUNT_NOTIONAL_USD } from "./paper-order-types";
 
@@ -74,6 +75,29 @@ export function buildPaperOrderFromAnalysis(
     openedBy: "committee_auto",
     notes: plan.entryNotes || desk?.committee.finalActionPlan || "",
   };
+}
+
+/** Auto-close open paper when committee flips to SKIP/WAIT. */
+export function tryAutoClosePaperOnSkip(
+  data: AnalyzeApiResponse,
+  verdict?: AgentRecommendation,
+): number {
+  const finalVerdict =
+    verdict ?? data.tradingDesk?.committee.finalVerdict ?? "WAIT";
+  if (finalVerdict !== "SKIP" && finalVerdict !== "WAIT") return 0;
+
+  const btc = data.step1_marketSnapshot.spotPrice;
+  if (btc <= 0) return 0;
+
+  let closed = 0;
+  for (const order of getOpenPaperOrders()) {
+    const result = closePaperOrderAndSyncLog(order.id, {
+      exitBtcPrice: btc,
+      notes: `Auto-close: committee ${finalVerdict}.`,
+    });
+    if (result) closed += 1;
+  }
+  return closed;
 }
 
 /** Open paper position when committee approves TRADE (one open position at a time). */

@@ -1,9 +1,11 @@
 import type {
   AnalyzeApiResponse,
   DecisionEngineInput,
+  SpotQuote,
 } from "@/lib/types/market";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import { runDeskMemoryAgent } from "@/lib/memory/memory-agent";
+import { runResearchLayer } from "@/lib/research/run-research-layer";
 import type { TradingDeskOutput } from "./types";
 import { runBearThesisAgent } from "./bear-thesis-agent";
 import { runBullThesisAgent } from "./bull-thesis-agent";
@@ -23,16 +25,20 @@ export function runTradingDesk(
   input: DecisionEngineInput,
   response: AnalyzeApiResponse,
   memoryPayload?: DeskMemoryClientPayload,
+  ethQuote?: SpotQuote | null,
 ): TradingDeskOutput {
-  const marketRegime = resolveMarketRegime(
-    buildTradingDeskContext(input, response),
-  );
+  const baseCtx = buildTradingDeskContext(input, response);
+  const marketRegime = resolveMarketRegime(baseCtx);
 
   const ctx: TradingDeskContext = {
-    ...buildTradingDeskContext(input, response),
+    ...baseCtx,
     deskMemoryPayload: memoryPayload,
     deskMemoryRegime: marketRegime,
+    ethQuote: ethQuote ?? null,
   };
+
+  const research = runResearchLayer(ctx, { ethQuote });
+  ctx.researchBullets = research.summaryBullets;
 
   const deskMemory = runDeskMemoryAgent(ctx, memoryPayload);
   ctx.deskMemoryBullets = deskMemory.bullets;
@@ -53,9 +59,11 @@ export function runTradingDesk(
     bear: bearThesis,
     riskManager,
     deskMemory,
+    research,
   });
 
   const agents = [
+    ...research.agents,
     deskMemory.agent,
     bullThesis,
     bearThesis,
@@ -68,6 +76,7 @@ export function runTradingDesk(
   return {
     analyzedAt: response.step5_verdict.analyzedAt,
     marketRegime,
+    research,
     deskMemory,
     agents,
     bullThesis,
@@ -83,10 +92,11 @@ export function attachTradingDesk(
   input: DecisionEngineInput,
   response: AnalyzeApiResponse,
   memoryPayload?: DeskMemoryClientPayload,
+  ethQuote?: SpotQuote | null,
 ): AnalyzeApiResponse {
   return {
     ...response,
-    tradingDesk: runTradingDesk(input, response, memoryPayload),
+    tradingDesk: runTradingDesk(input, response, memoryPayload, ethQuote),
   };
 }
 

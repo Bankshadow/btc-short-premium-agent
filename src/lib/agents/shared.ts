@@ -3,6 +3,7 @@ import type {
   DataSourceError,
   DecisionEngineInput,
   OptionCandidate,
+  SpotQuote,
   TradeRecommendation,
 } from "@/lib/types/market";
 import type {
@@ -39,6 +40,9 @@ export interface TradingDeskContext {
   deskMemoryBullets?: string[];
   deskMemoryRegime?: string;
   deskMemoryPayload?: DeskMemoryClientPayload;
+  /** MVP 5 — research layer bullets for downstream agents */
+  researchBullets?: string[];
+  ethQuote?: SpotQuote | null;
 }
 
 export function buildTradingDeskContext(
@@ -171,12 +175,14 @@ export function withDeskMemoryReasons(
   ctx: TradingDeskContext,
   reasons: string[],
 ): string[] {
-  const bullets = ctx.deskMemoryBullets ?? [];
-  if (bullets.length === 0) return reasons;
-  const memoryLines = bullets
+  const researchLines = (ctx.researchBullets ?? [])
+    .slice(0, 1)
+    .map((b) => `[Research] ${b}`);
+  const memoryLines = (ctx.deskMemoryBullets ?? [])
     .slice(0, 2)
     .map((b) => `[Memory] ${b}`);
-  return [...memoryLines, ...reasons];
+  if (researchLines.length === 0 && memoryLines.length === 0) return reasons;
+  return [...researchLines, ...memoryLines, ...reasons];
 }
 
 export function majorityRecommendation(

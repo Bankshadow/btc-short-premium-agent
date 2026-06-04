@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 export type AgentPipelineStatus = "idle" | "working" | "done";
 
-const STEP_MS = 420;
+const STEP_MS = 360;
 
 /** Simulates agents working in sequence while analyze runs. */
 export function useAgentPipeline(loading: boolean) {

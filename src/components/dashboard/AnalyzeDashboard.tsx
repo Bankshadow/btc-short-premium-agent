@@ -1,6 +1,6 @@
 "use client";
 
-import type { AnalyzeApiResponse } from "@/lib/types/market";
+import type { AnalyzeApiResponse, LiveMarketResponse, SpotQuote } from "@/lib/types/market";
 import {
   BYBIT_API_FAILED_MESSAGE,
   isBybitCriticalFailure,
@@ -31,6 +31,15 @@ import {
 import { useDebouncedConfigRerun } from "@/hooks/useDebouncedConfigRerun";
 import { usePaperTrading } from "@/hooks/usePaperTrading";
 import PaperTradingPanel from "./PaperTradingPanel";
+import PortfolioMilestonesPanel from "./portfolio/PortfolioMilestonesPanel";
+import ReplayDeskPanel from "./replay/ReplayDeskPanel";
+import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
+import { mergeDecisionLogFromRemote } from "@/lib/journal/journal-merge";
+import {
+  pullJournalFromServer,
+  syncJournalToServer,
+} from "@/lib/journal/journal-cloud-sync";
+import { loadDeskSettings, saveDeskSettings } from "@/lib/desk/desk-settings";
 import { useMacroEventSelection } from "./MacroEventToggle";
 import { useDerivativesOverrideForm } from "./ManualOverridesPanel";
 import type { ResolveOutcomeInput } from "@/lib/journal/decision-log-types";
@@ -51,6 +60,17 @@ function isAnalyzeApiResponse(
 
 function isLiveAnalysis(payload: AnalyzeApiResponse): boolean {
   return payload.marketSnapshot.spotPrice > 0;
+}
+
+async function fetchEthQuoteForDesk(): Promise<SpotQuote | undefined> {
+  try {
+    const response = await fetch("/api/market", { cache: "no-store" });
+    if (!response.ok) return undefined;
+    const data = (await response.json()) as LiveMarketResponse;
+    return data.eth?.price > 0 ? data.eth : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export default function AnalyzeDashboard({
@@ -88,8 +108,28 @@ export default function AnalyzeDashboard({
     void paper.pullFromServer();
   }, [paper.hydrated]);
 
+  useEffect(() => {
+    if (!logHydrated || !loadDeskSettings().syncJournalSupabase) return;
+    void pullJournalFromServer().then((remote) => {
+      if (remote.length > 0) {
+        mergeDecisionLogFromRemote(remote);
+        refreshLog();
+      }
+    });
+  }, [logHydrated]);
+
   const controlsReady =
     overridesHydrated && macroHydrated && logHydrated;
+
+  const syncJournalIfEnabled = useCallback(async () => {
+    if (!loadDeskSettings().syncJournalSupabase) return;
+    await syncJournalToServer();
+  }, []);
+
+  const portfolio = useMemo(
+    () => buildDeskPortfolioSnapshot(logEntries, paper.orders),
+    [logEntries, paper.orders],
+  );
 
   const persistAnalysis = useCallback(
     async (result: AnalyzeApiResponse) => {
@@ -97,8 +137,9 @@ export default function AnalyzeDashboard({
       const entry = saveFromAnalysis(result);
       await paper.afterAnalysis(result, entry.id);
       refreshLog();
+      await syncJournalIfEnabled();
     },
-    [saveFromAnalysis, paper.afterAnalysis, refreshLog],
+    [saveFromAnalysis, paper.afterAnalysis, refreshLog, syncJournalIfEnabled],
   );
 
   const handleAnalyze = useCallback(async () => {
@@ -115,10 +156,12 @@ export default function AnalyzeDashboard({
       draftRules,
       loadPinnedNotes(),
     );
+    const ethQuote = await fetchEthQuoteForDesk();
     const analyzeRequest = {
       macroView,
       macroEvent,
       deskMemory,
+      ethQuote,
       ...derivativesOverrides,
       derivativesOverrides,
     };
@@ -170,6 +213,7 @@ export default function AnalyzeDashboard({
         const clientResult = await postAnalyze({
           ...engineInput,
           deskMemory,
+          ethQuote,
           ...derivativesOverrides,
           derivativesOverrides,
         });
@@ -238,9 +282,10 @@ export default function AnalyzeDashboard({
       refreshLog();
       paper.refresh();
       void paper.syncToServer();
+      void syncJournalIfEnabled();
       trigger();
     },
-    [resolveOutcome, refreshLog, paper, trigger],
+    [resolveOutcome, refreshLog, paper, trigger, syncJournalIfEnabled],
   );
 
   const { statusById, activeIndex, pipelineRunning } = useAgentPipeline(loading);
@@ -304,6 +349,7 @@ export default function AnalyzeDashboard({
           className={`flex flex-col gap-4 transition-opacity ${loading ? "pointer-events-none opacity-60" : ""}`}
           aria-busy={loading}
         >
+          <PortfolioMilestonesPanel portfolio={portfolio} />
           <PaperTradingPanel
             orders={paper.orders}
             openOrders={paper.openOrders}
@@ -320,17 +366,28 @@ export default function AnalyzeDashboard({
             onPull={() => void paper.pullFromServer()}
           />
           <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
+          <ReplayDeskPanel entries={logEntries} />
           <DecisionLogPreview entries={logEntries} />
         </div>
       )}
 
       <details className="desk-panel group">
         <summary className="cursor-pointer list-none px-4 py-3 text-xs font-medium text-zinc-400 [&::-webkit-details-marker]:hidden">
-          Operations · scoreboard · journal · rules
+          Operations · journal sync · scoreboard · rules
           <span className="ml-2 opacity-50 group-open:hidden">▸</span>
           <span className="ml-2 hidden opacity-50 group-open:inline">▾</span>
         </summary>
         <div className="flex flex-col gap-4 border-t border-zinc-800 px-4 pb-4 pt-3">
+          <label className="flex items-center gap-2 px-1 text-xs text-zinc-400">
+            <input
+              type="checkbox"
+              defaultChecked={loadDeskSettings().syncJournalSupabase}
+              onChange={(e) =>
+                saveDeskSettings({ syncJournalSupabase: e.target.checked })
+              }
+            />
+            Sync decision log to Supabase after each session
+          </label>
           <AgentScoreboardPanel scoreboard={scoreboard} />
           <DecisionLogPanel
             entries={logEntries}

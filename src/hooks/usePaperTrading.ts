@@ -3,6 +3,7 @@
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import {
   closePaperOrderAndSyncLog,
+  tryAutoClosePaperOnSkip,
   tryAutoOpenPaperOrder,
 } from "@/lib/paper/paper-execution";
 import {
@@ -81,6 +82,7 @@ export function usePaperTrading() {
         markOrdersToMarket(btc);
       }
 
+      tryAutoClosePaperOnSkip(data);
       tryAutoOpenPaperOrder(data, decisionLogId);
 
       refresh();

@@ -1,6 +1,10 @@
 import type { AgentOutput, AgentStrategyType } from "@/lib/agents/types";
 
 export type DeskAgentId =
+  | "marketData"
+  | "regime"
+  | "dataQuality"
+  | "macroNews"
   | "memory"
   | "bull"
   | "bear"
@@ -22,6 +26,42 @@ export interface DeskAgentMeta {
 
 /** Pipeline order shown in UI while desk runs. */
 export const DESK_AGENT_PIPELINE: DeskAgentMeta[] = [
+  {
+    id: "marketData",
+    name: "Market Data",
+    role: "Tape & combination",
+    desk: "Research",
+    strategyType: "RESEARCH",
+    initials: "MD",
+    accent: "indigo",
+  },
+  {
+    id: "regime",
+    name: "Regime",
+    role: "Structure label",
+    desk: "Research",
+    strategyType: "RESEARCH",
+    initials: "RG",
+    accent: "slate",
+  },
+  {
+    id: "dataQuality",
+    name: "Data Quality",
+    role: "Completeness gate",
+    desk: "Research",
+    strategyType: "RESEARCH",
+    initials: "DQ",
+    accent: "fuchsia",
+  },
+  {
+    id: "macroNews",
+    name: "Macro & News",
+    role: "Calendar overlay",
+    desk: "Research",
+    strategyType: "RESEARCH",
+    initials: "MN",
+    accent: "pink",
+  },
   {
     id: "memory",
     name: "Desk Memory",
@@ -97,6 +137,10 @@ export const DESK_AGENT_PIPELINE: DeskAgentMeta[] = [
 ];
 
 const NAME_TO_ID: Record<string, DeskAgentId> = {
+  "Market Data Agent": "marketData",
+  "Regime Agent": "regime",
+  "Data Quality Agent": "dataQuality",
+  "Macro & News Agent": "macroNews",
   "Desk Memory Agent": "memory",
   "Bull Thesis Agent": "bull",
   "Bear Thesis Agent": "bear",
@@ -112,6 +156,10 @@ export function agentOutputToId(agent: AgentOutput): DeskAgentId | null {
 
 export function accentRingClass(accent: string): string {
   const map: Record<string, string> = {
+    indigo: "ring-indigo-500/40",
+    slate: "ring-slate-500/40",
+    fuchsia: "ring-fuchsia-500/40",
+    pink: "ring-pink-500/40",
     violet: "ring-violet-500/40",
     emerald: "ring-emerald-500/40",
     rose: "ring-rose-500/40",
@@ -126,6 +174,10 @@ export function accentRingClass(accent: string): string {
 
 export function accentBgClass(accent: string): string {
   const map: Record<string, string> = {
+    indigo: "bg-indigo-500/20 text-indigo-200",
+    slate: "bg-slate-500/25 text-slate-200",
+    fuchsia: "bg-fuchsia-500/20 text-fuchsia-200",
+    pink: "bg-pink-500/20 text-pink-200",
     violet: "bg-violet-500/20 text-violet-200",
     emerald: "bg-emerald-500/20 text-emerald-200",
     rose: "bg-rose-500/20 text-rose-200",

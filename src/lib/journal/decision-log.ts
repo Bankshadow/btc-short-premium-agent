@@ -1,4 +1,5 @@
 import { runReflectionAgent } from "@/lib/agents/reflection-agent";
+import { buildReplaySnapshot } from "@/lib/replay/build-replay-snapshot";
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import { createDraftRuleFromReflection } from "./draft-rules";
@@ -58,6 +59,7 @@ export function buildDecisionLogEntry(
     outcomeStatus: "PENDING",
     paperPnl: null,
     reflection: null,
+    replaySnapshot: buildReplaySnapshot(data),
   };
 }
 
@@ -102,6 +104,10 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
       raw.resolution && typeof raw.resolution === "object"
         ? (raw.resolution as DecisionLogEntry["resolution"])
         : undefined,
+    replaySnapshot:
+      raw.replaySnapshot && typeof raw.replaySnapshot === "object"
+        ? (raw.replaySnapshot as DecisionLogEntry["replaySnapshot"])
+        : null,
   };
 }
 

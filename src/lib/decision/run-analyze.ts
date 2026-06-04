@@ -1,6 +1,7 @@
 import { runAnalysisEngine, runDecisionEngineFromInput } from "./analyze";
 import { normalizeAnalyzeRequest } from "./analyze-request";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
+import type { SpotQuote } from "@/lib/types/market";
 import type {
   AnalysisInput,
   AnalyzeApiResponse,
@@ -35,14 +36,16 @@ export async function runAnalyzeRequest(
   const deskMemory = (raw as AnalyzeRequestBody).deskMemory as
     | DeskMemoryClientPayload
     | undefined;
+  const ethQuote = (raw as AnalyzeRequestBody).ethQuote as SpotQuote | undefined;
 
   if (hasFullEngineInput(body)) {
     return runDecisionEngineFromInput(
       body,
       body.derivativesOverrides,
       deskMemory,
+      ethQuote,
     );
   }
 
-  return runAnalysisEngine({ ...body, deskMemory });
+  return runAnalysisEngine({ ...body, deskMemory, ethQuote });
 }
