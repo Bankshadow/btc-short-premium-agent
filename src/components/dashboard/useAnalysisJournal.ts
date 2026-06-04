@@ -18,9 +18,9 @@ export function useAnalysisJournal() {
   }, []);
 
   const saveFromAnalysis = useCallback((data: AnalyzeApiResponse) => {
-    const next = appendAnalysisFromResponse(data);
+    const { entries: next, entry } = appendAnalysisFromResponse(data);
     setEntries(next);
-    return next;
+    return entry;
   }, []);
 
   return { entries, saveFromAnalysis, hydrated };

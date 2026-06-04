@@ -171,8 +171,10 @@ export function saveDecisionLogEntry(
 
 export function appendDecisionLogFromAnalysis(
   data: AnalyzeApiResponse,
-): DecisionLogEntry[] {
-  return saveDecisionLogEntry(buildDecisionLogEntry(data));
+): { entries: DecisionLogEntry[]; entry: DecisionLogEntry } {
+  const entry = buildDecisionLogEntry(data);
+  const entries = saveDecisionLogEntry(entry);
+  return { entries, entry };
 }
 
 export function updateDecisionLogEntry(

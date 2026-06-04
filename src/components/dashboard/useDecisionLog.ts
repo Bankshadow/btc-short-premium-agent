@@ -32,14 +32,11 @@ export function useDecisionLog() {
     [entries],
   );
 
-  const saveFromAnalysis = useCallback(
-    (data: AnalyzeApiResponse) => {
-      const next = appendDecisionLogFromAnalysis(data);
-      setEntries(next);
-      return next;
-    },
-    [],
-  );
+  const saveFromAnalysis = useCallback((data: AnalyzeApiResponse) => {
+    const { entries, entry } = appendDecisionLogFromAnalysis(data);
+    setEntries(entries);
+    return entry;
+  }, []);
 
   const resolveOutcome = useCallback(
     (id: string, input: ResolveOutcomeInput) => {

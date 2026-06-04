@@ -1,0 +1,63 @@
+import type { AgentRecommendation } from "@/lib/agents/types";
+import type { HypotheticalAction } from "@/lib/types/market";
+
+export type PaperOrderStatus = "OPEN" | "CLOSED" | "CANCELLED";
+
+export type PaperInstrument = HypotheticalAction;
+
+export interface PaperOrder {
+  id: string;
+  /** Links to decision log entry from same analyze run */
+  decisionLogId: string;
+  committeeVerdict: AgentRecommendation;
+  instrument: PaperInstrument;
+  symbol: string;
+  side: "short" | "long" | "none";
+  entryBtcPrice: number;
+  entryOptionMark: number | null;
+  strike: number | null;
+  sizePct: number;
+  /** Hypothetical notional for PnL display (USD) */
+  notionalUsd: number;
+  status: PaperOrderStatus;
+  openedAt: string;
+  closedAt: string | null;
+  exitBtcPrice: number | null;
+  realizedPnlPct: number | null;
+  unrealizedPnlPct: number | null;
+  lastMarkAt: string | null;
+  lastMarkBtcPrice: number | null;
+  openedBy: "committee_auto" | "manual";
+  notes: string;
+  supabaseId?: string;
+}
+
+export interface PaperTradingSettings {
+  autoOpenOnTrade: boolean;
+  autoMarkToMarket: boolean;
+  syncSupabase: boolean;
+}
+
+export interface PaperPortfolioSummary {
+  openCount: number;
+  closedCount: number;
+  totalRealizedPnlPct: number;
+  totalUnrealizedPnlPct: number;
+  winCount: number;
+  lossCount: number;
+}
+
+export const PAPER_SETTINGS_STORAGE_KEY =
+  "trading-agents-crypto-desk:paper-settings";
+
+export const PAPER_ORDERS_STORAGE_KEY =
+  "trading-agents-crypto-desk:paper-orders";
+
+/** Hypothetical account size for % PnL → USD display */
+export const PAPER_ACCOUNT_NOTIONAL_USD = 10_000;
+
+export const DEFAULT_PAPER_SETTINGS: PaperTradingSettings = {
+  autoOpenOnTrade: true,
+  autoMarkToMarket: true,
+  syncSupabase: true,
+};

@@ -10,7 +10,7 @@ import { resolveDerivativesOverrides } from "@/lib/decision/derivatives-override
 import { macroSelectionToStatus } from "@/lib/decision/macro-event";
 import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
 import { getMockDashboardFallback } from "@/lib/mock/dashboard-data";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AgentScoreboardPanel from "./AgentScoreboardPanel";
 import DecisionLogPanel from "./DecisionLogPanel";
 import DecisionLogPreview from "./DecisionLogPreview";
@@ -29,6 +29,8 @@ import {
   useAutoDeskRefresh,
 } from "@/hooks/useAutoDeskRefresh";
 import { useDebouncedConfigRerun } from "@/hooks/useDebouncedConfigRerun";
+import { usePaperTrading } from "@/hooks/usePaperTrading";
+import PaperTradingPanel from "./PaperTradingPanel";
 import { useMacroEventSelection } from "./MacroEventToggle";
 import { useDerivativesOverrideForm } from "./ManualOverridesPanel";
 import type { ResolveOutcomeInput } from "@/lib/journal/decision-log-types";
@@ -79,15 +81,24 @@ export default function AnalyzeDashboard({
     hydrated: logHydrated,
   } = useDecisionLog();
 
+  const paper = usePaperTrading();
+
+  useEffect(() => {
+    if (!paper.hydrated || !paper.settings.syncSupabase) return;
+    void paper.pullFromServer();
+  }, [paper.hydrated]);
+
   const controlsReady =
     overridesHydrated && macroHydrated && logHydrated;
 
   const persistAnalysis = useCallback(
-    (result: AnalyzeApiResponse) => {
+    async (result: AnalyzeApiResponse) => {
       setData(result);
-      saveFromAnalysis(result);
+      const entry = saveFromAnalysis(result);
+      await paper.afterAnalysis(result, entry.id);
+      refreshLog();
     },
-    [saveFromAnalysis],
+    [saveFromAnalysis, paper.afterAnalysis, refreshLog],
   );
 
   const handleAnalyze = useCallback(async () => {
@@ -177,7 +188,7 @@ export default function AnalyzeDashboard({
       }
 
       if (result && isLiveAnalysis(result)) {
-        persistAnalysis(result);
+        await persistAnalysis(result);
         setFetchError(null);
         setUsingFallback(false);
         return;
@@ -190,7 +201,7 @@ export default function AnalyzeDashboard({
       const bybitFailed = isBybitFetchError(message);
 
       setFetchError(bybitFailed ? BYBIT_API_FAILED_MESSAGE : message);
-      persistAnalysis(getMockDashboardFallback());
+      await persistAnalysis(getMockDashboardFallback());
       setUsingFallback(true);
     } finally {
       setLoading(false);
@@ -225,9 +236,11 @@ export default function AnalyzeDashboard({
     (id: string, input: ResolveOutcomeInput) => {
       resolveOutcome(id, input);
       refreshLog();
+      paper.refresh();
+      void paper.syncToServer();
       trigger();
     },
-    [resolveOutcome, refreshLog, trigger],
+    [resolveOutcome, refreshLog, paper, trigger],
   );
 
   const { statusById, activeIndex, pipelineRunning } = useAgentPipeline(loading);
@@ -291,6 +304,21 @@ export default function AnalyzeDashboard({
           className={`flex flex-col gap-4 transition-opacity ${loading ? "pointer-events-none opacity-60" : ""}`}
           aria-busy={loading}
         >
+          <PaperTradingPanel
+            orders={paper.orders}
+            openOrders={paper.openOrders}
+            summary={paper.summary}
+            settings={paper.settings}
+            syncStatus={paper.syncStatus}
+            currentBtcPrice={data.step1_marketSnapshot.spotPrice}
+            onSettingsChange={paper.updateSettings}
+            onCloseOrder={async (id, input) => {
+              await paper.closeOrder(id, input);
+              refreshLog();
+            }}
+            onSync={() => void paper.syncToServer()}
+            onPull={() => void paper.pullFromServer()}
+          />
           <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
           <DecisionLogPreview entries={logEntries} />
         </div>
