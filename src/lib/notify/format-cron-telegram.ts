@@ -67,15 +67,16 @@ export function formatCronTelegramMessage(data: AnalyzeApiResponse): string {
   const market = data.step1_marketSnapshot;
 
   return [
-    "BTC Short Premium Agent",
+    "Multi-Agent AI Trading Desk",
     `Time: ${formatTimestamp(entry.timestamp)}`,
     "",
-    `Verdict: ${entry.verdict.toUpperCase()}`,
-    `Confidence: ${entry.confidenceLevel}`,
+    `Committee: ${entry.committeeVerdict}`,
+    entry.riskVeto ? "Risk veto: YES" : "Risk veto: no",
+    `Regime: ${entry.regime}`,
     "",
     `BTC: ${entry.btcPrice > 0 ? formatUsd(entry.btcPrice) : "missing"}`,
     `IV/HV: ${market.ivHvRatio > 0 ? market.ivHvRatio.toFixed(2) : "missing"}`,
-    `Liquidation: ${formatLiquidation(entry.liquidation24h)}`,
+    `Liquidation: ${formatLiquidation(data.liquidation.liquidation24h)}`,
     "",
     "Top Reasons:",
     formatTopReasons(entry.topReasons),

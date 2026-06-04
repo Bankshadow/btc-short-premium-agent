@@ -1,15 +1,23 @@
+import { agentRecToTrade } from "@/lib/agents/types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import {
   buildAnalysisJournalEntry,
   type AnalysisJournalEntry,
 } from "@/lib/journal/analysis-journal";
+import {
+  resolveConfidenceLevel,
+  type ConfidenceLevel,
+} from "@/lib/decision/verdict-display";
 
 export interface CronAnalyzeResponse {
   timestamp: string;
-  verdict: AnalysisJournalEntry["verdict"];
+  verdict: ReturnType<typeof agentRecToTrade>;
+  committeeVerdict: AnalysisJournalEntry["committeeVerdict"];
   confidence: number;
-  confidenceLevel: AnalysisJournalEntry["confidenceLevel"];
+  confidenceLevel: ConfidenceLevel;
   btcPrice: number;
+  regime: string;
+  riskVeto: boolean;
   topReasons: string[];
   actionSummary: string;
   dataSourceIssues: AnalyzeApiResponse["dataSourceIssues"];
@@ -25,13 +33,20 @@ export function buildCronAnalyzeResponse(
   options: { test?: boolean } = {},
 ): CronAnalyzeResponse {
   const entry = buildAnalysisJournalEntry(data);
+  const desk = data.tradingDesk;
+  const tradeVerdict = agentRecToTrade(entry.committeeVerdict);
+  const confidence =
+    desk?.committeeVerdict.confidence ?? data.step5_verdict.confidence;
 
   return {
     timestamp: entry.timestamp,
-    verdict: entry.verdict,
-    confidence: entry.confidence,
-    confidenceLevel: entry.confidenceLevel,
+    verdict: tradeVerdict,
+    committeeVerdict: entry.committeeVerdict,
+    confidence,
+    confidenceLevel: resolveConfidenceLevel(confidence, tradeVerdict),
     btcPrice: entry.btcPrice,
+    regime: entry.regime,
+    riskVeto: entry.riskVeto,
     topReasons: entry.topReasons,
     actionSummary: entry.actionSummary,
     dataSourceIssues: data.dataSourceIssues ?? data.sourceErrors ?? [],

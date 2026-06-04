@@ -1,4 +1,4 @@
-import type { AgentOutput } from "@/lib/types/agent";
+import type { AgentOutput } from "./types";
 import {
   buildAgentOutput,
   fromEngineRecommendation,
@@ -29,7 +29,7 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   } else if (macroView === "bearish" && daily.trend === "bearish") {
     recommendation = "WAIT";
     confidence = 65;
-    reasons.push("Bearish macro + trend — no spot long; watch for bounce entries only.");
+    reasons.push("Bearish macro + trend — no spot long; watch bounce entries only.");
   } else if (macroView === "bullish" && daily.trend === "bullish") {
     recommendation = "TRADE";
     confidence = 70;
@@ -37,7 +37,7 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   } else if (daily.trend === "neutral") {
     recommendation = "WAIT";
     confidence = 50;
-    reasons.push("Neutral trend — spot desk prefers range edges, not breakout chase.");
+    reasons.push("Neutral trend — spot desk prefers range edges.");
   } else {
     recommendation = "SKIP";
     confidence = 60;
@@ -47,7 +47,7 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   if (ctx.input.macroEvent.hasEventBeforeSettlement) {
     recommendation = "SKIP";
     confidence = 90;
-    reasons.push("High-impact macro before settlement — spot size reduced to zero.");
+    reasons.push("High-impact macro — spot size zero.");
   }
 
   const engine = fromEngineRecommendation(
@@ -59,24 +59,26 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
     reasons.push("Options desk SKIP — spot will not front-run committee.");
   }
 
-  return buildAgentOutput({
-    agentName: "Spot Strategy Agent",
-    strategyType: "spot",
-    marketView: trendToMarketView(daily.trend),
-    recommendation,
-    confidence,
-    reasons,
-    risks,
-    proposedAction: {
-      instrument: "BTC spot (display only)",
-      side:
-        recommendation === "TRADE" && macroView === "bullish"
-          ? "long"
-          : recommendation === "TRADE"
-            ? "short"
+  return buildAgentOutput(
+    {
+      agentName: "Spot Strategy Agent",
+      strategyType: "SPOT",
+      marketView: trendToMarketView(daily.trend),
+      recommendation,
+      confidence,
+      reasons,
+      risks,
+      proposedAction: {
+        instrument: "BTC spot (hypothetical)",
+        side:
+          recommendation === "TRADE" && macroView === "bullish"
+            ? "long"
             : "none",
-      sizePct: recommendation === "TRADE" ? 1.5 : 0,
-      notes: "Hypothetical spot plan — not executed.",
+        sizePct: recommendation === "TRADE" ? 1 : 0,
+        notes: "Hypothetical spot plan — human approval required.",
+      },
+      missingData: missing,
     },
-  });
+    ctx,
+  );
 }

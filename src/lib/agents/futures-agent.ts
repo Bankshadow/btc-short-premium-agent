@@ -1,4 +1,4 @@
-import type { AgentOutput } from "@/lib/types/agent";
+import type { AgentOutput } from "./types";
 import {
   buildAgentOutput,
   getMissingDataLabels,
@@ -19,7 +19,7 @@ export function runFuturesStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   if (market.oiChange24hPct != null) {
     reasons.push(`OI 24h ${market.oiChange24hPct.toFixed(2)}%.`);
   } else {
-    risks.push("OI 24h change missing — futures read is partial.");
+    risks.push("OI 24h change missing — futures read partial.");
   }
 
   reasons.push(`Combination: ${combo.label} (${combo.pattern}).`);
@@ -40,11 +40,7 @@ export function runFuturesStrategyAgent(ctx: TradingDeskContext): AgentOutput {
     recommendation = "TRADE";
     confidence = 72;
     side = "short";
-    reasons.push("New shorts piling — tactical short perp bias with tight risk.");
-  } else if (combo.pattern === "bullish_accumulation") {
-    recommendation = "WAIT";
-    confidence = 60;
-    reasons.push("Bullish accumulation — futures desk waits for funding fade.");
+    reasons.push("New shorts piling — tactical short perp with tight risk.");
   } else if (market.fundingRate < -0.0003) {
     recommendation = "TRADE";
     confidence = 68;
@@ -56,22 +52,26 @@ export function runFuturesStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   }
 
   if (market.fundingRate > 0.0001 && side === "short") {
-    risks.push("Positive funding — short perp pays carry cost.");
+    risks.push("Positive funding — short perp pays carry.");
   }
 
-  return buildAgentOutput({
-    agentName: "Futures Strategy Agent",
-    strategyType: "futures",
-    marketView: trendToMarketView(ctx.input.technical4h.trend),
-    recommendation,
-    confidence,
-    reasons,
-    risks,
-    proposedAction: {
-      instrument: "BTCUSDT perpetual (hypothetical)",
-      side,
-      sizePct: recommendation === "TRADE" ? 1.25 : 0,
-      notes: "Perp plan for analysis — no order routing.",
+  return buildAgentOutput(
+    {
+      agentName: "Futures Strategy Agent",
+      strategyType: "FUTURES",
+      marketView: trendToMarketView(ctx.input.technical4h.trend),
+      recommendation,
+      confidence,
+      reasons,
+      risks,
+      proposedAction: {
+        instrument: "BTCUSDT perpetual (hypothetical)",
+        side,
+        sizePct: recommendation === "TRADE" ? 1 : 0,
+        notes: "Perp plan — no order routing.",
+      },
+      missingData: missing,
     },
-  });
+    ctx,
+  );
 }

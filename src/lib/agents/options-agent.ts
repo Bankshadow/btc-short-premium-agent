@@ -1,8 +1,6 @@
-import type { AgentOutput } from "@/lib/types/agent";
-import { tradeRecToAgent } from "@/lib/types/agent";
-import {
-  evaluateDeltaVerdict,
-} from "@/lib/decision/no-trade-rules";
+import type { AgentOutput } from "./types";
+import { tradeRecToAgent } from "./types";
+import { evaluateDeltaVerdict } from "@/lib/decision/no-trade-rules";
 import {
   IV_HV_SKIP_THRESHOLD,
   SD_SKIP_THRESHOLD,
@@ -33,53 +31,51 @@ export function runOptionsStrategyAgent(ctx: TradingDeskContext): AgentOutput {
       `Candidate ${candidate.symbol} Δ${candidate.delta.toFixed(2)} SD ${candidate.sdDistance.toFixed(2)}.`,
     );
     const deltaV = evaluateDeltaVerdict(Math.abs(candidate.delta));
-    if (deltaV === "trade_ok") {
-      reasons.push("Delta in sweet spot (0.13–0.15).");
-    } else if (deltaV === "wait") {
-      reasons.push("Delta in fallback band — prefer smaller size or wait.");
-    } else {
-      reasons.push("Delta outside playbook bands.");
-    }
+    if (deltaV === "trade_ok") reasons.push("Delta in sweet spot (0.13–0.15).");
+    else if (deltaV === "wait") reasons.push("Delta in fallback band.");
+    else reasons.push("Delta outside playbook bands.");
   } else {
     reasons.push("No option candidate selected.");
   }
 
   if (market.ivHvRatio > 0 && market.ivHvRatio < IV_HV_SKIP_THRESHOLD) {
-    reasons.push(`IV/HV ${market.ivHvRatio.toFixed(2)} below ${IV_HV_SKIP_THRESHOLD} — short premium unfavorable.`);
+    reasons.push(
+      `IV/HV ${market.ivHvRatio.toFixed(2)} < ${IV_HV_SKIP_THRESHOLD} — short premium unfavorable.`,
+    );
   }
 
   if (candidate && candidate.sdDistance < SD_SKIP_THRESHOLD) {
-    risks.push(`SD distance ${candidate.sdDistance.toFixed(2)} < ${SD_SKIP_THRESHOLD} — pin risk.`);
-  }
-
-  if (missing.length > 0) {
-    reasons.push(`Missing: ${missing.join(", ")}.`);
+    risks.push(`SD ${candidate.sdDistance.toFixed(2)} < ${SD_SKIP_THRESHOLD} — pin risk.`);
   }
 
   reasons.push(verdict.summary);
-  reasons.push(`Macro view ${macroView} — playbook short-call bias when bearish.`);
+  reasons.push(`Macro ${macroView} — short-call bias when bearish.`);
 
   const side =
     plan.action === "sell_call" || plan.action === "sell_put" ? "short" : "none";
 
-  return buildAgentOutput({
-    agentName: "Options Strategy Agent",
-    strategyType: "options",
-    marketView:
-      macroView === "bearish"
-        ? "bearish"
-        : macroView === "bullish"
-          ? "bullish"
-          : "neutral",
-    recommendation,
-    confidence,
-    reasons: reasons.slice(0, 6),
-    risks,
-    proposedAction: {
-      instrument: candidate?.symbol ?? "BTC options",
-      side,
-      sizePct: plan.suggestedSizePct,
-      notes: plan.entryNotes || "Hypothetical premium plan — no execution.",
+  return buildAgentOutput(
+    {
+      agentName: "Options Strategy Agent",
+      strategyType: "OPTIONS",
+      marketView:
+        macroView === "bearish"
+          ? "bearish"
+          : macroView === "bullish"
+            ? "bullish"
+            : "neutral",
+      recommendation,
+      confidence,
+      reasons: reasons.slice(0, 6),
+      risks,
+      proposedAction: {
+        instrument: candidate?.symbol ?? "BTC options",
+        side,
+        sizePct: Math.min(plan.suggestedSizePct, 1),
+        notes: plan.entryNotes || "Hypothetical premium — human approval only.",
+      },
+      missingData: missing,
     },
-  });
+    ctx,
+  );
 }

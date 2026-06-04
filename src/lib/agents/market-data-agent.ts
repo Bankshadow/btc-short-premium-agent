@@ -1,4 +1,4 @@
-import type { AgentOutput } from "@/lib/types/agent";
+import type { AgentOutput } from "./types";
 import {
   buildAgentOutput,
   emptyAction,
@@ -41,19 +41,23 @@ export function runMarketDataAgent(ctx: TradingDeskContext): AgentOutput {
     missing.length > 0 ? "WAIT" : market.spotPrice <= 0 ? "SKIP" : "WAIT";
 
   if (missing.length > 0) {
-    reasons.push(`Missing required fields: ${missing.join(", ")}.`);
+    reasons.push(`Missing critical fields: ${missing.join(", ")}.`);
   }
 
-  return buildAgentOutput({
-    agentName: "Market Data Agent",
-    strategyType: "market_data",
-    marketView: trendToMarketView(daily.trend),
-    recommendation,
-    confidence: missing.length > 0 ? 40 : 85,
-    reasons,
-    risks,
-    proposedAction: emptyAction(
-      "Data feed only — no trade. Confirm overrides before strategy agents vote.",
-    ),
-  });
+  return buildAgentOutput(
+    {
+      agentName: "Market Data Agent",
+      strategyType: "MARKET_DATA",
+      marketView: trendToMarketView(daily.trend),
+      recommendation,
+      confidence: missing.length > 0 ? 40 : 85,
+      reasons,
+      risks,
+      proposedAction: emptyAction(
+        "Data feed only — no trade. Confirm overrides before strategy agents vote.",
+      ),
+      missingData: missing,
+    },
+    ctx,
+  );
 }

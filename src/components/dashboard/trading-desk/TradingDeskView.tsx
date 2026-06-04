@@ -1,10 +1,12 @@
 "use client";
 
-import type { TradingDeskOutput } from "@/lib/types/agent";
+import type { TradingDeskOutput } from "@/lib/agents/types";
 import AgentDebateTable from "./AgentDebateTable";
 import FinalVerdictPanel from "./FinalVerdictPanel";
+import MarketRegimePanel from "./MarketRegimePanel";
+import MissionControlPanel from "./MissionControlPanel";
 import MultiAgentSummary from "./MultiAgentSummary";
-import PortfolioAllocationPanel from "./PortfolioAllocationPanel";
+import PortfolioMilestoneTracker from "./PortfolioMilestoneTracker";
 import RiskVetoPanel from "./RiskVetoPanel";
 
 interface TradingDeskViewProps {
@@ -18,10 +20,12 @@ export default function TradingDeskView({ desk }: TradingDeskViewProps) {
         {desk.disclaimer}
       </div>
 
+      <MissionControlPanel mission={desk.missionControl} />
+      <MarketRegimePanel regime={desk.regime} />
       <MultiAgentSummary agents={desk.agents} />
       <AgentDebateTable debate={desk.debate} />
       <RiskVetoPanel riskManager={desk.riskManager} />
-      <PortfolioAllocationPanel allocation={desk.portfolioAllocation} />
+      <PortfolioMilestoneTracker milestones={desk.portfolioMilestones} />
       <FinalVerdictPanel verdict={desk.committeeVerdict} />
     </div>
   );

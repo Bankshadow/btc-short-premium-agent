@@ -9,19 +9,37 @@ import type {
   AgentMarketView,
   AgentOutput,
   AgentRecommendation,
+  MissionControlStatus,
   ProposedAction,
-} from "@/lib/types/agent";
-import { tradeRecToAgent } from "@/lib/types/agent";
+} from "./types";
+import { tradeRecToAgent } from "./types";
 
 export const TRADING_DESK_DISCLAIMER =
-  "Multi-Agent AI Trading Desk — analysis only. No auto execution. Co-pilot, not auto-pilot.";
+  "Multi-Agent AI Trading Desk — analysis only. Human approval required. No auto execution.";
 
 export const DEFAULT_PORTFOLIO_CAPITAL_USD = 1000;
 export const PORTFOLIO_GOAL_USD = 20_000;
-export const PORTFOLIO_STAGES_USD = [1000, 2000, 4000, 8000, 16_000, 20_000] as const;
+export const PORTFOLIO_MILESTONES_USD = [
+  1000, 2000, 4000, 8000, 16_000, 20_000,
+] as const;
 
-export const MAX_LOSS_PER_TRADE_PCT = 2;
-export const MAX_DAILY_LOSS_PCT = 5;
+export const MAX_RISK_PER_TRADE_PCT = 1;
+export const MAX_DAILY_LOSS_PCT = 3;
+export const MAX_WEEKLY_LOSS_PCT = 8;
+
+/** @deprecated */
+export const MAX_LOSS_PER_TRADE_PCT = MAX_RISK_PER_TRADE_PCT;
+/** @deprecated */
+export const PORTFOLIO_STAGES_USD = PORTFOLIO_MILESTONES_USD;
+
+export const CRITICAL_DATA_FIELDS = [
+  "BTC spot price",
+  "HV30",
+  "IV",
+  "IV/HV ratio",
+  "option chain",
+  "liquidation 24h",
+] as const;
 
 export interface TradingDeskContext {
   input: DecisionEngineInput;
@@ -41,6 +59,15 @@ export function buildTradingDeskContext(
     sourceErrors: response.sourceErrors ?? response.dataSourceIssues ?? [],
     portfolioCapitalUsd,
   };
+}
+
+export function resolveRequiredAndMissing(ctx: TradingDeskContext): {
+  requiredData: string[];
+  missingData: string[];
+} {
+  const requiredData = [...CRITICAL_DATA_FIELDS];
+  const missingData = getMissingDataLabels(ctx);
+  return { requiredData, missingData };
 }
 
 export function selectBestOptionCandidate(
@@ -78,10 +105,22 @@ export function emptyAction(notes: string): ProposedAction {
 }
 
 export function buildAgentOutput(
-  partial: Omit<AgentOutput, "proposedAction"> & { proposedAction?: ProposedAction },
+  partial: Omit<AgentOutput, "proposedAction" | "requiredData" | "missingData"> & {
+    proposedAction?: ProposedAction;
+    requiredData?: string[];
+    missingData?: string[];
+  },
+  ctx?: TradingDeskContext,
 ): AgentOutput {
+  const data = ctx ? resolveRequiredAndMissing(ctx) : {
+    requiredData: [...CRITICAL_DATA_FIELDS],
+    missingData: [],
+  };
+
   return {
     proposedAction: emptyAction("No execution — analysis only."),
+    requiredData: partial.requiredData ?? data.requiredData,
+    missingData: partial.missingData ?? data.missingData,
     ...partial,
   };
 }
@@ -109,7 +148,9 @@ export function majorityRecommendation(
 
 export function getMissingDataLabels(ctx: TradingDeskContext): string[] {
   const missing = ctx.response.step5_verdict.missingData ?? [];
-  if (missing.length > 0) return missing;
+  if (missing.length > 0) {
+    return missing.map((f) => f.replace(/^market\./, "BTC "));
+  }
 
   const labels: string[] = [];
   const market = ctx.input.market;
@@ -122,4 +163,32 @@ export function getMissingDataLabels(ctx: TradingDeskContext): string[] {
     labels.push("liquidation 24h");
   }
   return labels;
+}
+
+export function buildMissionControl(
+  ctx: TradingDeskContext,
+  agentCount: number,
+): MissionControlStatus {
+  const missing = getMissingDataLabels(ctx);
+  const veto = ctx.response.step3_noTradeRules.some(
+    (r) => r.triggered && r.severity === "hard",
+  );
+
+  let deskHealth: MissionControlStatus["deskHealth"] = "ready";
+  if (missing.length > 0 || ctx.input.market.spotPrice <= 0) {
+    deskHealth = "degraded";
+  }
+  if (veto || missing.length >= 3) {
+    deskHealth = "blocked";
+  }
+
+  return {
+    mode: "analysis_only",
+    humanApprovalRequired: true,
+    autoExecution: false,
+    privateKeysRequired: false,
+    activeAgents: agentCount,
+    lastAnalyzedAt: ctx.response.step5_verdict.analyzedAt,
+    deskHealth,
+  };
 }

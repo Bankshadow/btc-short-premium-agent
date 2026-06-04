@@ -1,6 +1,6 @@
 "use client";
 
-import type { AgentOutput } from "@/lib/types/agent";
+import type { AgentOutput } from "@/lib/agents/types";
 import { recBadgeClass } from "./agent-display";
 
 interface RiskVetoPanelProps {
@@ -29,8 +29,8 @@ export default function RiskVetoPanel({ riskManager }: RiskVetoPanelProps) {
         </span>
       </div>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-        Risk Manager can block any TRADE. Caps: 1–2% per trade, 3–5% daily. No auto
-        execution.
+        Risk Manager can block any TRADE. Caps: 1% per trade, 3% daily, 8% weekly.
+        No martingale. No auto execution.
       </p>
       <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
         {riskManager.reasons.map((r) => (

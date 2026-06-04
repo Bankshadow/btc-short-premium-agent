@@ -1,4 +1,4 @@
-import type { TradingDeskOutput } from "@/lib/types/agent";
+import type { TradingDeskOutput } from "@/lib/agents/types";
 
 export type OptionType = "call" | "put";
 

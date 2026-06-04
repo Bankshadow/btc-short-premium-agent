@@ -1,4 +1,4 @@
-import type { AgentOutput } from "@/lib/types/agent";
+import type { AgentOutput } from "./types";
 import {
   evaluateNoTradeRules,
   isIntendedShortCall,
@@ -12,7 +12,8 @@ import {
   buildAgentOutput,
   getMissingDataLabels,
   MAX_DAILY_LOSS_PCT,
-  MAX_LOSS_PER_TRADE_PCT,
+  MAX_RISK_PER_TRADE_PCT,
+  MAX_WEEKLY_LOSS_PCT,
   selectBestOptionCandidate,
   type TradingDeskContext,
 } from "./shared";
@@ -22,6 +23,7 @@ export function runRiskManagerAgent(ctx: TradingDeskContext): AgentOutput {
   const candidate = selectBestOptionCandidate(ctx.input.optionCandidates);
   const shortPremium =
     isIntendedShortCall(ctx.input.macroView ?? "neutral", candidate);
+  const missing = getMissingDataLabels(ctx);
 
   const noTradeRules = evaluateNoTradeRules(market, candidate, {
     macroEvent,
@@ -42,17 +44,16 @@ export function runRiskManagerAgent(ctx: TradingDeskContext): AgentOutput {
     }
   }
 
-  const missing = getMissingDataLabels(ctx);
   if (missing.length > 0) {
     vetoReasons.push(
-      `Required data missing (${missing.join(", ")}) — no trade until complete.`,
+      `Missing critical data (${missing.join(", ")}) — no TRADE allowed.`,
     );
   }
 
   const liq = liquidation.liquidation24h;
   if (liq != null && liq > LIQUIDATION_SKIP) {
     vetoReasons.push(
-      `Liquidation 24h $${(liq / 1e6).toFixed(0)}M > $200M — hard SKIP.`,
+      `Liquidation 24h $${(liq / 1e6).toFixed(0)}M > $200M — SKIP.`,
     );
   }
 
@@ -62,29 +63,32 @@ export function runRiskManagerAgent(ctx: TradingDeskContext): AgentOutput {
     );
   }
 
-  if (
-    candidate &&
-    shortPremium &&
-    candidate.sdDistance < SD_SKIP_THRESHOLD
-  ) {
+  if (candidate && shortPremium && candidate.sdDistance < SD_SKIP_THRESHOLD) {
     vetoReasons.push(
-      `SD distance ${candidate.sdDistance.toFixed(2)} < ${SD_SKIP_THRESHOLD} — options SKIP.`,
+      `SD ${candidate.sdDistance.toFixed(2)} < ${SD_SKIP_THRESHOLD} — options SKIP.`,
     );
   }
 
   if (macroEvent.hasEventBeforeSettlement) {
-    vetoReasons.push("High-impact macro before settlement — reduce risk or SKIP.");
+    vetoReasons.push("High-impact macro before settlement — SKIP or cut risk.");
   }
 
-  reasons.push(
-    `Max loss per trade cap: ${MAX_LOSS_PER_TRADE_PCT}% of equity.`,
-  );
-  reasons.push(`Max daily loss cap: ${MAX_DAILY_LOSS_PCT}% of equity.`);
+  const consecutive = ctx.input.consecutiveLosses ?? 0;
+  if (consecutive >= 1) {
+    reasons.push(
+      "No martingale — do not increase size after a loss; flat or smaller only.",
+    );
+    if (consecutive >= 2) {
+      vetoReasons.push(
+        `${consecutive} consecutive losses — desk pauses new risk (martingale / weekly guard).`,
+      );
+    }
+  }
+
+  reasons.push(`Max risk per trade: ${MAX_RISK_PER_TRADE_PCT}% equity.`);
+  reasons.push(`Max daily loss: ${MAX_DAILY_LOSS_PCT}% equity.`);
+  reasons.push(`Max weekly loss policy: ${MAX_WEEKLY_LOSS_PCT}% equity.`);
   reasons.push("No auto execution — human approval required.");
-
-  if ((ctx.input.consecutiveLosses ?? 0) >= 2) {
-    vetoReasons.push("Two+ consecutive losses — desk pauses new risk.");
-  }
 
   const veto = vetoReasons.length > 0;
   const recommendation: AgentOutput["recommendation"] = veto
@@ -96,30 +100,39 @@ export function runRiskManagerAgent(ctx: TradingDeskContext): AgentOutput {
         : "WAIT";
 
   if (!veto) {
-    reasons.push("No hard risk veto — strategy agents may proceed to committee.");
+    reasons.push("No hard veto — committee may consider TRADE with caps.");
   }
 
-  return buildAgentOutput({
-    agentName: "Risk Manager Agent",
-    strategyType: "risk",
-    marketView: "neutral",
-    recommendation,
-    confidence: veto ? 100 : 80,
-    reasons,
-    risks: [
-      ...risks,
-      "Veto authority over all strategy agents.",
-      "Analysis-only — orders are never sent automatically.",
-    ],
-    veto,
-    vetoReasons: [...new Set(vetoReasons)],
-    proposedAction: {
-      instrument: "portfolio risk",
-      side: "none",
-      sizePct: veto ? 0 : Math.min(MAX_LOSS_PER_TRADE_PCT, ctx.response.step6_actionPlan.suggestedSizePct),
-      notes: veto
-        ? "Risk veto active — committee must SKIP or WAIT."
-        : `Size capped at ${MAX_LOSS_PER_TRADE_PCT}% max loss per trade.`,
+  return buildAgentOutput(
+    {
+      agentName: "Risk Manager Agent",
+      strategyType: "RISK",
+      marketView: "neutral",
+      recommendation,
+      confidence: veto ? 100 : 82,
+      reasons,
+      risks: [
+        ...risks,
+        "Binding veto over all strategy agents.",
+        "Analysis-only — never routes orders.",
+      ],
+      veto,
+      vetoReasons: [...new Set(vetoReasons)],
+      proposedAction: {
+        instrument: "portfolio risk",
+        side: "none",
+        sizePct: veto
+          ? 0
+          : Math.min(
+              MAX_RISK_PER_TRADE_PCT,
+              ctx.response.step6_actionPlan.suggestedSizePct,
+            ),
+        notes: veto
+          ? "Risk veto — committee must not approve live TRADE."
+          : `Cap size at ${MAX_RISK_PER_TRADE_PCT}% risk per trade.`,
+      },
+      missingData: missing,
     },
-  });
+    ctx,
+  );
 }

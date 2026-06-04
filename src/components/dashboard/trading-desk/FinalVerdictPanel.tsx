@@ -1,6 +1,6 @@
 "use client";
 
-import type { CommitteeVerdict } from "@/lib/types/agent";
+import type { CommitteeVerdict } from "@/lib/agents/types";
 import { recBadgeClass } from "./agent-display";
 
 interface FinalVerdictPanelProps {
@@ -13,7 +13,7 @@ export default function FinalVerdictPanel({ verdict }: FinalVerdictPanelProps) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-widest opacity-70">
-            Final Verdict — Committee
+            Final Verdict
           </p>
           <h2 className="mt-1 text-2xl font-bold">{verdict.recommendation}</h2>
           <p className="mt-2 text-sm opacity-80">{verdict.summary}</p>
@@ -25,19 +25,39 @@ export default function FinalVerdictPanel({ verdict }: FinalVerdictPanelProps) {
         </span>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2 text-xs">
-        <span className="rounded bg-white/10 px-2 py-1 dark:bg-zinc-900/10">
-          Agreement: {verdict.agreement}
-        </span>
-        {verdict.riskVetoApplied && (
-          <span className="rounded bg-red-500/20 px-2 py-1 text-red-200 dark:text-red-800">
-            Risk veto applied
-          </span>
-        )}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase opacity-70">Agreement</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {verdict.agreementNotes.length > 0 ? (
+              verdict.agreementNotes.map((n) => <li key={n}>✓ {n}</li>)
+            ) : (
+              <li className="opacity-60">No full agreement</li>
+            )}
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase opacity-70">
+            Disagreement
+          </p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {verdict.disagreementNotes.length > 0 ? (
+              verdict.disagreementNotes.map((n) => <li key={n}>✗ {n}</li>)
+            ) : (
+              <li className="opacity-60">None</li>
+            )}
+          </ul>
+        </div>
       </div>
 
+      {verdict.riskVetoApplied && (
+        <p className="mt-3 rounded bg-red-500/20 px-3 py-2 text-sm text-red-100 dark:text-red-900">
+          Risk Manager veto applied — TRADE blocked until cleared.
+        </p>
+      )}
+
       <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
+        <p className="text-xs font-semibold uppercase opacity-70">
           Top 3 reasons
         </p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
@@ -48,22 +68,11 @@ export default function FinalVerdictPanel({ verdict }: FinalVerdictPanelProps) {
       </div>
 
       <div className="mt-4 rounded-lg bg-white/10 p-3 text-sm dark:bg-zinc-900/10">
-        <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
-          Action plan (hypothetical)
+        <p className="text-xs font-semibold uppercase opacity-70">
+          Action summary (hypothetical)
         </p>
-        <p className="mt-1">{verdict.actionPlan}</p>
+        <p className="mt-1">{verdict.actionSummary}</p>
       </div>
-
-      {verdict.dissent.length > 0 && (
-        <div className="mt-4 text-xs opacity-75">
-          <p className="font-semibold uppercase tracking-wide">Dissent</p>
-          <ul className="mt-1 space-y-0.5">
-            {verdict.dissent.map((d) => (
-              <li key={d}>• {d}</li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }

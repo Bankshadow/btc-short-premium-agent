@@ -1,4 +1,6 @@
+import { agentRecToTrade } from "@/lib/agents/types";
 import { buildAnalysisJournalEntry } from "@/lib/journal/analysis-journal";
+import { resolveConfidenceLevel } from "@/lib/decision/verdict-display";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import {
   getSupabaseAdmin,
@@ -30,17 +32,23 @@ export class SupabaseJournalError extends Error {
 
 function buildAnalysisRunInsert(data: AnalyzeApiResponse) {
   const entry = buildAnalysisJournalEntry(data);
+  const market = data.step1_marketSnapshot;
+  const candidate = data.step5_verdict.candidate;
+  const tradeVerdict = agentRecToTrade(entry.committeeVerdict);
+  const confidence =
+    data.tradingDesk?.committeeVerdict.confidence ??
+    data.step5_verdict.confidence;
 
   return {
     btc_price: entry.btcPrice > 0 ? entry.btcPrice : null,
-    verdict: entry.verdict,
-    confidence: entry.confidenceLevel,
+    verdict: tradeVerdict,
+    confidence: resolveConfidenceLevel(confidence, tradeVerdict),
     top_reasons: entry.topReasons,
     action_summary: entry.actionSummary,
-    liquidation24h: entry.liquidation24h,
-    iv_hv_ratio: entry.ivHvRatio > 0 ? entry.ivHvRatio : null,
-    sd_distance: entry.sdDistance,
-    delta: entry.delta,
+    liquidation24h: data.liquidation.liquidation24h,
+    iv_hv_ratio: market.ivHvRatio > 0 ? market.ivHvRatio : null,
+    sd_distance: candidate?.sdDistance ?? null,
+    delta: candidate?.delta ?? null,
     raw_result: data,
   };
 }

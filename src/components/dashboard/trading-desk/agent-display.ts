@@ -1,4 +1,4 @@
-import type { AgentRecommendation, AgentStrategyType } from "@/lib/types/agent";
+import type { AgentRecommendation, AgentStrategyType } from "@/lib/agents/types";
 
 export function recBadgeClass(rec: AgentRecommendation): string {
   switch (rec) {
@@ -13,13 +13,27 @@ export function recBadgeClass(rec: AgentRecommendation): string {
 
 export function strategyLabel(type: AgentStrategyType): string {
   const labels: Record<AgentStrategyType, string> = {
-    market_data: "Market Data",
-    spot: "Spot",
-    futures: "Futures",
-    options: "Options",
-    risk: "Risk",
-    committee: "Committee",
-    portfolio: "Portfolio",
+    SPOT: "Spot",
+    FUTURES: "Futures",
+    OPTIONS: "Options",
+    RISK: "Risk",
+    PORTFOLIO: "Portfolio",
+    MARKET_DATA: "Market Data",
+    REGIME: "Regime",
+    COMMITTEE: "Committee",
   };
   return labels[type];
+}
+
+export function deskHealthClass(
+  health: "ready" | "degraded" | "blocked",
+): string {
+  switch (health) {
+    case "ready":
+      return "text-emerald-600 dark:text-emerald-400";
+    case "degraded":
+      return "text-amber-600 dark:text-amber-400";
+    case "blocked":
+      return "text-red-600 dark:text-red-400";
+  }
 }

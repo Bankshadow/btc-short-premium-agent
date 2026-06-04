@@ -1,6 +1,6 @@
 "use client";
 
-import type { AgentDebateRow } from "@/lib/types/agent";
+import type { AgentDebateRow } from "@/lib/agents/types";
 import { recBadgeClass, strategyLabel } from "./agent-display";
 
 interface AgentDebateTableProps {

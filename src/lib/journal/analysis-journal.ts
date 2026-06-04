@@ -1,122 +1,102 @@
-import type { AgentRecommendation } from "@/lib/types/agent";
-import type {
-  AnalyzeApiResponse,
-  OptionCandidate,
-  TradeRecommendation,
-} from "@/lib/types/market";
-import {
-  collectTopReasons,
-  resolveActionSummary,
-  resolveConfidenceLevel,
-  type ConfidenceLevel,
-} from "@/lib/decision/verdict-display";
+import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
+import { REGIME_LABELS, type MarketRegimeLabel } from "@/lib/agents/types";
+import type { AnalyzeApiResponse } from "@/lib/types/market";
 
 export const ANALYSIS_JOURNAL_STORAGE_KEY =
-  "btc-short-premium-agent:analysis-journal";
+  "multi-agent-trading-desk:analysis-journal";
+
+/** Legacy key — migrated on load */
+const LEGACY_JOURNAL_KEY = "btc-short-premium-agent:analysis-journal";
 
 export const JOURNAL_MAX_ENTRIES = 10;
-
-export interface JournalOptionCandidate {
-  symbol: string;
-  strike: number;
-  expiry: string;
-  delta: number;
-  sdDistance: number;
-}
 
 export interface AnalysisJournalEntry {
   id: string;
   timestamp: string;
   btcPrice: number;
-  verdict: TradeRecommendation;
-  confidence: number;
-  confidenceLevel: ConfidenceLevel;
+  regime: string;
+  agentOutputs: AgentOutput[];
+  committeeVerdict: AgentRecommendation;
+  riskVeto: boolean;
   topReasons: string[];
-  callCandidate: JournalOptionCandidate | null;
-  putCandidate: JournalOptionCandidate | null;
-  liquidation24h: number | null;
-  ivHvRatio: number;
-  sdDistance: number | null;
-  delta: number | null;
   actionSummary: string;
-  /** Committee final desk verdict when multi-agent desk ran */
-  committeeVerdict?: AgentRecommendation;
-  riskVetoApplied?: boolean;
+  /** User-editable later — paper trade outcome */
+  paperOutcome: string | null;
 }
 
-function pickBestByType(
-  candidates: OptionCandidate[],
-  optionType: "call" | "put",
-): JournalOptionCandidate | null {
-  const filtered = candidates.filter((c) => c.optionType === optionType);
-  if (filtered.length === 0) return null;
-
-  const best = [...filtered].sort(
-    (a, b) =>
-      Math.abs(Math.abs(a.delta) - 0.14) - Math.abs(Math.abs(b.delta) - 0.14),
-  )[0];
-
+function slimAgentOutput(agent: AgentOutput): AgentOutput {
   return {
-    symbol: best.symbol,
-    strike: best.strike,
-    expiry: best.expiry,
-    delta: best.delta,
-    sdDistance: best.sdDistance,
-  };
-}
-
-function toJournalCandidate(
-  candidate: OptionCandidate | undefined,
-): JournalOptionCandidate | null {
-  if (!candidate) return null;
-  return {
-    symbol: candidate.symbol,
-    strike: candidate.strike,
-    expiry: candidate.expiry,
-    delta: candidate.delta,
-    sdDistance: candidate.sdDistance,
+    agentName: agent.agentName,
+    marketView: agent.marketView,
+    recommendation: agent.recommendation,
+    strategyType: agent.strategyType,
+    confidence: agent.confidence,
+    reasons: agent.reasons.slice(0, 4),
+    risks: agent.risks.slice(0, 3),
+    proposedAction: agent.proposedAction,
+    requiredData: agent.requiredData,
+    missingData: agent.missingData,
+    veto: agent.veto,
+    vetoReasons: agent.vetoReasons?.slice(0, 5),
   };
 }
 
 export function buildAnalysisJournalEntry(
   data: AnalyzeApiResponse,
 ): AnalysisJournalEntry {
+  const desk = data.tradingDesk;
   const market = data.step1_marketSnapshot;
-  const verdict = data.step5_verdict;
-  const actionPlan = data.step6_actionPlan;
-  const selected = verdict.candidate;
-
-  const topReasons = collectTopReasons(
-    verdict,
-    data.step2_eightCheckFramework,
-    data.step3_noTradeRules,
-    data.step4_combinationRead,
-  );
+  const regimeLabel = desk?.regime.label ?? ("unclear" as MarketRegimeLabel);
 
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    timestamp: verdict.analyzedAt,
+    timestamp: data.step5_verdict.analyzedAt,
     btcPrice: market.spotPrice,
-    verdict: verdict.recommendation,
-    confidence: verdict.confidence,
-    confidenceLevel: resolveConfidenceLevel(
-      verdict.confidence,
-      verdict.recommendation,
-    ),
-    topReasons,
-    callCandidate:
-      pickBestByType(data.optionCandidates, "call") ??
-      (selected?.optionType === "call" ? toJournalCandidate(selected) : null),
-    putCandidate:
-      pickBestByType(data.optionCandidates, "put") ??
-      (selected?.optionType === "put" ? toJournalCandidate(selected) : null),
-    liquidation24h: data.liquidation.liquidation24h,
-    ivHvRatio: market.ivHvRatio,
-    sdDistance: selected?.sdDistance ?? null,
-    delta: selected?.delta ?? null,
-    actionSummary: resolveActionSummary(verdict, actionPlan),
-    committeeVerdict: data.tradingDesk?.committeeVerdict.recommendation,
-    riskVetoApplied: data.tradingDesk?.committeeVerdict.riskVetoApplied,
+    regime: REGIME_LABELS[regimeLabel] ?? regimeLabel,
+    agentOutputs: (desk?.agents ?? []).map(slimAgentOutput),
+    committeeVerdict:
+      desk?.committeeVerdict.recommendation ?? "WAIT",
+    riskVeto: desk?.committeeVerdict.riskVetoApplied ?? false,
+    topReasons:
+      desk?.committeeVerdict.topReasons ??
+      [data.step5_verdict.summary],
+    actionSummary:
+      desk?.committeeVerdict.actionSummary ??
+      data.step6_actionPlan.entryNotes,
+    paperOutcome: null,
+  };
+}
+
+function isJournalEntry(value: unknown): value is AnalysisJournalEntry {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "timestamp" in value &&
+    "committeeVerdict" in value
+  );
+}
+
+function migrateLegacyEntry(raw: Record<string, unknown>): AnalysisJournalEntry | null {
+  if (!raw.timestamp) return null;
+  return {
+    id: String(raw.id ?? `${Date.now()}-legacy`),
+    timestamp: String(raw.timestamp),
+    btcPrice: Number(raw.btcPrice ?? 0),
+    regime: "Legacy import",
+    agentOutputs: [],
+    committeeVerdict:
+      (raw.committeeVerdict as AgentRecommendation) ??
+      (raw.verdict === "trade"
+        ? "TRADE"
+        : raw.verdict === "skip"
+          ? "SKIP"
+          : "WAIT"),
+    riskVeto: Boolean(raw.riskVetoApplied),
+    topReasons: Array.isArray(raw.topReasons)
+      ? (raw.topReasons as string[])
+      : [],
+    actionSummary: String(raw.actionSummary ?? ""),
+    paperOutcome: null,
   };
 }
 
@@ -125,9 +105,34 @@ export function loadAnalysisJournal(): AnalysisJournalEntry[] {
 
   try {
     const raw = localStorage.getItem(ANALYSIS_JOURNAL_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as AnalysisJournalEntry[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(isJournalEntry);
+      }
+    }
+
+    const legacy = localStorage.getItem(LEGACY_JOURNAL_KEY);
+    if (!legacy) return [];
+
+    const legacyParsed = JSON.parse(legacy) as unknown;
+    if (!Array.isArray(legacyParsed)) return [];
+
+    const migrated = legacyParsed
+      .map((item) =>
+        isJournalEntry(item)
+          ? item
+          : migrateLegacyEntry(item as Record<string, unknown>),
+      )
+      .filter((e): e is AnalysisJournalEntry => e != null);
+
+    if (migrated.length > 0) {
+      localStorage.setItem(
+        ANALYSIS_JOURNAL_STORAGE_KEY,
+        JSON.stringify(migrated),
+      );
+    }
+    return migrated;
   } catch {
     return [];
   }
