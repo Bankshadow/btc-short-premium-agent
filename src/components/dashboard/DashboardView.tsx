@@ -6,6 +6,7 @@ import DashboardHeader from "./DashboardHeader";
 import MarketSnapshot from "./MarketSnapshot";
 import NoTradeRulesPanel from "./NoTradeRulesPanel";
 import OptionSweetSpotTable from "./OptionSweetSpotTable";
+import TradingDeskView from "./trading-desk/TradingDeskView";
 import VerdictCard from "./VerdictCard";
 
 interface DashboardViewProps {
@@ -20,6 +21,15 @@ export default function DashboardView({ data }: DashboardViewProps) {
         marketTimestamp={data.step1_marketSnapshot.timestamp}
       />
 
+      {data.tradingDesk && <TradingDeskView desk={data.tradingDesk} />}
+
+      <details className="group rounded-xl border border-zinc-200 dark:border-zinc-800">
+        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-zinc-700 dark:text-zinc-300 [&::-webkit-details-marker]:hidden">
+          Playbook engine detail (options · checks · rules)
+          <span className="ml-2 text-zinc-400 group-open:hidden">▸</span>
+          <span className="ml-2 text-zinc-400 hidden group-open:inline">▾</span>
+        </summary>
+        <div className="flex flex-col gap-6 border-t border-zinc-200 px-4 pb-4 pt-4 dark:border-zinc-800">
       <MarketSnapshot snapshot={data.step1_marketSnapshot} />
 
       <OptionSweetSpotTable candidates={data.optionCandidates} />
@@ -44,6 +54,8 @@ export default function DashboardView({ data }: DashboardViewProps) {
       </div>
 
       <DashboardDisclaimer />
+        </div>
+      </details>
     </>
   );
 }

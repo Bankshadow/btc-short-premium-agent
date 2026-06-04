@@ -174,11 +174,21 @@ export default function AnalyzeDashboard({
 
   return (
     <div className="relative flex flex-col gap-6">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          Multi-Agent AI Trading Desk
+        </h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Analysis-only — options, spot, and futures agents debate; risk manager can
+          veto; no auto execution.
+        </p>
+      </header>
+
       <LiveSpotPrices />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          Run a fresh analysis against live Bybit public data.
+          Run committee analysis against live Bybit public data.
         </p>
         <button
           type="button"

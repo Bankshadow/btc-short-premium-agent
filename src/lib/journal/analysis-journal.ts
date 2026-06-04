@@ -1,3 +1,4 @@
+import type { AgentRecommendation } from "@/lib/types/agent";
 import type {
   AnalyzeApiResponse,
   OptionCandidate,
@@ -38,6 +39,9 @@ export interface AnalysisJournalEntry {
   sdDistance: number | null;
   delta: number | null;
   actionSummary: string;
+  /** Committee final desk verdict when multi-agent desk ran */
+  committeeVerdict?: AgentRecommendation;
+  riskVetoApplied?: boolean;
 }
 
 function pickBestByType(
@@ -111,6 +115,8 @@ export function buildAnalysisJournalEntry(
     sdDistance: selected?.sdDistance ?? null,
     delta: selected?.delta ?? null,
     actionSummary: resolveActionSummary(verdict, actionPlan),
+    committeeVerdict: data.tradingDesk?.committeeVerdict.recommendation,
+    riskVetoApplied: data.tradingDesk?.committeeVerdict.riskVetoApplied,
   };
 }
 

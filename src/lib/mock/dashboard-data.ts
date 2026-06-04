@@ -1,3 +1,4 @@
+import { attachTradingDesk } from "@/lib/agents/run-trading-desk";
 import { buildAnalyzeApiResponse } from "@/lib/decision/analyze-response";
 import { runDecisionEngine } from "@/lib/decision/engine";
 import type {
@@ -78,13 +79,14 @@ function buildMockEngineInput(): DecisionEngineInput {
 
 /** Fallback payload when live /api/analyze fails — not used on initial page load. */
 export function getMockDashboardFallback(): AnalyzeApiResponse {
-  const output = runDecisionEngine(buildMockEngineInput());
-
-  return buildAnalyzeApiResponse(output, [
+  const input = buildMockEngineInput();
+  const output = runDecisionEngine(input);
+  const base = buildAnalyzeApiResponse(output, [
     {
       source: "Fallback Data",
       message:
         "Live analysis unavailable — placeholder data shown. Click Analyze Now to retry.",
     },
   ]);
+  return attachTradingDesk(input, base);
 }

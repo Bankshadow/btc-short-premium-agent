@@ -58,7 +58,8 @@ export default function AnalysisJournal({ entries }: AnalysisJournalProps) {
               <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
                 <th className="px-3 py-2 font-medium">Time</th>
                 <th className="px-3 py-2 font-medium">BTC</th>
-                <th className="px-3 py-2 font-medium">Verdict</th>
+                <th className="px-3 py-2 font-medium">Playbook</th>
+                <th className="px-3 py-2 font-medium">Committee</th>
                 <th className="px-3 py-2 font-medium">Conf.</th>
                 <th className="px-3 py-2 font-medium">Liq 24h</th>
                 <th className="px-3 py-2 font-medium">IV/HV</th>
@@ -87,6 +88,16 @@ export default function AnalysisJournal({ entries }: AnalysisJournalProps) {
                     >
                       {entry.verdict}
                     </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    {entry.committeeVerdict ? (
+                      <span className="inline-block rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold uppercase text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200">
+                        {entry.committeeVerdict}
+                        {entry.riskVetoApplied ? " · veto" : ""}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-400">—</span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     <span className="font-semibold">{entry.confidenceLevel}</span>

@@ -1,3 +1,5 @@
+import type { TradingDeskOutput } from "@/lib/types/agent";
+
 export type OptionType = "call" | "put";
 
 export type CheckStatus = "pass" | "fail" | "warn" | "skip";
@@ -202,6 +204,8 @@ export interface DataSourceError {
 }
 
 export interface AnalyzeApiResponse extends DecisionEngineOutput {
+  /** Multi-agent trading desk synthesis (analysis-only). */
+  tradingDesk?: TradingDeskOutput;
   sourceErrors: DataSourceError[];
   /** Friendly alias for step1_marketSnapshot */
   marketSnapshot: MarketSnapshot;

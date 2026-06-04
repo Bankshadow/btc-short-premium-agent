@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BTC Short Premium Agent",
+  title: "Multi-Agent AI Trading Desk",
   description:
-    "Analysis-only dashboard for BTC short premium options strategies.",
+    "Analysis-only multi-agent desk for BTC options, spot, and futures — debate, risk veto, no auto execution.",
 };
 
 export default function RootLayout({

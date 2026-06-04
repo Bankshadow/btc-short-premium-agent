@@ -13,6 +13,7 @@ import type {
   DerivativesOverrides,
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
+import { attachTradingDesk } from "@/lib/agents/run-trading-desk";
 import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
 import { hasAnyOverride, hasOverrideForField } from "./derivatives-overrides";
@@ -297,7 +298,8 @@ export function runDecisionEngineFromInput(
   }
 
   const output = runDecisionEngine(engineInput);
-  return buildAnalyzeApiResponse(output, sourceErrors);
+  const response = buildAnalyzeApiResponse(output, sourceErrors);
+  return attachTradingDesk(engineInput, response);
 }
 
 /** Map 6-step output to legacy AnalysisResult for dashboard components. */
@@ -329,18 +331,19 @@ export async function runAnalysisEngine(
 ): Promise<AnalyzeApiResponse> {
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
-  const response = buildAnalyzeApiResponse(output, sourceErrors);
+  const base = buildAnalyzeApiResponse(output, sourceErrors);
+  const response = attachTradingDesk(input, base);
 
   if (isBybitCriticalFailure(response.marketSnapshot, response.dataSourceIssues)) {
     const issues = [
       { source: "Bybit API", message: BYBIT_API_FAILED_MESSAGE },
       ...response.dataSourceIssues,
     ];
-    return {
+    return attachTradingDesk(input, {
       ...response,
       sourceErrors: issues,
       dataSourceIssues: issues,
-    };
+    });
   }
 
   return response;
