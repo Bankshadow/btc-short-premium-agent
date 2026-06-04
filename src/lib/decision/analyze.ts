@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types/market";
 import { applyDerivativesOverrides } from "./apply-overrides";
 import { attachTradingDesk } from "@/lib/agents/run-trading-desk";
+import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
 import { hasAnyOverride, hasOverrideForField } from "./derivatives-overrides";
@@ -273,6 +274,7 @@ function collectDerivativesSourceErrors(
 export function runDecisionEngineFromInput(
   input: DecisionEngineInput,
   derivativesOverrides?: DerivativesOverrides,
+  deskMemory?: DeskMemoryClientPayload,
 ): AnalyzeApiResponse {
   const engineInput = withAppliedOverrides(input, derivativesOverrides);
   const resolvedOverrides = engineInput.derivativesOverrides;
@@ -299,7 +301,7 @@ export function runDecisionEngineFromInput(
 
   const output = runDecisionEngine(engineInput);
   const response = buildAnalyzeApiResponse(output, sourceErrors);
-  return attachTradingDesk(engineInput, response);
+  return attachTradingDesk(engineInput, response, deskMemory);
 }
 
 /** Map 6-step output to legacy AnalysisResult for dashboard components. */
@@ -329,21 +331,26 @@ export function toAnalysisResult(output: DecisionEngineOutput): AnalysisResult {
 export async function runAnalysisEngine(
   overrides: Partial<DecisionEngineInput> & AnalysisInput = {},
 ): Promise<AnalyzeApiResponse> {
+  const deskMemory = overrides.deskMemory;
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
   const base = buildAnalyzeApiResponse(output, sourceErrors);
-  const response = attachTradingDesk(input, base);
+  const response = attachTradingDesk(input, base, deskMemory);
 
   if (isBybitCriticalFailure(response.marketSnapshot, response.dataSourceIssues)) {
     const issues = [
       { source: "Bybit API", message: BYBIT_API_FAILED_MESSAGE },
       ...response.dataSourceIssues,
     ];
-    return attachTradingDesk(input, {
-      ...response,
-      sourceErrors: issues,
-      dataSourceIssues: issues,
-    });
+    return attachTradingDesk(
+      input,
+      {
+        ...response,
+        sourceErrors: issues,
+        dataSourceIssues: issues,
+      },
+      deskMemory,
+    );
   }
 
   return response;

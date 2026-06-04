@@ -1,6 +1,7 @@
 "use client";
 
 import type { TradingDeskOutput } from "@/lib/agents/types";
+import DeskMemoryPanel from "../DeskMemoryPanel";
 import BullBearThesis from "./BullBearThesis";
 import CommitteeFinalVerdict from "./CommitteeFinalVerdict";
 import MultiAgentDebate from "./MultiAgentDebate";
@@ -8,22 +9,30 @@ import RiskVetoPanel from "./RiskVetoPanel";
 
 interface TradingDeskViewProps {
   desk: TradingDeskOutput;
+  onPinsChange?: () => void;
 }
 
-export default function TradingDeskView({ desk }: TradingDeskViewProps) {
+export default function TradingDeskView({
+  desk,
+  onPinsChange,
+}: TradingDeskViewProps) {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400">
-        {desk.disclaimer}
-      </div>
-
-      <BullBearThesis bull={desk.bullThesis} bear={desk.bearThesis} />
-      <MultiAgentDebate debate={desk.debate} />
-      <RiskVetoPanel riskManager={desk.riskManager} />
+    <div className="relative flex flex-col gap-4">
       <CommitteeFinalVerdict
         committee={desk.committee}
         marketRegime={desk.marketRegime}
       />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <BullBearThesis bull={desk.bullThesis} bear={desk.bearThesis} />
+        <RiskVetoPanel riskManager={desk.riskManager} />
+      </div>
+
+      <MultiAgentDebate debate={desk.debate} agents={desk.agents} />
+
+      <DeskMemoryPanel memory={desk.deskMemory} onPinsChange={onPinsChange} />
+
+      <p className="text-center text-[10px] text-zinc-600">{desk.disclaimer}</p>
     </div>
   );
 }

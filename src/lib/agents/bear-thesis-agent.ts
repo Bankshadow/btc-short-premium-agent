@@ -3,6 +3,7 @@ import {
   buildAgentOutput,
   formatProposedAction,
   getMissingDataLabels,
+  withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
 import { LIQUIDATION_SKIP } from "@/lib/decision/thresholds";
@@ -58,7 +59,7 @@ export function runBearThesisAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: "Defensive / risk-off bias",
       recommendation,
       confidence: score,
-      reasons,
+      reasons: withDeskMemoryReasons(ctx, reasons),
       risks,
       proposedAction: formatProposedAction({
         instrument: "Bear thesis",

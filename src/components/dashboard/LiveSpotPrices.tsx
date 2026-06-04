@@ -32,11 +32,11 @@ function SpotCard({
   quote: SpotQuote;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950/90 px-4 py-3">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
         {label}
       </p>
-      <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+      <p className="mt-1 font-mono text-xl font-semibold text-zinc-100">
         {formatSpotUsd(quote.price, quote.symbol)}
       </p>
       <p className={`mt-1 text-sm font-medium ${changeClass(quote.priceChange24hPct)}`}>
@@ -132,7 +132,7 @@ export default function LiveSpotPrices() {
   };
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-zinc-100/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/30">
+    <section className="desk-panel p-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">

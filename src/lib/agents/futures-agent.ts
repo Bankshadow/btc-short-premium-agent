@@ -3,6 +3,7 @@ import {
   buildAgentOutput,
   formatProposedAction,
   getMissingDataLabels,
+  withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
 
@@ -57,7 +58,7 @@ export function runFuturesStrategyAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: `Perp desk · ${ctx.input.technical4h.trend}`,
       recommendation,
       confidence: score,
-      reasons,
+      reasons: withDeskMemoryReasons(ctx, reasons),
       risks,
       proposedAction: formatProposedAction({
         instrument: "BTCUSDT perp",

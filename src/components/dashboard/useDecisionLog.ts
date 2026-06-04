@@ -58,7 +58,7 @@ export function useDecisionLog() {
     resolveOutcome,
     refresh,
     hydrated,
-  };
+  } as const;
 }
 
 export const useAnalysisJournal = useDecisionLog;

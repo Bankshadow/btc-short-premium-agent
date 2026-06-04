@@ -4,6 +4,7 @@ import {
   formatProposedAction,
   fromEngineRecommendation,
   getMissingDataLabels,
+  withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
 
@@ -56,7 +57,7 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: `Spot desk · ${daily.trend}`,
       recommendation,
       confidence: score,
-      reasons,
+      reasons: withDeskMemoryReasons(ctx, reasons),
       risks,
       proposedAction: formatProposedAction({
         instrument: "BTC spot",

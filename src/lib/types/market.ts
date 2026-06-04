@@ -1,4 +1,5 @@
 import type { TradingDeskOutput } from "@/lib/agents/types";
+import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 
 export type OptionType = "call" | "put";
 
@@ -235,6 +236,8 @@ export interface AnalysisInput {
   consecutiveLosses?: number;
   priorDayRallyPct?: number;
   derivativesOverrides?: DerivativesOverrides;
+  /** MVP 4 — client-sent journal/rules/pins for desk memory (browser only). */
+  deskMemory?: DeskMemoryClientPayload;
 }
 
 /** @deprecated Use DecisionEngineOutput — kept for dashboard compatibility */

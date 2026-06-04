@@ -15,6 +15,7 @@ import {
   MAX_CONSECUTIVE_LOSSES_SKIP,
   MAX_DAILY_LOSS_PCT,
   selectBestOptionCandidate,
+  withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
 
@@ -107,7 +108,7 @@ export function runRiskManagerAgent(
       marketView: "Risk overlay — challenges bull & bear",
       recommendation: veto ? "SKIP" : recommendation,
       confidence: veto ? 95 : 70,
-      reasons,
+      reasons: withDeskMemoryReasons(ctx, reasons),
       risks: [
         ...risks,
         "Binding veto authority over committee.",

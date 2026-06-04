@@ -1,17 +1,20 @@
 export default function DashboardLoadingSkeleton() {
   return (
     <div
-      className="flex flex-col gap-6 animate-pulse"
+      className="desk-panel relative overflow-hidden p-8"
       aria-live="polite"
       aria-busy="true"
-      aria-label="Loading analysis"
+      aria-label="Desk session in progress"
     >
-      <div className="h-28 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
-      <div className="h-40 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
-      <div className="h-64 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="h-72 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
-        <div className="h-72 rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+      <div className="desk-scan-line absolute inset-0 opacity-50" />
+      <div className="relative flex flex-col items-center gap-4 text-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-2 border-amber-500/30 border-t-amber-500" />
+        <p className="text-sm font-medium text-amber-200/90">
+          Trading desk in session
+        </p>
+        <p className="max-w-md text-xs text-zinc-500">
+          Agents are fetching Bybit data and running committee — no button required
+        </p>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { runAnalysisEngine, runDecisionEngineFromInput } from "./analyze";
 import { normalizeAnalyzeRequest } from "./analyze-request";
+import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import type {
   AnalysisInput,
   AnalyzeApiResponse,
@@ -31,10 +32,17 @@ export async function runAnalyzeRequest(
   const body = normalizeAnalyzeRequest(
     raw as AnalyzeRequestBody,
   );
+  const deskMemory = (raw as AnalyzeRequestBody).deskMemory as
+    | DeskMemoryClientPayload
+    | undefined;
 
   if (hasFullEngineInput(body)) {
-    return runDecisionEngineFromInput(body, body.derivativesOverrides);
+    return runDecisionEngineFromInput(
+      body,
+      body.derivativesOverrides,
+      deskMemory,
+    );
   }
 
-  return runAnalysisEngine(body);
+  return runAnalysisEngine({ ...body, deskMemory });
 }

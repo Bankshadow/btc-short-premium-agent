@@ -2,6 +2,8 @@ import type {
   AnalyzeApiResponse,
   DecisionEngineInput,
 } from "@/lib/types/market";
+import type { DeskMemoryClientPayload } from "@/lib/memory/types";
+import { runDeskMemoryAgent } from "@/lib/memory/memory-agent";
 import type { TradingDeskOutput } from "./types";
 import { runBearThesisAgent } from "./bear-thesis-agent";
 import { runBullThesisAgent } from "./bull-thesis-agent";
@@ -20,8 +22,20 @@ import {
 export function runTradingDesk(
   input: DecisionEngineInput,
   response: AnalyzeApiResponse,
+  memoryPayload?: DeskMemoryClientPayload,
 ): TradingDeskOutput {
-  const ctx = buildTradingDeskContext(input, response);
+  const marketRegime = resolveMarketRegime(
+    buildTradingDeskContext(input, response),
+  );
+
+  const ctx: TradingDeskContext = {
+    ...buildTradingDeskContext(input, response),
+    deskMemoryPayload: memoryPayload,
+    deskMemoryRegime: marketRegime,
+  };
+
+  const deskMemory = runDeskMemoryAgent(ctx, memoryPayload);
+  ctx.deskMemoryBullets = deskMemory.bullets;
 
   const bullThesis = runBullThesisAgent(ctx);
   const bearThesis = runBearThesisAgent(ctx);
@@ -38,9 +52,11 @@ export function runTradingDesk(
     bull: bullThesis,
     bear: bearThesis,
     riskManager,
+    deskMemory,
   });
 
   const agents = [
+    deskMemory.agent,
     bullThesis,
     bearThesis,
     spot,
@@ -51,7 +67,8 @@ export function runTradingDesk(
 
   return {
     analyzedAt: response.step5_verdict.analyzedAt,
-    marketRegime: resolveMarketRegime(ctx),
+    marketRegime,
+    deskMemory,
     agents,
     bullThesis,
     bearThesis,
@@ -65,10 +82,11 @@ export function runTradingDesk(
 export function attachTradingDesk(
   input: DecisionEngineInput,
   response: AnalyzeApiResponse,
+  memoryPayload?: DeskMemoryClientPayload,
 ): AnalyzeApiResponse {
   return {
     ...response,
-    tradingDesk: runTradingDesk(input, response),
+    tradingDesk: runTradingDesk(input, response, memoryPayload),
   };
 }
 

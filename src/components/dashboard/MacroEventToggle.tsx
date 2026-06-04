@@ -16,9 +16,11 @@ interface MacroEventToggleProps {
 
 export function useMacroEventSelection() {
   const [value, setValue] = useState<MacroEventSelection>(DEFAULT_MACRO_EVENT);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     setValue(loadMacroEventFromStorage());
+    setHydrated(true);
   }, []);
 
   const updateValue = (next: MacroEventSelection) => {
@@ -26,7 +28,7 @@ export function useMacroEventSelection() {
     saveMacroEventToStorage(next);
   };
 
-  return { value, setValue: updateValue };
+  return { value, setValue: updateValue, hydrated };
 }
 
 export default function MacroEventToggle({
@@ -36,16 +38,14 @@ export default function MacroEventToggle({
   const isSkip = value.type !== "none";
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-      <header className="mb-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-          Macro Calendar
-        </p>
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-          Event Before Settlement
+    <section className="desk-panel p-4">
+      <header className="mb-3">
+        <p className="desk-section-title">Macro desk</p>
+        <h2 className="text-sm font-semibold text-zinc-100">
+          Event before settlement
         </h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          Saved in localStorage. Any major event triggers No-Trade SKIP.
+        <p className="mt-1 text-[10px] text-zinc-500">
+          Desk re-runs automatically when changed
         </p>
       </header>
 
@@ -57,12 +57,12 @@ export default function MacroEventToggle({
               key={option.type}
               type="button"
               onClick={() => onChange({ type: option.type })}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+              className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                 selected
                   ? option.type === "none"
-                    ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
-                    : "border-red-600 bg-red-600 text-white dark:border-red-500 dark:bg-red-600"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600"
+                    ? "border-zinc-500 bg-zinc-700 text-zinc-100"
+                    : "border-red-700 bg-red-950 text-red-200"
+                  : "border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-600"
               }`}
             >
               {option.label}
@@ -72,7 +72,7 @@ export default function MacroEventToggle({
       </div>
 
       {isSkip && (
-        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+        <p className="mt-3 rounded-lg border border-red-900/50 bg-red-950/40 px-3 py-2 text-xs text-red-300">
           Macro event selected — No-Trade Rule will trigger SKIP before 15:00 TH
           settlement.
         </p>

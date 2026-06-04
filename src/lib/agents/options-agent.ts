@@ -11,6 +11,7 @@ import {
   getMissingDataLabels,
   selectBestOptionCandidate,
   toConfidenceLevel,
+  withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
 
@@ -56,7 +57,7 @@ export function runOptionsStrategyAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: `Options · ${ctx.input.macroView ?? "neutral"} playbook`,
       recommendation,
       confidence,
-      reasons: reasons.slice(0, 6),
+      reasons: withDeskMemoryReasons(ctx, reasons.slice(0, 6)),
       risks,
       proposedAction: formatProposedAction({
         instrument: candidate?.symbol ?? "BTC options",

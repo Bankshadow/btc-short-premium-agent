@@ -11,6 +11,7 @@ import type {
   ConfidenceLevel,
 } from "./types";
 import { tradeRecToAgent } from "./types";
+import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import { LIQUIDATION_SKIP } from "@/lib/decision/thresholds";
 
 export const TRADING_DESK_DISCLAIMER =
@@ -34,6 +35,10 @@ export interface TradingDeskContext {
   sourceErrors: DataSourceError[];
   /** Set true when desk detects daily loss budget exhausted */
   dailyLossLimitHit?: boolean;
+  /** MVP 4 — read-only memory bullets for agents */
+  deskMemoryBullets?: string[];
+  deskMemoryRegime?: string;
+  deskMemoryPayload?: DeskMemoryClientPayload;
 }
 
 export function buildTradingDeskContext(
@@ -159,6 +164,19 @@ export function fromEngineRecommendation(
     recommendation,
     confidence: toConfidenceLevel(confidenceScore, recommendation),
   };
+}
+
+/** Prepend desk memory context to agent reasons (advisory only). */
+export function withDeskMemoryReasons(
+  ctx: TradingDeskContext,
+  reasons: string[],
+): string[] {
+  const bullets = ctx.deskMemoryBullets ?? [];
+  if (bullets.length === 0) return reasons;
+  const memoryLines = bullets
+    .slice(0, 2)
+    .map((b) => `[Memory] ${b}`);
+  return [...memoryLines, ...reasons];
 }
 
 export function majorityRecommendation(

@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fafafa;
-  --foreground: #171717;
+  --desk-bg: #07080b;
+  --desk-panel: #0f1117;
+  --desk-panel-muted: #0a0c10;
+  --desk-border: #1e2430;
+  --desk-accent: #d97706;
+  --foreground: #e4e4e7;
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-background: var(--desk-bg);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #fafafa;
+body {
+  background: var(--desk-bg);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.desk-root {
+  background: radial-gradient(ellipse 120% 80% at 50% -20%, #1a1f2e 0%, var(--desk-bg) 55%);
+}
+
+.desk-panel {
+  background: var(--desk-panel);
+  border: 1px solid var(--desk-border);
+  border-radius: 0.5rem;
+}
+
+.desk-panel-muted {
+  background: var(--desk-panel-muted);
+  border-bottom: 1px solid var(--desk-border);
+}
+
+.desk-section-title {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+
+@keyframes desk-scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+.desk-scan-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(217, 119, 6, 0.08),
+    transparent
+  );
+  animation: desk-scan 2s ease-in-out infinite;
 }

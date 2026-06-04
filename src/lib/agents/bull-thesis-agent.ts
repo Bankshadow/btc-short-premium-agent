@@ -3,6 +3,7 @@ import {
   buildAgentOutput,
   formatProposedAction,
   getMissingDataLabels,
+  withDeskMemoryReasons,
   type TradingDeskContext,
 } from "./shared";
 
@@ -60,7 +61,7 @@ export function runBullThesisAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: "Constructive / risk-on bias",
       recommendation,
       confidence: score,
-      reasons,
+      reasons: withDeskMemoryReasons(ctx, reasons),
       risks,
       proposedAction: formatProposedAction({
         instrument: "Bull thesis",

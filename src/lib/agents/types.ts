@@ -1,3 +1,4 @@
+import type { DeskMemorySnapshot } from "@/lib/memory/types";
 import type { TradeRecommendation } from "@/lib/types/market";
 
 export type AgentRecommendation = "TRADE" | "SKIP" | "WAIT";
@@ -7,7 +8,8 @@ export type AgentStrategyType =
   | "SPOT"
   | "FUTURES"
   | "RISK"
-  | "THESIS";
+  | "THESIS"
+  | "MEMORY";
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
@@ -49,6 +51,7 @@ export interface CommitteeVerdict {
 export interface TradingDeskOutput {
   analyzedAt: string;
   marketRegime: string;
+  deskMemory: DeskMemorySnapshot;
   agents: AgentOutput[];
   bullThesis: AgentOutput;
   bearThesis: AgentOutput;

@@ -5,6 +5,7 @@ import type {
   CommitteeVerdict,
 } from "./types";
 import { collectTopReasons } from "@/lib/decision/verdict-display";
+import type { DeskMemorySnapshot } from "@/lib/memory/types";
 import {
   majorityRecommendation,
   type TradingDeskContext,
@@ -18,6 +19,7 @@ export interface CommitteeInput {
   bull: AgentOutput;
   bear: AgentOutput;
   riskManager: AgentOutput;
+  deskMemory: DeskMemorySnapshot;
 }
 
 function buildDebateRows(
@@ -38,7 +40,8 @@ export function runCommitteeAgent(input: CommitteeInput): {
   verdict: CommitteeVerdict;
   debate: AgentDebateRow[];
 } {
-  const { ctx, spot, futures, options, bull, bear, riskManager } = input;
+  const { ctx, spot, futures, options, bull, bear, riskManager, deskMemory } =
+    input;
   const strategyAgents = [spot, futures, options];
   const strategyRecs = strategyAgents.map((a) => a.recommendation);
   const majority = majorityRecommendation(strategyRecs);
@@ -85,6 +88,9 @@ export function runCommitteeAgent(input: CommitteeInput): {
   );
 
   const topReasons: string[] = [];
+  if (deskMemory.bullets.length > 0) {
+    topReasons.push(`Desk memory: ${deskMemory.bullets[0]}`);
+  }
   if (riskVeto && riskManager.vetoReasons?.length) {
     topReasons.push(...riskManager.vetoReasons.slice(0, 2));
   }
