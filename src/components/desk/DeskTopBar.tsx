@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { DESK_REFRESH_OPTIONS } from "@/hooks/useAutoDeskRefresh";
 
 function formatCountdown(seconds: number): string {
@@ -92,6 +93,13 @@ export default function DeskTopBar({
           </p>
           <p className="font-mono text-xs text-zinc-300">{lastLabel}</p>
         </div>
+
+        <Link
+          href="/validation"
+          className="rounded-lg border border-teal-900/50 bg-teal-950/40 px-3 py-1.5 text-xs font-medium text-teal-300/90 hover:bg-teal-900/40"
+        >
+          Validation
+        </Link>
 
         <div className="flex items-center gap-2">
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-400">

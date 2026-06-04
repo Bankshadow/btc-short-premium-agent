@@ -12,6 +12,26 @@ Analysis-only desk — no live exchange execution unless explicitly scoped in a 
 | 5 | Research layer (market data, regime, data quality, macro, ETH/BTC) |
 | 6 | Portfolio milestones, session replay, journal Supabase sync, cron desk briefing |
 | 9 | Operator hub: alerts, risk profile, narrator, backtest, desk APIs, webhooks |
+| 10 | Profit validation, capital allocation v2, regime router, kill switch (`/validation`) |
+
+---
+
+## MVP 10 — Profit Validation & Capital Control ✅
+
+**Goal:** Measure which agents/strategies have edge — no new trading features.
+
+### Delivered
+
+1. **Strategy Performance Matrix** — 6 buckets, full metrics, ACTIVE/WATCHLIST/PAPER_ONLY/DISABLED/EXPERIMENTAL
+2. **Agent promotion/demotion engine** — threshold rules on signals, avg R, drawdown
+3. **Regime-based strategy router** — static rules + regime performance table
+4. **Capital allocation v2** — reserve/core/growth/experimental %, aggressive allowed flag
+5. **Kill switch & cooldown** — daily/weekly loss, drawdown, streak, data quality, aggressive lockout, operator pause
+6. **Validation dashboard** — `/validation`
+
+### API
+
+- `GET /api/validation` — thresholds + regime router rules
 
 ---
 

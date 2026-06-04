@@ -10,6 +10,7 @@ import {
 } from "@/lib/journal/decision-log";
 import { buildAgentScoreboard, type DeskScoreboard } from "@/lib/journal/agent-scoreboard";
 import { loadDraftRules, type DraftRule } from "@/lib/journal/draft-rules";
+import { loadDeskSettings } from "@/lib/desk/desk-settings";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export function useDecisionLog() {
@@ -33,7 +34,9 @@ export function useDecisionLog() {
   );
 
   const saveFromAnalysis = useCallback((data: AnalyzeApiResponse) => {
-    const { entries, entry } = appendDecisionLogFromAnalysis(data);
+    const { entries, entry } = appendDecisionLogFromAnalysis(data, {
+      deskRiskProfile: loadDeskSettings().riskProfile,
+    });
     setEntries(entries);
     return entry;
   }, []);

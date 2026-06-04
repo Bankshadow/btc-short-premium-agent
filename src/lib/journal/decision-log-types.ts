@@ -1,4 +1,5 @@
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
+import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { DeskReplaySnapshot } from "@/lib/replay/replay-types";
 
 export type OutcomeStatus = "PENDING" | "RESOLVED";
@@ -25,6 +26,8 @@ export interface DecisionLogEntry {
   timestamp: string;
   btcPrice: number;
   marketRegime: string;
+  /** MVP 10 — risk profile at session time */
+  deskRiskProfile?: DeskRiskProfile;
   agentOutputs: AgentOutput[];
   finalVerdict: AgentRecommendation;
   riskVeto: boolean;

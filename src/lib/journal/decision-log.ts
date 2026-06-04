@@ -84,6 +84,10 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
     timestamp: String(raw.timestamp),
     btcPrice: Number(raw.btcPrice ?? 0),
     marketRegime: String(raw.marketRegime ?? raw.regime ?? "Unknown"),
+    deskRiskProfile:
+      raw.deskRiskProfile === "balanced" || raw.deskRiskProfile === "aggressive"
+        ? raw.deskRiskProfile
+        : undefined,
     agentOutputs: Array.isArray(raw.agentOutputs)
       ? (raw.agentOutputs as AgentOutput[])
       : [],
@@ -181,8 +185,12 @@ export function saveDecisionLogEntry(
 
 export function appendDecisionLogFromAnalysis(
   data: AnalyzeApiResponse,
+  meta?: { deskRiskProfile?: DecisionLogEntry["deskRiskProfile"] },
 ): { entries: DecisionLogEntry[]; entry: DecisionLogEntry } {
   const entry = buildDecisionLogEntry(data);
+  if (meta?.deskRiskProfile) {
+    entry.deskRiskProfile = meta.deskRiskProfile;
+  }
   const entries = saveDecisionLogEntry(entry);
   return { entries, entry };
 }
