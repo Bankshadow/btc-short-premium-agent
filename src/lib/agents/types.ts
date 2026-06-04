@@ -3,134 +3,58 @@ import type { TradeRecommendation } from "@/lib/types/market";
 export type AgentRecommendation = "TRADE" | "SKIP" | "WAIT";
 
 export type AgentStrategyType =
+  | "OPTIONS"
   | "SPOT"
   | "FUTURES"
-  | "OPTIONS"
   | "RISK"
-  | "PORTFOLIO"
-  | "MARKET_DATA"
-  | "REGIME"
-  | "COMMITTEE";
+  | "THESIS";
 
-export type AgentMarketView = "bullish" | "bearish" | "neutral" | "mixed";
+export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
-export type MarketRegimeLabel =
-  | "risk_on_trend"
-  | "risk_off_trend"
-  | "range_bound"
-  | "liquidation_stress"
-  | "macro_caution"
-  | "unclear";
-
-export interface ProposedAction {
-  instrument: string;
-  side: "long" | "short" | "neutral" | "none";
-  sizePct: number;
-  notes: string;
-}
-
+/** TradingAgents-style structured agent output (MVP 2). */
 export interface AgentOutput {
   agentName: string;
-  marketView: AgentMarketView;
   recommendation: AgentRecommendation;
   strategyType: AgentStrategyType;
-  confidence: number;
+  confidence: ConfidenceLevel;
+  marketView: string;
   reasons: string[];
   risks: string[];
-  proposedAction: ProposedAction;
-  requiredData: string[];
+  proposedAction: string;
   missingData: string[];
+  /** Risk Manager only */
   veto?: boolean;
   vetoReasons?: string[];
-}
-
-export interface MarketRegimeSnapshot {
-  label: MarketRegimeLabel;
-  title: string;
-  description: string;
-  agent: AgentOutput;
-}
-
-export interface MissionControlStatus {
-  mode: "analysis_only";
-  humanApprovalRequired: true;
-  autoExecution: false;
-  privateKeysRequired: false;
-  activeAgents: number;
-  lastAnalyzedAt: string;
-  deskHealth: "ready" | "degraded" | "blocked";
 }
 
 export interface AgentDebateRow {
   agentName: string;
   strategyType: AgentStrategyType;
   recommendation: AgentRecommendation;
-  confidence: number;
-  marketView: AgentMarketView;
+  confidence: ConfidenceLevel;
+  marketView: string;
   alignedWithMajority: boolean;
 }
 
 export interface CommitteeVerdict {
-  recommendation: AgentRecommendation;
-  confidence: number;
-  summary: string;
+  finalVerdict: AgentRecommendation;
+  consensusSummary: string;
+  riskVeto: boolean;
   topReasons: string[];
-  actionSummary: string;
-  /** @deprecated alias */
-  actionPlan: string;
-  agreement: "strong" | "mixed" | "split";
+  finalActionPlan: string;
   agreementNotes: string[];
   disagreementNotes: string[];
-  riskVetoApplied: boolean;
-  dissent: string[];
 }
-
-export interface PortfolioStage {
-  label: string;
-  targetUsd: number;
-  reached: boolean;
-}
-
-export interface CapitalSplitProposal {
-  reservePct: number;
-  growthPct: number;
-  experimentalPct: number;
-  rationale: string;
-}
-
-export interface PortfolioMilestones {
-  initialCapitalUsd: number;
-  currentCapitalUsd: number;
-  goalCapitalUsd: number;
-  milestonesUsd: readonly number[];
-  currentStage: PortfolioStage;
-  nextStage: PortfolioStage | null;
-  progressPct: number;
-  doubledAtStage: boolean;
-  proposeSplit: boolean;
-  split: CapitalSplitProposal | null;
-  maxRiskPerTradePct: number;
-  maxDailyLossPct: number;
-  maxWeeklyLossPct: number;
-  notes: string[];
-}
-
-/** @deprecated use PortfolioMilestones */
-export type PortfolioAllocation = PortfolioMilestones;
 
 export interface TradingDeskOutput {
   analyzedAt: string;
-  missionControl: MissionControlStatus;
-  regime: MarketRegimeSnapshot;
+  marketRegime: string;
   agents: AgentOutput[];
-  debate: AgentDebateRow[];
+  bullThesis: AgentOutput;
+  bearThesis: AgentOutput;
   riskManager: AgentOutput;
-  committee: AgentOutput;
-  committeeVerdict: CommitteeVerdict;
-  portfolio: AgentOutput;
-  portfolioMilestones: PortfolioMilestones;
-  /** @deprecated */
-  portfolioAllocation: PortfolioMilestones;
+  committee: CommitteeVerdict;
+  debate: AgentDebateRow[];
   disclaimer: string;
 }
 
@@ -149,12 +73,3 @@ export function agentRecToTrade(
   if (rec === "SKIP") return "skip";
   return "wait";
 }
-
-export const REGIME_LABELS: Record<MarketRegimeLabel, string> = {
-  risk_on_trend: "Risk-on trend",
-  risk_off_trend: "Risk-off trend",
-  range_bound: "Range-bound",
-  liquidation_stress: "Liquidation stress",
-  macro_caution: "Macro caution",
-  unclear: "Unclear",
-};

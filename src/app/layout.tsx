@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Multi-Agent AI Trading Desk",
+  title: "TradingAgents-Style Crypto Desk",
   description:
-    "Analysis-only multi-agent desk for BTC options, spot, and futures — debate, risk veto, no auto execution.",
+    "Bybit analysis-only desk — bull/bear thesis, options, spot, futures, risk veto, committee verdict.",
 };
 
 export default function RootLayout({

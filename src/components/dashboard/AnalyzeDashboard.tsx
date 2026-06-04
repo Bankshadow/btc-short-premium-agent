@@ -11,7 +11,10 @@ import { macroSelectionToStatus } from "@/lib/decision/macro-event";
 import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
 import { getMockDashboardFallback } from "@/lib/mock/dashboard-data";
 import { useCallback, useState } from "react";
-import AnalysisJournal from "./AnalysisJournal";
+import AgentScoreboardPanel from "./AgentScoreboardPanel";
+import DecisionLogPanel from "./DecisionLogPanel";
+import DecisionLogPreview from "./DecisionLogPreview";
+import DraftRulesPanel from "./DraftRulesPanel";
 import AnalysisAlerts from "./AnalysisAlerts";
 import DashboardEmptyState from "./DashboardEmptyState";
 import DashboardLoadingSkeleton from "./DashboardLoadingSkeleton";
@@ -24,7 +27,7 @@ import ManualOverridesPanel, {
   useDerivativesOverrideForm,
 } from "./ManualOverridesPanel";
 import TestAutomationPanel from "./TestAutomationPanel";
-import { useAnalysisJournal } from "./useAnalysisJournal";
+import { useDecisionLog } from "./useDecisionLog";
 
 interface AnalyzeDashboardProps {
   macroView?: "bearish" | "bullish" | "neutral";
@@ -54,7 +57,14 @@ export default function AnalyzeDashboard({
   const { values, setValues } = useDerivativesOverrideForm();
   const { value: macroEventSelection, setValue: setMacroEventSelection } =
     useMacroEventSelection();
-  const { entries: journalEntries, saveFromAnalysis } = useAnalysisJournal();
+  const {
+    entries: logEntries,
+    draftRules,
+    scoreboard,
+    saveFromAnalysis,
+    resolveOutcome,
+    refresh: refreshLog,
+  } = useDecisionLog();
 
   const persistAnalysis = useCallback(
     (result: AnalyzeApiResponse) => {
@@ -176,11 +186,11 @@ export default function AnalyzeDashboard({
     <div className="relative flex flex-col gap-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Multi-Agent AI Trading Desk
+          TradingAgents-Style Crypto Desk
         </h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Analysis-only — options, spot, and futures agents debate; risk manager can
-          veto; no auto execution.
+          MVP 3: decision log, paper outcomes, reflection, and agent scoreboard — Bybit
+          public data only. No auto trading.
         </p>
       </header>
 
@@ -226,9 +236,16 @@ export default function AnalyzeDashboard({
           aria-busy={loading}
         >
           <DashboardView data={data} />
-          <AnalysisJournal entries={journalEntries} />
+          <DecisionLogPreview entries={logEntries} />
         </div>
       )}
+
+      <AgentScoreboardPanel scoreboard={scoreboard} />
+      <DecisionLogPanel
+        entries={logEntries}
+        onResolve={(id, input) => resolveOutcome(id, input)}
+      />
+      <DraftRulesPanel rules={draftRules} onRefresh={refreshLog} />
 
       <TestAutomationPanel />
     </div>

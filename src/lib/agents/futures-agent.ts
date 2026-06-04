@@ -1,8 +1,8 @@
 import type { AgentOutput } from "./types";
 import {
   buildAgentOutput,
+  formatProposedAction,
   getMissingDataLabels,
-  trendToMarketView,
   type TradingDeskContext,
 } from "./shared";
 
@@ -14,64 +14,63 @@ export function runFuturesStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   const risks: string[] = [];
 
   if (market.fundingRate !== 0) {
-    reasons.push(`Funding ${(market.fundingRate * 100).toFixed(4)}% per interval.`);
+    reasons.push(`Funding ${(market.fundingRate * 100).toFixed(4)}%.`);
   }
-  if (market.oiChange24hPct != null) {
-    reasons.push(`OI 24h ${market.oiChange24hPct.toFixed(2)}%.`);
-  } else {
-    risks.push("OI 24h change missing — futures read partial.");
-  }
-
-  reasons.push(`Combination: ${combo.label} (${combo.pattern}).`);
+  reasons.push(`Combination: ${combo.label}.`);
 
   let recommendation: AgentOutput["recommendation"] = "WAIT";
-  let confidence = 50;
-  let side: "long" | "short" | "neutral" | "none" = "none";
+  let score = 50;
+  let side = "none";
 
   if (missing.length > 0) {
-    recommendation = "WAIT";
     reasons.push("Missing data — no perp bias.");
   } else if (combo.pattern === "long_capitulation") {
     recommendation = "SKIP";
-    confidence = 85;
-    side = "short";
-    reasons.push("Long capitulation — avoid new short perps into squeeze.");
+    score = 85;
+    reasons.push("Long capitulation — no averaging down long perps.");
+    risks.push("No futures average down in cascade regime.");
   } else if (combo.pattern === "new_shorts_piling") {
     recommendation = "TRADE";
-    confidence = 72;
+    score = 72;
     side = "short";
-    reasons.push("New shorts piling — tactical short perp with tight risk.");
+    reasons.push("New shorts piling — tactical short perp with tight stop.");
   } else if (market.fundingRate < -0.0003) {
     recommendation = "TRADE";
-    confidence = 68;
+    score = 65;
     side = "short";
-    reasons.push("Negative funding supports short-perp carry (analysis only).");
-  } else {
-    recommendation = "WAIT";
-    reasons.push("No clear perp edge — stand aside.");
+    reasons.push("Negative funding — short perp carry edge (analysis only).");
   }
 
-  if (market.fundingRate > 0.0001 && side === "short") {
-    risks.push("Positive funding — short perp pays carry.");
+  if (
+    dailyBearish(ctx) &&
+    recommendation === "TRADE" &&
+    side === "long"
+  ) {
+    recommendation = "SKIP";
+    risks.push("No averaging down futures long into bearish structure.");
   }
 
   return buildAgentOutput(
     {
       agentName: "Futures Strategy Agent",
       strategyType: "FUTURES",
-      marketView: trendToMarketView(ctx.input.technical4h.trend),
+      marketView: `Perp desk · ${ctx.input.technical4h.trend}`,
       recommendation,
-      confidence,
+      confidence: score,
       reasons,
       risks,
-      proposedAction: {
-        instrument: "BTCUSDT perpetual (hypothetical)",
+      proposedAction: formatProposedAction({
+        instrument: "BTCUSDT perp",
         side,
         sizePct: recommendation === "TRADE" ? 1 : 0,
-        notes: "Perp plan — no order routing.",
-      },
+        notes: "No auto execution — no DCA into losers.",
+      }),
       missingData: missing,
     },
     ctx,
   );
+}
+
+function dailyBearish(ctx: TradingDeskContext): boolean {
+  return ctx.input.technicalDaily.trend === "bearish";
 }

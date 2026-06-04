@@ -1,53 +1,43 @@
 import type { AgentOutput } from "./types";
 import {
   buildAgentOutput,
+  formatProposedAction,
   fromEngineRecommendation,
   getMissingDataLabels,
-  trendToMarketView,
   type TradingDeskContext,
 } from "./shared";
 
 export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   const daily = ctx.input.technicalDaily;
-  const h4 = ctx.input.technical4h;
   const macroView = ctx.input.macroView ?? "neutral";
   const missing = getMissingDataLabels(ctx);
   const reasons: string[] = [];
   const risks: string[] = [];
 
-  reasons.push(`Daily trend: ${daily.trend}; 4h trend: ${h4.trend}.`);
-  reasons.push(`Macro bias: ${macroView}.`);
-
-  if (daily.rsi14 > 70) risks.push("RSI overbought on daily — spot chase risk.");
-  if (daily.rsi14 < 30) risks.push("RSI oversold — spot dip may continue.");
+  reasons.push(`Daily ${daily.trend}; macro ${macroView}.`);
 
   let recommendation: AgentOutput["recommendation"] = "WAIT";
-  let confidence = 55;
+  let score = 50;
 
   if (missing.length > 0) {
-    reasons.push("Incomplete market data — spot desk waits.");
-  } else if (macroView === "bearish" && daily.trend === "bearish") {
-    recommendation = "WAIT";
-    confidence = 65;
-    reasons.push("Bearish macro + trend — no spot long; watch bounce entries only.");
+    reasons.push("Incomplete data — spot desk waits.");
   } else if (macroView === "bullish" && daily.trend === "bullish") {
     recommendation = "TRADE";
-    confidence = 70;
-    reasons.push("Aligned bullish spot — tactical long bias on dips to EMA20.");
-  } else if (daily.trend === "neutral") {
+    score = 70;
+    reasons.push("Aligned bullish — tactical spot long on dips only.");
+  } else if (macroView === "bearish" && daily.trend === "bearish") {
     recommendation = "WAIT";
-    confidence = 50;
-    reasons.push("Neutral trend — spot desk prefers range edges.");
+    score = 60;
+    reasons.push("Bearish tape — no spot long; cash is a position.");
   } else {
     recommendation = "SKIP";
-    confidence = 60;
-    reasons.push("Macro vs technical conflict — spot desk stands aside.");
+    score = 55;
+    reasons.push("Conflicted signals — spot desk stands aside.");
   }
 
   if (ctx.input.macroEvent.hasEventBeforeSettlement) {
     recommendation = "SKIP";
-    confidence = 90;
-    reasons.push("High-impact macro — spot size zero.");
+    score = 90;
   }
 
   const engine = fromEngineRecommendation(
@@ -56,27 +46,24 @@ export function runSpotStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   );
   if (engine.recommendation === "SKIP" && recommendation === "TRADE") {
     recommendation = "WAIT";
-    reasons.push("Options desk SKIP — spot will not front-run committee.");
+    reasons.push("Options playbook SKIP — spot defers.");
   }
 
   return buildAgentOutput(
     {
       agentName: "Spot Strategy Agent",
       strategyType: "SPOT",
-      marketView: trendToMarketView(daily.trend),
+      marketView: `Spot desk · ${daily.trend}`,
       recommendation,
-      confidence,
+      confidence: score,
       reasons,
       risks,
-      proposedAction: {
-        instrument: "BTC spot (hypothetical)",
-        side:
-          recommendation === "TRADE" && macroView === "bullish"
-            ? "long"
-            : "none",
+      proposedAction: formatProposedAction({
+        instrument: "BTC spot",
+        side: recommendation === "TRADE" ? "long" : "none",
         sizePct: recommendation === "TRADE" ? 1 : 0,
-        notes: "Hypothetical spot plan — human approval required.",
-      },
+        notes: "Hypothetical — human approval required.",
+      }),
       missingData: missing,
     },
     ctx,

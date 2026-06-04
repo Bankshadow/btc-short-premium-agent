@@ -7,8 +7,10 @@ import {
 } from "@/lib/decision/thresholds";
 import {
   buildAgentOutput,
+  formatProposedAction,
   getMissingDataLabels,
   selectBestOptionCandidate,
+  toConfidenceLevel,
   type TradingDeskContext,
 } from "./shared";
 
@@ -19,61 +21,48 @@ export function runOptionsStrategyAgent(ctx: TradingDeskContext): AgentOutput {
     verdict.candidate ?? selectBestOptionCandidate(ctx.input.optionCandidates);
   const missing = getMissingDataLabels(ctx);
   const market = ctx.input.market;
-  const macroView = ctx.input.macroView ?? "neutral";
   const reasons: string[] = [];
   const risks: string[] = [...verdict.risks];
 
   const recommendation = tradeRecToAgent(verdict.recommendation);
-  const confidence = verdict.confidence;
+  const confidence = toConfidenceLevel(
+    verdict.confidence,
+    recommendation,
+  );
 
   if (candidate) {
     reasons.push(
-      `Candidate ${candidate.symbol} Δ${candidate.delta.toFixed(2)} SD ${candidate.sdDistance.toFixed(2)}.`,
+      `${candidate.symbol} Δ${candidate.delta.toFixed(2)} SD${candidate.sdDistance.toFixed(2)}.`,
     );
-    const deltaV = evaluateDeltaVerdict(Math.abs(candidate.delta));
-    if (deltaV === "trade_ok") reasons.push("Delta in sweet spot (0.13–0.15).");
-    else if (deltaV === "wait") reasons.push("Delta in fallback band.");
-    else reasons.push("Delta outside playbook bands.");
-  } else {
-    reasons.push("No option candidate selected.");
+    const dv = evaluateDeltaVerdict(Math.abs(candidate.delta));
+    if (dv === "trade_ok") reasons.push("Delta sweet spot.");
+    else if (dv === "skip") risks.push("Delta outside bands.");
   }
 
   if (market.ivHvRatio > 0 && market.ivHvRatio < IV_HV_SKIP_THRESHOLD) {
-    reasons.push(
-      `IV/HV ${market.ivHvRatio.toFixed(2)} < ${IV_HV_SKIP_THRESHOLD} — short premium unfavorable.`,
-    );
+    reasons.push(`IV/HV ${market.ivHvRatio.toFixed(2)} < ${IV_HV_SKIP_THRESHOLD}.`);
   }
-
-  if (candidate && candidate.sdDistance < SD_SKIP_THRESHOLD) {
-    risks.push(`SD ${candidate.sdDistance.toFixed(2)} < ${SD_SKIP_THRESHOLD} — pin risk.`);
-  }
-
   reasons.push(verdict.summary);
-  reasons.push(`Macro ${macroView} — short-call bias when bearish.`);
 
-  const side =
-    plan.action === "sell_call" || plan.action === "sell_put" ? "short" : "none";
+  const action =
+    plan.action === "sell_call" || plan.action === "sell_put"
+      ? "sell premium"
+      : "no trade";
 
   return buildAgentOutput(
     {
       agentName: "Options Strategy Agent",
       strategyType: "OPTIONS",
-      marketView:
-        macroView === "bearish"
-          ? "bearish"
-          : macroView === "bullish"
-            ? "bullish"
-            : "neutral",
+      marketView: `Options · ${ctx.input.macroView ?? "neutral"} playbook`,
       recommendation,
       confidence,
       reasons: reasons.slice(0, 6),
       risks,
-      proposedAction: {
+      proposedAction: formatProposedAction({
         instrument: candidate?.symbol ?? "BTC options",
-        side,
         sizePct: Math.min(plan.suggestedSizePct, 1),
-        notes: plan.entryNotes || "Hypothetical premium — human approval only.",
-      },
+        notes: `${action} — ${plan.entryNotes || "human approval only"}`,
+      }),
       missingData: missing,
     },
     ctx,

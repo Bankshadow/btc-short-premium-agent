@@ -1,4 +1,4 @@
-import type { AgentRecommendation, AgentStrategyType } from "@/lib/agents/types";
+import type { AgentRecommendation, ConfidenceLevel } from "@/lib/agents/types";
 
 export function recBadgeClass(rec: AgentRecommendation): string {
   switch (rec) {
@@ -11,29 +11,13 @@ export function recBadgeClass(rec: AgentRecommendation): string {
   }
 }
 
-export function strategyLabel(type: AgentStrategyType): string {
-  const labels: Record<AgentStrategyType, string> = {
-    SPOT: "Spot",
-    FUTURES: "Futures",
-    OPTIONS: "Options",
-    RISK: "Risk",
-    PORTFOLIO: "Portfolio",
-    MARKET_DATA: "Market Data",
-    REGIME: "Regime",
-    COMMITTEE: "Committee",
-  };
-  return labels[type];
-}
-
-export function deskHealthClass(
-  health: "ready" | "degraded" | "blocked",
-): string {
-  switch (health) {
-    case "ready":
-      return "text-emerald-600 dark:text-emerald-400";
-    case "degraded":
-      return "text-amber-600 dark:text-amber-400";
-    case "blocked":
-      return "text-red-600 dark:text-red-400";
+export function confidenceBadgeClass(level: ConfidenceLevel): string {
+  switch (level) {
+    case "HIGH":
+      return "bg-zinc-800 text-zinc-100 dark:bg-zinc-200 dark:text-zinc-900";
+    case "MEDIUM":
+      return "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200";
+    case "LOW":
+      return "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400";
   }
 }

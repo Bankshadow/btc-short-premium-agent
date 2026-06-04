@@ -1,7 +1,5 @@
 import type { AnalyzeApiResponse } from "@/lib/types/market";
-import {
-  buildAnalysisJournalEntry,
-} from "@/lib/journal/analysis-journal";
+import { buildDecisionLogEntry } from "@/lib/journal/decision-log";
 import { formatStrategyLabel } from "@/lib/decision/verdict-display";
 
 function formatUsd(value: number): string {
@@ -63,16 +61,16 @@ function formatActionSection(data: AnalyzeApiResponse): string {
 
 /** Telegram body for cron / scheduled analysis alerts. */
 export function formatCronTelegramMessage(data: AnalyzeApiResponse): string {
-  const entry = buildAnalysisJournalEntry(data);
+  const entry = buildDecisionLogEntry(data);
   const market = data.step1_marketSnapshot;
 
   return [
     "Multi-Agent AI Trading Desk",
     `Time: ${formatTimestamp(entry.timestamp)}`,
     "",
-    `Committee: ${entry.committeeVerdict}`,
+    `Committee: ${entry.finalVerdict}`,
     entry.riskVeto ? "Risk veto: YES" : "Risk veto: no",
-    `Regime: ${entry.regime}`,
+    `Regime: ${entry.marketRegime}`,
     "",
     `BTC: ${entry.btcPrice > 0 ? formatUsd(entry.btcPrice) : "missing"}`,
     `IV/HV: ${market.ivHvRatio > 0 ? market.ivHvRatio.toFixed(2) : "missing"}`,
@@ -82,7 +80,7 @@ export function formatCronTelegramMessage(data: AnalyzeApiResponse): string {
     formatTopReasons(entry.topReasons),
     "",
     "Action:",
-    formatActionSection(data),
+    entry.actionPlan || formatActionSection(data),
     "",
     "Analysis-only. No auto-trading.",
   ].join("\n");

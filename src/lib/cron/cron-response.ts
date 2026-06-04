@@ -1,9 +1,9 @@
 import { agentRecToTrade } from "@/lib/agents/types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import {
-  buildAnalysisJournalEntry,
-  type AnalysisJournalEntry,
-} from "@/lib/journal/analysis-journal";
+  buildDecisionLogEntry,
+  type DecisionLogEntry,
+} from "@/lib/journal/decision-log";
 import {
   resolveConfidenceLevel,
   type ConfidenceLevel,
@@ -12,11 +12,11 @@ import {
 export interface CronAnalyzeResponse {
   timestamp: string;
   verdict: ReturnType<typeof agentRecToTrade>;
-  committeeVerdict: AnalysisJournalEntry["committeeVerdict"];
+  committeeVerdict: DecisionLogEntry["finalVerdict"];
   confidence: number;
   confidenceLevel: ConfidenceLevel;
   btcPrice: number;
-  regime: string;
+  marketRegime: string;
   riskVeto: boolean;
   topReasons: string[];
   actionSummary: string;
@@ -32,23 +32,21 @@ export function buildCronAnalyzeResponse(
   data: AnalyzeApiResponse,
   options: { test?: boolean } = {},
 ): CronAnalyzeResponse {
-  const entry = buildAnalysisJournalEntry(data);
-  const desk = data.tradingDesk;
-  const tradeVerdict = agentRecToTrade(entry.committeeVerdict);
-  const confidence =
-    desk?.committeeVerdict.confidence ?? data.step5_verdict.confidence;
+  const entry = buildDecisionLogEntry(data);
+  const tradeVerdict = agentRecToTrade(entry.finalVerdict);
+  const engineConfidence = data.step5_verdict.confidence;
 
   return {
     timestamp: entry.timestamp,
     verdict: tradeVerdict,
-    committeeVerdict: entry.committeeVerdict,
-    confidence,
-    confidenceLevel: resolveConfidenceLevel(confidence, tradeVerdict),
+    committeeVerdict: entry.finalVerdict,
+    confidence: engineConfidence,
+    confidenceLevel: resolveConfidenceLevel(engineConfidence, tradeVerdict),
     btcPrice: entry.btcPrice,
-    regime: entry.regime,
+    marketRegime: entry.marketRegime,
     riskVeto: entry.riskVeto,
     topReasons: entry.topReasons,
-    actionSummary: entry.actionSummary,
+    actionSummary: entry.actionPlan,
     dataSourceIssues: data.dataSourceIssues ?? data.sourceErrors ?? [],
     ...(options.test ? { test: true } : {}),
   };

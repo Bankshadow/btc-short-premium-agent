@@ -1,5 +1,5 @@
 import { agentRecToTrade } from "@/lib/agents/types";
-import { buildAnalysisJournalEntry } from "@/lib/journal/analysis-journal";
+import { buildDecisionLogEntry } from "@/lib/journal/decision-log";
 import { resolveConfidenceLevel } from "@/lib/decision/verdict-display";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import {
@@ -31,20 +31,18 @@ export class SupabaseJournalError extends Error {
 }
 
 function buildAnalysisRunInsert(data: AnalyzeApiResponse) {
-  const entry = buildAnalysisJournalEntry(data);
+  const entry = buildDecisionLogEntry(data);
   const market = data.step1_marketSnapshot;
   const candidate = data.step5_verdict.candidate;
-  const tradeVerdict = agentRecToTrade(entry.committeeVerdict);
-  const confidence =
-    data.tradingDesk?.committeeVerdict.confidence ??
-    data.step5_verdict.confidence;
+  const tradeVerdict = agentRecToTrade(entry.finalVerdict);
+  const confidence = data.step5_verdict.confidence;
 
   return {
     btc_price: entry.btcPrice > 0 ? entry.btcPrice : null,
     verdict: tradeVerdict,
     confidence: resolveConfidenceLevel(confidence, tradeVerdict),
     top_reasons: entry.topReasons,
-    action_summary: entry.actionSummary,
+    action_summary: entry.actionPlan,
     liquidation24h: data.liquidation.liquidation24h,
     iv_hv_ratio: market.ivHvRatio > 0 ? market.ivHvRatio : null,
     sd_distance: candidate?.sdDistance ?? null,
