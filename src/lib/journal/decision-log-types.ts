@@ -2,6 +2,12 @@ import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { DeskReplaySnapshot } from "@/lib/replay/replay-types";
 import type {
+  LossAutopsyResult,
+  LearningSnapshot,
+  PreMortemResult,
+} from "@/lib/mortem/types";
+import type { OutcomeClassification } from "@/lib/review/outcome-classifier";
+import type {
   OrderTicket,
   TradeControlState,
 } from "@/lib/trade-control/trade-control-types";
@@ -55,6 +61,17 @@ export interface DecisionLogEntry {
   /** MVP 11 — semi-live trade ticket */
   orderTicket?: OrderTicket | null;
   tradeControl?: TradeControlState | null;
+  /** MVP 18 — pre-mortem before TRADE ticket */
+  preMortem?: PreMortemResult | null;
+  /** MVP 18 — loss autopsy after losing resolve */
+  autopsy?: LossAutopsyResult | null;
+  regretClassification?: OutcomeClassification | null;
+  falseTradeFlag?: boolean;
+  falseSkipFlag?: boolean;
+  missedOpportunityR?: number;
+  avoidedLossR?: number;
+  lessonTags?: string[];
+  learningSnapshot?: LearningSnapshot | null;
 }
 
 export interface ResolveOutcomeInput {

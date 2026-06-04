@@ -19,6 +19,85 @@ Analysis-only desk — no live exchange execution unless explicitly scoped in a 
 | 14 | Safety, governance, incident review, hard rule lock (`/governance`, `/incidents`) |
 | 15 | Trading OS productization — workspace, modes, API docs, reports, public view |
 | 16 | AI Strategy Council — multi-agent debate, proposals, council memo (`/council`) |
+| 17 | Data trust & strategy conflict control — provenance, freshness, conflict gate |
+| 18 | Pre-mortem, loss autopsy, regret tracker (`/mortem`) |
+| 19 | Capital & rule simulation (`/simulation`) |
+| 20 | Operator discipline & war room (`/war-room`) |
+| 21 | Multi-asset perp directional scanner — BTC/SOL/WLD/LINK/DOGE, paper-first (`/assets`) |
+
+---
+
+## MVP 21 — Multi-Asset Perp Directional Desk ✅
+
+**Goal:** Extend beyond BTC options to a perp directional read across BTC · SOL · WLD · LINK · DOGE, and make paper positions open automatically from actionable signals. Still **analysis-only / paper-first** — no live exchange execution.
+
+### Delivered
+
+1. **Asset config** (`src/lib/multi-asset/asset-config.ts`) — 5 USDT perps; WLD/LINK/DOGE flagged perp-only (no options market).
+2. **Perp directional agent** (`perp-directional-agent.ts`) — trend (EMA stack + MACD), RSI, ATR, funding → conviction score (-100..+100) → LONG/SHORT/FLAT with HIGH/MED/LOW confidence, suggested size, ATR-based SL/TP.
+3. **Scanner** (`multi-asset-scanner.ts`) — fetches ticker + D/4H klines per asset (`src/lib/bybit/perp-market.ts`, generic `getLinearKlines`), ranks by conviction.
+4. **Perp paper store** (`perp-paper-store.ts`) — auto-opens simulated positions from actionable signals, mark-to-market, manual close, portfolio summary. localStorage, no live order.
+5. **`/assets`** UI + `GET|POST /api/multi-asset/scan`.
+
+### Guardrails
+
+- No live orders, no exchange auth — paper positions are simulated only.
+- Signals below conviction threshold or with stale/insufficient data are non-actionable (no auto-open).
+- Independent of BTC options gates; the heavy data-trust/pre-mortem gates still protect the BTC options pipeline.
+
+---
+
+## MVP 20 — War Room & Operator Discipline ✅
+
+**Goal:** Operator analytics, crisis drills, emergency playbook, trade frequency governor.
+
+### Delivered
+
+1. **Operator behavior analytics** + discipline score
+2. **10 preset scenario drills** + emergency playbook actions
+3. **Trade frequency governor** with cooldowns
+4. **`/war-room`** UI + APIs `POST /api/war-room/run-scenario`, `POST /api/operator/discipline`, `POST /api/frequency/check`
+
+---
+
+## MVP 19 — Simulation ✅
+
+**Goal:** Monte Carlo capital risk, milestone projection, drawdown stress, rule impact on log.
+
+### Delivered
+
+1. **`src/lib/simulation/`** + **`src/lib/rules/rule-impact-simulator.ts`**
+2. **`POST /api/simulation/capital-risk`** + **`POST /api/simulation/rule-impact`**
+3. **`/simulation`** dashboard — advisory only, no auto risk/rule changes
+
+---
+
+## MVP 18 — Pre-Mortem, Loss Autopsy & Regret ✅
+
+**Goal:** Learn from failure before TRADE and after losses — no auto live rules.
+
+### Delivered
+
+1. **Pre-mortem agent** — PASS / CAUTION / BLOCK before order ticket
+2. **Loss autopsy** — on resolved losses; draft rule + incident candidate
+3. **Regret tracker** — false TRADE / false SKIP metrics
+4. **Outcome classifier** — 8 resolution classes
+5. **Decision log fields** — preMortem, autopsy, regret flags, lesson tags
+6. **UI `/mortem`** + dashboard pre-mortem panel before trade control
+
+---
+
+## MVP 17 — Data Trust & Conflict Control ✅
+
+**Goal:** Reliability layer before committee TRADE — data provenance, freshness, agent conflict gate.
+
+### Delivered
+
+1. **`src/lib/data-trust/`** — provenance, freshness rules, confidence score (0–100)
+2. **`src/lib/conflict/`** — disagreement score, strategy conflict detector, conflict gate
+3. **`POST /api/analyze`** — `dataTrust`, `dataProvenance`, `conflictAnalysis`, `conflictGate`, `finalVerdict`
+4. **Dashboard** — Data Trust Score, source map, warnings, conflict meter, trade gate banner
+5. **Guardrails** — CRITICAL/LOW data trust and HIGH/CRITICAL conflict block TRADE; risk veto respected
 
 ---
 

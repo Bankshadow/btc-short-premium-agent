@@ -47,18 +47,26 @@ function parseCandle(row: string[]): BtcCandle {
   return candle;
 }
 
-export async function getBtcKlines(
+export async function getLinearKlines(
+  symbol: string,
   interval: BtcKlineInterval,
+  limit = KLINE_LIMIT,
 ): Promise<BtcCandle[]> {
   const result = await bybitGet<KlineResult>("/v5/market/kline", {
     category: "linear",
-    symbol: "BTCUSDT",
+    symbol,
     interval,
-    limit: KLINE_LIMIT,
+    limit,
   });
 
   const candles = result.list.map(parseCandle);
 
   // Bybit returns newest first — normalize to ascending time.
   return candles.sort((a, b) => a.openTime - b.openTime);
+}
+
+export async function getBtcKlines(
+  interval: BtcKlineInterval,
+): Promise<BtcCandle[]> {
+  return getLinearKlines("BTCUSDT", interval);
 }

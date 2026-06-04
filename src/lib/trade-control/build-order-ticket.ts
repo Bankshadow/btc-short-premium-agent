@@ -10,6 +10,7 @@ import type { OrderTicket } from "./trade-control-types";
 import { primaryStrategyBlockedForTicket } from "@/lib/strategy-registry/strategy-registry-gates";
 import { buildRegistryPayloadFromDesk } from "@/lib/strategy-registry/build-strategy-registry";
 import { allowOrderTicketsInCurrentMode } from "@/lib/trading-os/trading-os-runtime";
+import { preMortemBlocksTicket } from "@/lib/mortem/apply-mortem-layer";
 import type { StrategyRegistryAnalyzePayload } from "@/lib/strategy-registry/strategy-registry-types";
 
 function primaryStrategyLabel(ids: StrategyId[]): string {
@@ -47,6 +48,7 @@ export function buildOrderTicket(
   if (!desk) return null;
   const verdict = desk.committee.finalVerdict;
   if (verdict !== "TRADE" || desk.committee.riskVeto) return null;
+  if (preMortemBlocksTicket(data.preMortem)) return null;
   if (!allowOrderTicketsInCurrentMode()) return null;
 
   const plan = data.step6_actionPlan;

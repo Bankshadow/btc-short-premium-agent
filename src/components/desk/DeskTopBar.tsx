@@ -106,10 +106,34 @@ export default function DeskTopBar({
           aria-label="Ops modules"
         >
           <Link
+            href="/assets"
+            className="rounded-md border border-emerald-900/40 bg-emerald-950/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95 hover:bg-emerald-900/45"
+          >
+            Assets
+          </Link>
+          <Link
             href="/council"
-            className="rounded-md border border-amber-900/40 bg-amber-950/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300/95 hover:bg-amber-900/45"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300/95 hover:bg-amber-900/45"
           >
             Council
+          </Link>
+          <Link
+            href="/mortem"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90 hover:bg-emerald-950/50"
+          >
+            Mortem
+          </Link>
+          <Link
+            href="/simulation"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-400/90 hover:bg-violet-950/50"
+          >
+            Sim
+          </Link>
+          <Link
+            href="/war-room"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-rose-400/90 hover:bg-rose-950/50"
+          >
+            War
           </Link>
           <Link
             href="/capital"

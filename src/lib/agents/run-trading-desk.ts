@@ -29,6 +29,8 @@ import {
   mergeHardRuleResults,
 } from "@/lib/governance/hard-rule-lock";
 import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
+import { applyReliabilityLayerToAnalyzeResponse } from "@/lib/data-trust/apply-reliability-layer";
+import { applyPreMortemToAnalyzeResponse } from "@/lib/mortem/apply-mortem-layer";
 
 export function runTradingDesk(
   input: DecisionEngineInput,
@@ -132,7 +134,7 @@ export function attachTradingDesk(
   strategyRegistry?: StrategyRegistryAnalyzePayload | null,
   governance?: GovernanceAnalyzePayload | null,
 ): AnalyzeApiResponse {
-  return {
+  const withDesk: AnalyzeApiResponse = {
     ...response,
     tradingDesk: runTradingDesk(
       input,
@@ -143,6 +145,17 @@ export function attachTradingDesk(
       governance,
     ),
   };
+  const reliable = applyReliabilityLayerToAnalyzeResponse(
+    input,
+    withDesk,
+    ethQuote,
+    memoryPayload,
+  );
+  return applyPreMortemToAnalyzeResponse(
+    input,
+    reliable,
+    `pending-${Date.now()}`,
+  );
 }
 
 export type { TradingDeskContext };

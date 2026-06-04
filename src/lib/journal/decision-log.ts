@@ -3,6 +3,7 @@ import { buildReplaySnapshot } from "@/lib/replay/build-replay-snapshot";
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import { attachTradeControlToEntry } from "@/lib/trade-control/trade-control-log";
+import { enrichResolvedEntry } from "@/lib/mortem/resolve-learning";
 import { createDraftRuleFromReflection } from "./draft-rules";
 import { computePaperPnl } from "./paper-pnl";
 import type {
@@ -61,6 +62,15 @@ export function buildDecisionLogEntry(
     paperPnl: null,
     reflection: null,
     replaySnapshot: buildReplaySnapshot(data),
+    preMortem: data.preMortem ?? null,
+    learningSnapshot: data.learningSnapshot ?? null,
+    autopsy: null,
+    regretClassification: null,
+    falseTradeFlag: false,
+    falseSkipFlag: false,
+    missedOpportunityR: 0,
+    avoidedLossR: 0,
+    lessonTags: [],
   };
 }
 
@@ -124,6 +134,28 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
     tradeControl:
       raw.tradeControl && typeof raw.tradeControl === "object"
         ? (raw.tradeControl as DecisionLogEntry["tradeControl"])
+        : null,
+    preMortem:
+      raw.preMortem && typeof raw.preMortem === "object"
+        ? (raw.preMortem as DecisionLogEntry["preMortem"])
+        : null,
+    autopsy:
+      raw.autopsy && typeof raw.autopsy === "object"
+        ? (raw.autopsy as DecisionLogEntry["autopsy"])
+        : null,
+    regretClassification:
+      (raw.regretClassification as DecisionLogEntry["regretClassification"]) ??
+      null,
+    falseTradeFlag: Boolean(raw.falseTradeFlag),
+    falseSkipFlag: Boolean(raw.falseSkipFlag),
+    missedOpportunityR: Number(raw.missedOpportunityR ?? 0),
+    avoidedLossR: Number(raw.avoidedLossR ?? 0),
+    lessonTags: Array.isArray(raw.lessonTags)
+      ? (raw.lessonTags as string[])
+      : [],
+    learningSnapshot:
+      raw.learningSnapshot && typeof raw.learningSnapshot === "object"
+        ? (raw.learningSnapshot as DecisionLogEntry["learningSnapshot"])
         : null,
   };
 }
@@ -240,13 +272,15 @@ export function resolveDecisionOutcome(
     resolution,
   );
 
-  const entry: DecisionLogEntry = {
+  let entry: DecisionLogEntry = {
     ...existing,
     outcomeStatus: "RESOLVED",
     resolution,
     paperPnl,
     reflection,
   };
+
+  entry = enrichResolvedEntry(entry, input);
 
   updateDecisionLogEntry(id, () => entry);
 

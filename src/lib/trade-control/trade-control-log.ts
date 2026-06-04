@@ -2,6 +2,7 @@ import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import { updateDecisionLogEntry } from "@/lib/journal/decision-log";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import { buildOrderTicket } from "./build-order-ticket";
+import { preMortemBlocksTicket } from "@/lib/mortem/apply-mortem-layer";
 import { runPreTradeChecklist } from "./pre-trade-checklist";
 import type {
   OrderTicket,
@@ -14,6 +15,8 @@ export function attachTradeControlToEntry(
   data: AnalyzeApiResponse,
   allEntries: DecisionLogEntry[],
 ): DecisionLogEntry | null {
+  if (preMortemBlocksTicket(entry.preMortem ?? data.preMortem)) return null;
+
   const ticket = buildOrderTicket(data, entry.id, entry);
   if (!ticket) return null;
 

@@ -1,5 +1,16 @@
-import type { TradingDeskOutput } from "@/lib/agents/types";
+import type { CommitteeVerdict, TradingDeskOutput } from "@/lib/agents/types";
+import type { AgentRecommendation } from "@/lib/agents/types";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
+import type {
+  ConflictGateResult,
+  DataConfidenceResult,
+  DataProvenanceField,
+  StrategyConflictAnalysis,
+} from "@/lib/data-trust/types";
+import type {
+  LearningSnapshot,
+  PreMortemResult,
+} from "@/lib/mortem/types";
 
 export type OptionType = "call" | "put";
 
@@ -234,6 +245,16 @@ export interface AnalyzeApiResponse extends DecisionEngineOutput {
     source: "template" | "llm";
     locale: "th" | "en";
   };
+  /** MVP 17 — data trust & conflict control */
+  dataTrust?: DataConfidenceResult;
+  dataProvenance?: DataProvenanceField[];
+  conflictAnalysis?: StrategyConflictAnalysis;
+  conflictGate?: ConflictGateResult;
+  committeeVerdict?: CommitteeVerdict;
+  finalVerdict?: AgentRecommendation;
+  /** MVP 18 — pre-mortem before TRADE ticket */
+  preMortem?: PreMortemResult;
+  learningSnapshot?: LearningSnapshot;
 }
 
 /** @deprecated Use DecisionEngineInput */

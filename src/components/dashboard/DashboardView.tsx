@@ -22,6 +22,10 @@ export default function DashboardView({
       {data.tradingDesk && (
         <TradingDeskView
           desk={data.tradingDesk}
+          dataTrust={data.dataTrust}
+          dataProvenance={data.dataProvenance}
+          conflictAnalysis={data.conflictAnalysis}
+          conflictGate={data.conflictGate}
           onPinsChange={onMemoryPinsChange}
         />
       )}

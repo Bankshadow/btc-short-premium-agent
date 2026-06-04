@@ -14,6 +14,8 @@ import type {
   TradeControlActionType,
 } from "@/lib/trade-control/trade-control-types";
 import { loadDecisionLog } from "@/lib/journal/decision-log";
+import PreMortemSummary from "@/components/mortem/PreMortemSummary";
+import { preMortemBlocksTicket } from "@/lib/mortem/apply-mortem-layer";
 
 interface TradeControlPanelProps {
   data: AnalyzeApiResponse;
@@ -101,17 +103,24 @@ export default function TradeControlPanel({
     ],
   );
 
-  const showPanel = useMemo(() => {
-    return (
-      data.tradingDesk?.committee.finalVerdict === "TRADE" &&
-      ticket != null &&
-      pending
-    );
-  }, [data, ticket, pending]);
+  const preMortem = data.preMortem ?? logEntry?.preMortem ?? null;
+  const preMortemBlocked = preMortemBlocksTicket(preMortem);
 
-  if (!showPanel || !ticket) return null;
+  const showPanel = useMemo(() => {
+    return data.tradingDesk?.committee.finalVerdict === "TRADE";
+  }, [data]);
+
+  if (!showPanel) return null;
+
+  if (preMortemBlocked && preMortem) {
+    return <PreMortemSummary preMortem={preMortem} />;
+  }
+
+  if (!ticket || !pending) return null;
 
   return (
+    <>
+      {preMortem && <PreMortemSummary preMortem={preMortem} />}
     <section className="desk-panel border-2 border-amber-600/50 bg-amber-950/20">
       <div className="border-b border-amber-900/40 px-4 py-3">
         <p className="desk-section-title text-amber-400">Semi-live trade control · MVP 11</p>
@@ -302,5 +311,6 @@ export default function TradeControlPanel({
         </details>
       )}
     </section>
+    </>
   );
 }
