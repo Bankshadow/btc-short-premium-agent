@@ -86,6 +86,7 @@ export const OPS_ACCENT: Record<
 
 export const OPS_MODULE_LINKS = [
   { href: "/", label: "Trading desk", accent: "amber" as OpsAccent },
+  { href: "/automation", label: "Automation", accent: "cyan" as OpsAccent },
   { href: "/assets", label: "Assets", accent: "emerald" as OpsAccent },
   { href: "/council", label: "Council", accent: "amber" as OpsAccent },
   { href: "/mortem", label: "Mortem", accent: "emerald" as OpsAccent },

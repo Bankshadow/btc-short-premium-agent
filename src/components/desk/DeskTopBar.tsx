@@ -106,8 +106,14 @@ export default function DeskTopBar({
           aria-label="Ops modules"
         >
           <Link
+            href="/automation"
+            className="rounded-md border border-cyan-900/40 bg-cyan-950/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300/95 hover:bg-cyan-900/45"
+          >
+            AI
+          </Link>
+          <Link
             href="/assets"
-            className="rounded-md border border-emerald-900/40 bg-emerald-950/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95 hover:bg-emerald-900/45"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95 hover:bg-emerald-900/45"
           >
             Assets
           </Link>

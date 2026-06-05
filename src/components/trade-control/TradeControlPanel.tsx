@@ -14,7 +14,9 @@ import type {
   TradeControlActionType,
 } from "@/lib/trade-control/trade-control-types";
 import { loadDecisionLog } from "@/lib/journal/decision-log";
+import ExchangePreviewPanel from "@/components/exchange/ExchangePreviewPanel";
 import PreMortemSummary from "@/components/mortem/PreMortemSummary";
+import type { OrderPreviewResult } from "@/lib/exchange/types";
 import { preMortemBlocksTicket } from "@/lib/mortem/apply-mortem-layer";
 
 interface TradeControlPanelProps {
@@ -38,6 +40,8 @@ export default function TradeControlPanel({
   );
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<OrderPreviewResult | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const ticket = logEntry?.orderTicket ?? null;
   const control = logEntry?.tradeControl ?? null;
@@ -49,6 +53,37 @@ export default function TradeControlPanel({
     const next = saveTradeControlSettings(patch);
     setSettings(next);
   }, []);
+
+  const runExchangePreview = useCallback(async () => {
+    if (!ticket) return;
+    setPreviewLoading(true);
+    setPreview(null);
+    try {
+      const res = await fetch("/api/exchange/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "order_ticket",
+          ticket: { ...ticket, positionSizePct: sizePct },
+        }),
+      });
+      const data = (await res.json()) as OrderPreviewResult & { error?: string };
+      if (!res.ok || data.error) {
+        setStatusMsg(data.error ?? "Preview failed");
+        return;
+      }
+      setPreview(data);
+      setStatusMsg(
+        data.valid
+          ? "Exchange preview VALID — no order sent."
+          : "Exchange preview REJECTED — see details below.",
+      );
+    } catch {
+      setStatusMsg("Exchange preview request failed.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [ticket, sizePct]);
 
   const runAction = useCallback(
     async (action: TradeControlActionType) => {
@@ -280,6 +315,14 @@ export default function TradeControlPanel({
         </button>
         <button
           type="button"
+          disabled={busy || previewLoading}
+          onClick={() => void runExchangePreview()}
+          className="rounded border border-cyan-800 bg-cyan-950/50 px-3 py-1.5 text-xs text-cyan-200"
+        >
+          {previewLoading ? "Previewing…" : "Preview on exchange"}
+        </button>
+        <button
+          type="button"
           disabled={busy}
           onClick={() => {
             void navigator.clipboard.writeText(formatTicketForCopy(ticket));
@@ -289,6 +332,14 @@ export default function TradeControlPanel({
         >
           Copy ticket
         </button>
+      </div>
+
+      <div className="px-4 pb-3">
+        <ExchangePreviewPanel
+          preview={preview}
+          loading={previewLoading}
+          onClose={() => setPreview(null)}
+        />
       </div>
 
       {statusMsg && (

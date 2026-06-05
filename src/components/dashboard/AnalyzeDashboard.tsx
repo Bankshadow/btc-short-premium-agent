@@ -35,6 +35,7 @@ import {
   useAutoDeskRefresh,
 } from "@/hooks/useAutoDeskRefresh";
 import { usePaperTrading } from "@/hooks/usePaperTrading";
+import { useDeskAutomation } from "@/hooks/useDeskAutomation";
 import PaperTradingPanel from "./PaperTradingPanel";
 import PortfolioMilestonesPanel from "./portfolio/PortfolioMilestonesPanel";
 import ReplayDeskPanel from "./replay/ReplayDeskPanel";
@@ -135,6 +136,7 @@ export default function AnalyzeDashboard({
   } = useDecisionLog();
 
   const paper = usePaperTrading();
+  const automation = useDeskAutomation(logHydrated);
 
   useEffect(() => {
     if (!paper.hydrated || !paper.settings.syncSupabase) return;
@@ -411,6 +413,22 @@ export default function AnalyzeDashboard({
           className={`flex flex-col gap-4 transition-opacity ${loading ? "pointer-events-none opacity-60" : ""}`}
           aria-busy={loading}
         >
+          {automation.lastRun && (
+            <p className="rounded-lg border border-cyan-800/40 bg-cyan-950/30 px-3 py-2 text-[11px] text-cyan-100/90">
+              <span className="font-semibold text-cyan-300">AI automation</span> —{" "}
+              {automation.lastRun.summary}
+              {automation.applied.length > 0 && (
+                <span className="text-emerald-400">
+                  {" "}
+                  · applied {automation.applied.length}
+                </span>
+              )}
+              {" · "}
+              <a href="/automation" className="underline hover:text-cyan-50">
+                Ops center
+              </a>
+            </p>
+          )}
           <p className="rounded-lg border border-cyan-900/30 bg-cyan-950/20 px-3 py-2 text-[11px] text-cyan-200/80">
             Trading OS · {activeProfile.name} · {ENVIRONMENT_MODE_LABELS[workspace.environmentMode]} —{" "}
             {modeEffects.analysisOnlyLabel}

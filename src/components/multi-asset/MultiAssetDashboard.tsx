@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import ExchangePreviewPanel from "@/components/exchange/ExchangePreviewPanel";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
+import type { OrderPreviewResult } from "@/lib/exchange/types";
 import type {
   MultiAssetScanResult,
   PerpDirectionalSignal,
@@ -51,6 +53,12 @@ export default function MultiAssetDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [autoOpen, setAutoOpen] = useState(true);
   const [lastOpened, setLastOpened] = useState<number | null>(null);
+  const [preview, setPreview] = useState<OrderPreviewResult | null>(null);
+  const [previewSymbol, setPreviewSymbol] = useState<string | null>(null);
+  const [previewSignal, setPreviewSignal] = useState<PerpDirectionalSignal | null>(
+    null,
+  );
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const refreshLocal = useCallback(() => {
     setPositions(loadPerpPositions().filter((p) => p.status === "OPEN"));
@@ -103,6 +111,30 @@ export default function MultiAssetDashboard() {
     },
     [scan, refreshLocal],
   );
+
+  const handlePreview = useCallback(async (signal: PerpDirectionalSignal) => {
+    setPreviewLoading(true);
+    setPreview(null);
+    setPreviewSymbol(signal.symbol);
+    setPreviewSignal(signal);
+    try {
+      const res = await fetch("/api/exchange/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "perp_signal", signal }),
+      });
+      const data = (await res.json()) as OrderPreviewResult & { error?: string };
+      if (!res.ok || data.error) {
+        setError(data.error ?? "Preview failed");
+        return;
+      }
+      setPreview(data);
+    } catch {
+      setError("Exchange preview request failed");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
 
   const actionable = scan?.actionableCount ?? 0;
   const scanned = scan?.signals.length ?? 0;
@@ -229,13 +261,23 @@ export default function MultiAssetDashboard() {
                     <td className="px-3 py-2.5 font-mono text-zinc-400">{s.rsi14}</td>
                     <td className="px-3 py-2.5 text-right">
                       {s.actionable ? (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenManual(s)}
-                          className="rounded-md border border-emerald-800/60 bg-emerald-950/40 px-2 py-1 text-[10px] font-medium text-emerald-300 hover:bg-emerald-900/40"
-                        >
-                          Open paper
-                        </button>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void handlePreview(s)}
+                            disabled={previewLoading && previewSymbol === s.symbol}
+                            className="rounded-md border border-cyan-800/60 bg-cyan-950/40 px-2 py-1 text-[10px] font-medium text-cyan-300 hover:bg-cyan-900/40 disabled:opacity-50"
+                          >
+                            Preview
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenManual(s)}
+                            className="rounded-md border border-emerald-800/60 bg-emerald-950/40 px-2 py-1 text-[10px] font-medium text-emerald-300 hover:bg-emerald-900/40"
+                          >
+                            Paper
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-[10px] text-zinc-700">—</span>
                       )}
@@ -245,6 +287,24 @@ export default function MultiAssetDashboard() {
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {(preview || previewLoading) && (
+        <section className="desk-panel px-5 py-4">
+          <p className="desk-section-title text-cyan-300/90">
+            Exchange preview {previewSymbol ? `· ${previewSymbol}` : ""}
+          </p>
+          <ExchangePreviewPanel
+            preview={preview}
+            loading={previewLoading}
+            perpSignal={previewSignal}
+            onClose={() => {
+              setPreview(null);
+              setPreviewSymbol(null);
+              setPreviewSignal(null);
+            }}
+          />
         </section>
       )}
 

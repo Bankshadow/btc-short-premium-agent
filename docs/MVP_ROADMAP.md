@@ -24,6 +24,99 @@ Analysis-only desk — no live exchange execution unless explicitly scoped in a 
 | 19 | Capital & rule simulation (`/simulation`) |
 | 20 | Operator discipline & war room (`/war-room`) |
 | 21 | Multi-asset perp directional scanner — BTC/SOL/WLD/LINK/DOGE, paper-first (`/assets`) |
+| 32 | Exchange read-only connector — Bybit wallet, positions, open orders (`/governance`) |
+| 33 | Order preview & validation — dry-run Bybit payload, margin check (`/api/exchange/preview`) |
+| 34 | Live perp gate + AI desk automation orchestrator (`/automation`, `/api/desk/automation/run`) |
+
+---
+
+## MVP 34 — Live Perp Gate & AI Desk Automation ✅
+
+**Goal:** (A) First live perp path with human double-confirm; (B) wire all ops nav modules into one auto cycle that produces actions, not dead pages.
+
+### Delivered — Live (MVP 34A)
+
+1. **`bybitPrivatePost`** + **`place-linear-order.ts`**
+2. **`live-execution-gate.ts`** — `LIVE_EXECUTION_ENABLED`, confirm token, frequency governor
+3. **`POST /api/exchange/execute`** — perp market order after preview
+4. **UI** — Execute live on `/assets` preview panel (double confirm checkbox)
+
+### Delivered — Automation (MVP 34B)
+
+1. **`run-desk-automation.ts`** — runs 11 modules: analyze, assets, council, mortem, simulation, war_room, capital, validation, frequency, exchange, operator
+2. **`derive-automation-actions.ts`** — OPEN_PAPER_PERP, REVIEW_BTC_TRADE, COUNCIL_PROPOSAL, LOWER_RISK, etc.
+3. **`apply-automation-client.ts`** — auto paper open, pause paper, optional safe mode
+4. **`POST /api/desk/automation/run`** + **`GET /api/cron/desk-automation`**
+5. **`/automation`** UI + **`useDeskAutomation`** hook on main dashboard (15m cycle)
+6. Top bar **AI** link
+
+### Env
+
+| Variable | Purpose |
+|----------|---------|
+| `LIVE_EXECUTION_ENABLED` | `true` to allow `/api/exchange/execute` |
+| `LIVE_REQUIRE_DOUBLE_CONFIRM` | default true |
+| `CRON_SECRET` | cron + execute confirm token signing |
+
+### Guardrails
+
+- No auto-live — execute requires UI double confirm + valid preview token
+- Council/strategy changes remain human-approved
+- Cron automation runs server-side (empty journal unless client POSTs entries)
+
+---
+
+## MVP 33 — Order Preview & Validation ✅
+
+**Goal:** Validate what would be sent to Bybit before any live execution (MVP 34). No orders placed.
+
+### Delivered
+
+1. **`instrument-info.ts`** — lot size / min notional from Bybit public API
+2. **`instrument-mapper.ts`** — perp signal → linear market order; option ticket → limit sell
+3. **`order-validator.ts`** — qty, notional, `LIVE_MAX_NOTIONAL_USD`, `LIVE_ALLOWED_SYMBOLS`, balance check
+4. **`order-preview.ts`** — orchestrator with wallet read from MVP 32
+5. **`POST /api/exchange/preview`** — `{ source: "perp_signal" | "order_ticket", ... }`
+6. **UI** — Preview on Trade Control + `/assets` scanner
+
+### Env (optional limits)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LIVE_MAX_NOTIONAL_USD` | `500` | Cap preview/ future live size |
+| `LIVE_ALLOWED_SYMBOLS` | all desk perps | Comma list e.g. `SOLUSDT,DOGEUSDT` |
+| `LIVE_EXECUTION_ENABLED` | `false` | Master kill for future MVP 34 |
+
+### Next
+
+- MVP 34: Live perp execution gate (testnet, human double-confirm)
+
+---
+
+## MVP 32 — Exchange Read-Only Connector ✅
+
+**Goal:** Connect to Bybit with server-side API keys for read-only account visibility. No order placement.
+
+### Delivered
+
+1. **`src/lib/exchange/`** — HMAC auth client, wallet, linear/option positions, open orders
+2. **`GET /api/exchange/status`** — full snapshot + clock skew check
+3. **`GET /api/exchange/positions`** — positions-only poll
+4. **Governance UI** — Exchange panel on `/governance`
+
+### Env
+
+| Variable | Purpose |
+|----------|---------|
+| `BYBIT_API_KEY` | Server only — never expose to client |
+| `BYBIT_API_SECRET` | Server only |
+| `BYBIT_TESTNET` | `true` for testnet (recommended first) |
+
+### Guardrails
+
+- Read-only connector — no trading endpoints
+- API key should have Read permission only (no withdraw)
+- Next: MVP 33 order preview, MVP 34 live perp gate
 
 ---
 
@@ -346,5 +439,7 @@ Supabase migrations to plan for MVP 7–8:
 | `CRON_SECRET` | Vercel cron + test automation |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | briefing alerts |
 | `OPENAI_API_KEY` (MVP 8) | optional narrator |
+| `BYBIT_API_KEY` / `BYBIT_API_SECRET` (MVP 32) | read-only exchange connector |
+| `BYBIT_TESTNET` (MVP 32) | `true` for testnet wallet/positions |
 
 Run SQL in order: `001` → `002` → `003` in [supabase/migrations](../supabase/migrations/).

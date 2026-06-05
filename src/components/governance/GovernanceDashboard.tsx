@@ -21,6 +21,7 @@ import {
 } from "@/lib/governance/hard-rule-lock";
 import type { DeskUserRole } from "@/lib/governance/governance-types";
 import { evaluateKillSwitch, saveKillSwitchState } from "@/lib/validation/kill-switch";
+import ExchangeStatusPanel from "./ExchangeStatusPanel";
 
 const ROLES: DeskUserRole[] = [
   "VIEWER",
@@ -231,6 +232,8 @@ export default function GovernanceDashboard() {
           {state.operatorPaused ? "Resume desk (clear operator pause)" : "Pause desk trading"}
         </button>
       </section>
+
+      <ExchangeStatusPanel />
 
       <section className="desk-panel px-4 py-4">
         <h2 className="desk-section-title">Hard rule lock</h2>
