@@ -72,5 +72,13 @@ export function patchStrategyOverride(
     versionHistory = { ...versionHistory, [id]: history.slice(0, 20) };
   }
 
-  return savePersistedRegistry({ overrides, versionHistory });
+  const saved = savePersistedRegistry({ overrides, versionHistory });
+  if (typeof window !== "undefined") {
+    void fetch("/api/db/migrate-local", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strategyRegistry: saved }),
+    }).catch(() => undefined);
+  }
+  return saved;
 }

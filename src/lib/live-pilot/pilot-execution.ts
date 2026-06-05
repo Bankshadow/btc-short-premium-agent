@@ -13,6 +13,10 @@ import { previewPerpSignal } from "@/lib/exchange/order-preview";
 import { estimateTakerFeeUsd } from "@/lib/exchange/order-validator";
 import type { LiveExecuteResult, OrderPreviewResult } from "@/lib/exchange/types";
 import { loadLivePilotRiskConfig } from "./pilot-config";
+import {
+  enrichRealTimeRiskInput,
+  evaluateRealTimeRisk,
+} from "@/lib/real-time-risk";
 import { checkPilotGuards } from "./pilot-guards";
 import { confirmTokenId } from "./journal-store";
 import { resolveLivePilotMode } from "./pilot-mode";
@@ -36,6 +40,12 @@ export interface PilotExecuteInput {
   readinessStatus?: "PASS" | "WARNING" | "FAIL";
   emergencyStopActive?: boolean;
   riskBudget?: import("@/lib/risk-budget-optimizer/types").RiskBudgetResult | null;
+  perpPositions?: import("@/lib/multi-asset/types").PerpPaperPosition[];
+  portfolio?: import("@/lib/portfolio/unified-types").UnifiedPortfolioSnapshot | null;
+  market?: import("@/lib/types/market").AnalyzeApiResponse | null;
+  regimeBrain?: import("@/lib/market-regime-brain/types").RegimeBrainResult | null;
+  commandCenter?: import("@/lib/command-center/types").CommandCenterReport | null;
+  scaleStage?: import("@/lib/live-scale-up/types").LiveScaleStage;
 }
 
 export interface PilotExecuteResult extends LiveExecuteResult {
@@ -58,6 +68,22 @@ export async function executePilotPerpOrder(
   const note = input.operatorApprovalNote?.trim() ?? "";
 
   const preview = await previewPerpSignal(input.signal);
+  const riskInput = await enrichRealTimeRiskInput({
+    entries: input.entries ?? [],
+    orders: input.orders ?? [],
+    perpPositions: input.perpPositions,
+    liveTrades: journal,
+    governance: input.governance,
+    incidents: input.incidents,
+    riskBudget: input.riskBudget,
+    emergencyStopActive: input.emergencyStopActive,
+    market: input.market,
+    regimeBrain: input.regimeBrain,
+    portfolio: input.portfolio,
+    commandCenter: input.commandCenter,
+  });
+  const realTimeRiskReport = evaluateRealTimeRisk(riskInput);
+
   const guards = checkPilotGuards({
     preview,
     journal,
@@ -72,6 +98,8 @@ export async function executePilotPerpOrder(
     operatorApproval: input.operatorApproval,
     doubleConfirm: input.doubleConfirm,
     riskBudget: input.riskBudget,
+    realTimeRiskReport,
+    scaleStage: input.scaleStage,
   });
 
   if (!guards.allowed) {

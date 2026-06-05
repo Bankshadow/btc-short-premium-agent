@@ -68,6 +68,7 @@ export async function POST(request: Request) {
       experiments: body.experiments,
       registry: body.registry,
       automationEnabled: body.automationEnabled,
+      dryRunHistory: body.dryRunHistory,
       serverContext,
     });
 

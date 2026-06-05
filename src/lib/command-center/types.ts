@@ -17,6 +17,9 @@ import type { PersistedStrategyRegistry } from "@/lib/strategy-registry/strategy
 import type { TradeFrequencyGovernorOutput } from "@/lib/frequency/trade-frequency-governor";
 import type { DeskHealthSnapshot } from "@/lib/operator/desk-health";
 import type { UnifiedPaperPosition } from "@/lib/portfolio/unified-types";
+import type { OptionsDryRunResult } from "@/lib/options-dry-run/types";
+import type { OptionsRiskReport } from "@/lib/options-risk-greeks/types";
+import type { RealTimeRiskReport } from "@/lib/real-time-risk/types";
 
 export const COMMAND_CENTER_SAFETY_NOTICE =
   "Command center can pause or reduce risk only — it cannot increase risk, approve AI proposals, or bypass governance.";
@@ -159,6 +162,8 @@ export interface CommandCenterReport {
   blockers: CommandCenterBlocker[];
   cautions: string[];
   panels: CommandCenterPanels;
+  realTimeRisk: RealTimeRiskReport;
+  optionsRisk: OptionsRiskReport;
   safetyNotice: string;
   cannotIncreaseRisk: true;
   cannotAutoApproveProposals: true;
@@ -182,6 +187,7 @@ export interface CommandCenterInput {
   experiments?: StrategyExperiment[];
   registry?: PersistedStrategyRegistry | null;
   automationEnabled?: boolean;
+  dryRunHistory?: OptionsDryRunResult[];
   serverContext: ServerReadinessContext;
 }
 

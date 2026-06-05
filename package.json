@@ -25,7 +25,12 @@
     "test:historical-backtest": "npx --yes tsx --test src/lib/historical-backtest/historical-backtest.test.ts",
     "test:risk-budget-optimizer": "npx --yes tsx --test src/lib/risk-budget-optimizer/risk-budget-optimizer.test.ts",
     "test:live-trade-supervisor": "npx --yes tsx --test src/lib/live-trade-supervisor/live-trade-supervisor.test.ts",
-    "test:command-center": "npx --yes tsx --test src/lib/command-center/command-center.test.ts"
+    "test:command-center": "npx --yes tsx --test src/lib/command-center/command-center.test.ts",
+    "test:warehouse": "npx --yes tsx --test src/lib/db/warehouse.test.ts",
+    "test:real-time-risk": "npx --yes tsx --test src/lib/real-time-risk/real-time-risk.test.ts",
+    "test:live-scale-up": "npx --yes tsx --test src/lib/live-scale-up/live-scale-up.test.ts",
+    "test:options-dry-run": "npx --yes tsx --test src/lib/options-dry-run/options-dry-run.test.ts",
+    "test:options-risk-greeks": "npx --yes tsx --test src/lib/options-risk-greeks/options-risk-greeks.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

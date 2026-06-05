@@ -51,6 +51,24 @@ export function runLiveTradeSupervisor(
     });
   }
 
+  const rt = input.realTimeRisk;
+  if (rt?.blockNewTrades) {
+    riskAlerts.push({
+      id: "realtime-risk-block",
+      severity: rt.riskStatus === "EMERGENCY" ? "critical" : "warning",
+      category: "realtime_risk",
+      message: `Real-time risk ${rt.riskStatus} — new trades blocked.`,
+    });
+  }
+  if (rt?.reduceOnlyMode) {
+    riskAlerts.push({
+      id: "realtime-reduce-only",
+      severity: "warning",
+      category: "realtime_risk",
+      message: "Reduce-only mode active.",
+    });
+  }
+
   const dedupedAlerts = riskAlerts.slice(0, 24);
 
   return {
@@ -67,6 +85,7 @@ export function runLiveTradeSupervisor(
       false,
     emergencyStopActive: input.emergencyStopActive ?? false,
     autoCloseEnabled: false,
+    realTimeRisk: rt ?? null,
     safetyNotice: LIVE_SUPERVISOR_SAFETY_NOTICE,
   };
 }

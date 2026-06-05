@@ -116,6 +116,13 @@ export interface PilotGuardInput {
   doubleConfirm?: boolean;
   isCloseOrder?: boolean;
   riskBudget?: import("@/lib/risk-budget-optimizer/types").RiskBudgetResult | null;
+  realTimeRiskReport?: import("@/lib/real-time-risk/types").RealTimeRiskReport;
+  perpPositions?: import("@/lib/multi-asset/types").PerpPaperPosition[];
+  portfolio?: import("@/lib/portfolio/unified-types").UnifiedPortfolioSnapshot | null;
+  market?: import("@/lib/types/market").AnalyzeApiResponse | null;
+  regimeBrain?: import("@/lib/market-regime-brain/types").RegimeBrainResult | null;
+  commandCenter?: import("@/lib/command-center/types").CommandCenterReport | null;
+  scaleStage?: import("@/lib/live-scale-up/types").LiveScaleStage;
 }
 
 export interface PilotGuardResult {

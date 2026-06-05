@@ -6,6 +6,7 @@ import { verifyExecuteConfirmToken } from "./execute-confirm";
 import { resolveExchangeCredentials } from "./exchange-config";
 import type { MappedLinearOrder } from "./instrument-mapper";
 import { placeLinearMarketOrder } from "./place-linear-order";
+import { evaluateRealTimeRisk } from "@/lib/real-time-risk/evaluate-realtime-risk";
 import { previewPerpSignal } from "./order-preview";
 import type { LiveExecuteResult, OrderPreviewResult } from "./types";
 
@@ -80,6 +81,26 @@ export async function executeLivePerpOrder(
       operatorNote: note,
       auditId,
       error: "doubleConfirm must be true for live execution.",
+    };
+  }
+
+  const riskReport = evaluateRealTimeRisk({
+    entries: input.entries ?? [],
+    orders: [],
+  });
+  if (riskReport.blockNewTrades) {
+    return {
+      ok: false,
+      orderId: null,
+      symbol: input.signal.symbol,
+      side: input.signal.direction,
+      qty: 0,
+      network: creds.network,
+      testnet: creds.network === "testnet",
+      timestamp: new Date().toISOString(),
+      operatorNote: note,
+      auditId,
+      error: `Real-time risk ${riskReport.riskStatus} — new trades blocked.`,
     };
   }
 

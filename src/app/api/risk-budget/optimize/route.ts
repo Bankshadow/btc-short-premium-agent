@@ -8,6 +8,12 @@ import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
+import {
+  applyRealTimeRiskToBudget,
+  enrichRealTimeRiskInput,
+  evaluateRealTimeRisk,
+} from "@/lib/real-time-risk";
+import type { RealTimeRiskInput } from "@/lib/real-time-risk";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +29,7 @@ export async function POST(request: Request) {
       analyze?: AnalyzeApiResponse | null;
       governance?: GovernanceAnalyzePayload | null;
       applyToAnalyze?: boolean;
+      realTimeRiskInput?: Partial<RealTimeRiskInput>;
     };
 
     const budgetInput = buildRiskBudgetInput({
@@ -34,7 +41,19 @@ export async function POST(request: Request) {
       governance: body.governance,
     });
 
-    const budget = optimizeRiskBudget(budgetInput);
+    let budget = optimizeRiskBudget(budgetInput);
+
+    let realTimeRisk = null;
+    if (body.realTimeRiskInput) {
+      const riskInput = await enrichRealTimeRiskInput({
+        entries: body.entries ?? [],
+        orders: body.orders ?? [],
+        perpPositions: body.perpPositions,
+        ...body.realTimeRiskInput,
+      });
+      realTimeRisk = evaluateRealTimeRisk(riskInput);
+      budget = applyRealTimeRiskToBudget(budget, realTimeRisk);
+    }
 
     let analyze = body.analyze ?? null;
     if (body.applyToAnalyze && analyze) {
@@ -44,6 +63,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       budget,
+      realTimeRisk,
       analyze,
     });
   } catch (error) {

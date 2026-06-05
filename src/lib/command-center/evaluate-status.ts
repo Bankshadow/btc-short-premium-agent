@@ -12,6 +12,8 @@ import type {
   CommandCenterReport,
   CommandCenterStatus,
 } from "./types";
+import { buildOptionsRiskReport } from "@/lib/options-risk-greeks/build-options-risk-report";
+import { evaluateRealTimeRisk } from "@/lib/real-time-risk/evaluate-realtime-risk";
 import { COMMAND_CENTER_SAFETY_NOTICE } from "./types";
 
 function blocker(
@@ -281,6 +283,58 @@ export function buildCommandCenterReport(
   }
   recentChanges.sort((a, b) => b.at.localeCompare(a.at));
 
+  const realTimeRisk = evaluateRealTimeRisk({
+    entries: input.entries,
+    orders: input.orders,
+    perpPositions: input.perpPositions,
+    liveTrades: input.livePilotJournal,
+    exchangePositions: [
+      ...(ex.linearPositions ?? []),
+      ...(ex.optionPositions ?? []),
+    ],
+    openOrders: [
+      ...(ex.openLinearOrders ?? []),
+      ...(ex.openOptionOrders ?? []),
+    ],
+    wallet: ex.wallet,
+    governance: input.governance,
+    incidents: input.incidents,
+    riskBudget: input.riskBudget ?? null,
+    emergencyStopActive: input.emergencyStopActive,
+    market: input.latestAnalysis ?? null,
+    dailyPnlPct: killSwitch.dailyPnlPct,
+    weeklyPnlPct: killSwitch.weeklyPnlPct,
+    pilotDailyLossUsd: pilotStatus.metrics.realizedPnlTodayUsd,
+    pilotWeeklyLossUsd: pilotStatus.metrics.realizedPnlWeekUsd,
+  });
+
+  if (realTimeRisk.blockNewTrades) {
+    cautions.push(
+      `Real-time risk ${realTimeRisk.riskStatus} — new live trades blocked.`,
+    );
+  } else if (realTimeRisk.riskStatus === "CAUTION") {
+    cautions.push("Real-time risk CAUTION — review exposure and limits.");
+  }
+
+  const optionsRisk = buildOptionsRiskReport({
+    paperOrders: input.orders,
+    exchangePositions: ex.optionPositions ?? [],
+    dryRunResults: input.dryRunHistory ?? [],
+    spotPrice: input.latestAnalysis?.step1_marketSnapshot.spotPrice ?? null,
+    walletBalanceUsd: ex.wallet?.totalEquityUsd ?? null,
+  });
+
+  if (optionsRisk.liveReadinessBlocked) {
+    cautions.push("Options portfolio risk blocked — Greeks or margin not estimable.");
+  } else if (optionsRisk.overallStatus === "WARNING") {
+    cautions.push("Options portfolio risk WARNING — review Greeks and margin.");
+  }
+  if (optionsRisk.blockers.length > 0) {
+    for (const b of optionsRisk.blockers.slice(0, 3)) {
+      cautions.push(`Options risk: ${b}`);
+    }
+  }
+
   const status = resolveOverallStatus({
     blockers,
     cautions,
@@ -378,6 +432,8 @@ export function buildCommandCenterReport(
         pilotDailyLossLimitUsd: pilotStatus.config.dailyLossLimitUsd,
       },
     },
+    realTimeRisk,
+    optionsRisk,
     safetyNotice: COMMAND_CENTER_SAFETY_NOTICE,
     cannotIncreaseRisk: true,
     cannotAutoApproveProposals: true,

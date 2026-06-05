@@ -1,3 +1,5 @@
+import { assertLiveWriteHealthy } from "@/lib/db/write-health";
+import { writeThroughLiveTrades } from "@/lib/db/write-through";
 import { executePilotPerpOrder } from "@/lib/live-pilot/pilot-execution";
 import type { PilotExecuteInput } from "@/lib/live-pilot/pilot-execution";
 import { NextResponse } from "next/server";
@@ -30,7 +32,38 @@ export async function POST(request: Request) {
       );
     }
 
+    const writeHealth = await assertLiveWriteHealthy();
+    if (!writeHealth.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: writeHealth.reason,
+          warehouseBlocked: true,
+        },
+        { status: 422 },
+      );
+    }
+
     const result = await executePilotPerpOrder(body);
+
+    if (result.journalEntry) {
+      const wh = await writeThroughLiveTrades([result.journalEntry]);
+      if (!wh.ok) {
+        return NextResponse.json(
+          {
+            ...result,
+            ok: false,
+            error:
+              wh.errors.join("; ") ||
+              "Live trade executed but warehouse write failed — blocked for safety.",
+            warehouseBlocked: true,
+            clientMustPersistJournal: true,
+          },
+          { status: 422 },
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         ...result,

@@ -28,6 +28,13 @@ export function saveLivePilotJournal(entries: LiveTradeJournalEntry[]): void {
 export function appendLivePilotJournal(entry: LiveTradeJournalEntry): LiveTradeJournalEntry[] {
   const next = [entry, ...loadLivePilotJournal()];
   saveLivePilotJournal(next);
+  if (typeof window !== "undefined") {
+    void fetch("/api/db/migrate-local", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ liveTrades: [entry] }),
+    }).catch(() => undefined);
+  }
   return next;
 }
 

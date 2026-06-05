@@ -1,3 +1,4 @@
+import { writeThroughPaperTrades } from "@/lib/db/write-through";
 import type { PaperSyncPayload } from "@/lib/paper/paper-sync";
 import {
   fetchOpenPaperOrdersFromSupabase,
@@ -36,21 +37,21 @@ export async function POST(request: Request) {
   }
 
   const orders = body.orders ?? [];
-  if (!isSupabaseConfigured()) {
-    return NextResponse.json({
-      ok: true,
-      synced: 0,
-      error: "Supabase not configured — orders kept in browser only.",
-    });
-  }
 
   try {
-    const synced = await upsertPaperOrdersToSupabase(orders);
-    const openOrders = await fetchOpenPaperOrdersFromSupabase();
+    const warehouse = await writeThroughPaperTrades(orders);
+    let synced = warehouse.written;
+    let openOrders = orders.filter((o) => o.status === "OPEN");
+    if (isSupabaseConfigured()) {
+      synced = await upsertPaperOrdersToSupabase(orders);
+      openOrders = await fetchOpenPaperOrdersFromSupabase();
+    }
     return NextResponse.json({
-      ok: true,
+      ok: warehouse.ok || synced > 0,
       synced,
       openOrders,
+      warehouseOk: warehouse.ok,
+      warehouseError: warehouse.errors[0] ?? null,
       syncedAt: new Date().toISOString(),
     });
   } catch (err) {

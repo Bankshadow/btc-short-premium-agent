@@ -142,6 +142,19 @@ describe("command center MVP 40", () => {
     assert.equal(result.clientMustPersist, true);
   });
 
+  it("includes real-time risk report", () => {
+    const report = buildCommandCenterReport(baseInput());
+    assert.ok(report.realTimeRisk);
+    assert.ok(["SAFE", "CAUTION", "BLOCKED", "EMERGENCY"].includes(report.realTimeRisk.riskStatus));
+  });
+
+  it("includes options portfolio risk report", () => {
+    const report = buildCommandCenterReport(baseInput());
+    assert.ok(report.optionsRisk);
+    assert.equal(report.optionsRisk.cannotPlaceOrders, true);
+    assert.equal(report.optionsRisk.greeksEstimable, false);
+  });
+
   it("export daily report requires snapshot", () => {
     const without = runCommandCenterAction({ action: "EXPORT_DAILY_REPORT" });
     assert.equal(without.ok, false);

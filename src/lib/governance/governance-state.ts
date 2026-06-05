@@ -97,12 +97,19 @@ export function saveGovernanceState(
   }
 
   if (audit) {
-    appendGovernanceAudit({
+    const auditEntries = appendGovernanceAudit({
       action: audit.action,
       detail: audit.detail,
       actorName: next.operatorName,
       actorRole: next.operatorRole,
     });
+    if (typeof window !== "undefined") {
+      void fetch("/api/db/migrate-local", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ governanceAudit: auditEntries.slice(0, 5) }),
+      }).catch(() => undefined);
+    }
   }
 
   return next;

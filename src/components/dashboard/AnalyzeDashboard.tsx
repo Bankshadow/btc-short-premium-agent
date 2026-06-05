@@ -44,6 +44,7 @@ import PortfolioMilestonesPanel from "./portfolio/PortfolioMilestonesPanel";
 import ReplayDeskPanel from "./replay/ReplayDeskPanel";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
 import { mergeDecisionLogFromRemote } from "@/lib/journal/journal-merge";
+import { pushWarehouseAfterAnalyze } from "@/lib/db/client-warehouse-sync";
 import {
   pullJournalFromServer,
   syncJournalToServer,
@@ -194,6 +195,9 @@ export default function AnalyzeDashboard({
         loadDecisionLog().find((e) => e.id === entry.id) ?? fresh,
       );
       await syncJournalIfEnabled();
+      const latest =
+        loadDecisionLog().find((e) => e.id === entry.id) ?? entry;
+      await pushWarehouseAfterAnalyze(result, latest);
     },
     [saveFromAnalysis, paper.afterAnalysis, refreshLog, syncJournalIfEnabled],
   );

@@ -14,6 +14,8 @@ import type {
   OptionsRiskCheck,
 } from "./types";
 import type { OptionsPreviewJournalEntry } from "./types";
+import type { RealTimeRiskReport } from "@/lib/real-time-risk/types";
+import { applyRealTimeRiskToOptionsChecks } from "@/lib/real-time-risk/bridge-options";
 
 function check(
   id: string,
@@ -36,6 +38,7 @@ export function runOptionsRiskChecks(input: {
   incidents?: DeskIncident[];
   journal?: OptionsPreviewJournalEntry[];
   preMortem?: PreMortemResult | null;
+  realTimeRiskReport?: RealTimeRiskReport | null;
 }): OptionsRiskCheck[] {
   const config = loadOptionsExecutionConfig();
   const checks: OptionsRiskCheck[] = [];
@@ -328,6 +331,10 @@ export function runOptionsRiskChecks(input: {
         false,
       ),
     );
+  }
+
+  if (input.realTimeRiskReport) {
+    checks.push(...applyRealTimeRiskToOptionsChecks(input.realTimeRiskReport));
   }
 
   return checks;

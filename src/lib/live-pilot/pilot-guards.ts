@@ -2,6 +2,8 @@ import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import { effectivePilotMaxNotional } from "./pilot-config";
 import { computePilotDailyMetrics } from "./pilot-metrics";
+import { checkScaleUpGuards } from "@/lib/live-scale-up/scale-guards";
+import { defaultScaleStage } from "@/lib/live-scale-up/stage-definitions";
 import { pilotExecutionAllowed } from "./pilot-mode";
 import type { PilotGuardInput, PilotGuardResult } from "./types";
 
@@ -129,6 +131,28 @@ export function checkPilotGuards(input: PilotGuardInput): PilotGuardResult {
     blockers.push(
       `Preview notional $${preview.estNotionalUsd.toFixed(2)} exceeds risk budget $${budget.recommendedPositionSizeUsd.toFixed(2)}.`,
     );
+  }
+
+  const scaleStage = input.scaleStage ?? defaultScaleStage();
+  const scale = checkScaleUpGuards({
+    stage: scaleStage,
+    preview,
+    journal,
+    isCloseOrder: input.isCloseOrder,
+  });
+  blockers.push(...scale.blockers);
+  warnings.push(...scale.warnings);
+
+  const rt = input.realTimeRiskReport;
+  if (rt && !input.isCloseOrder) {
+    if (rt.blockNewTrades) {
+      blockers.push(
+        `Real-time risk ${rt.riskStatus} — new trades blocked.`,
+      );
+    }
+    if (rt.reduceOnlyMode && !preview.bybitPayload?.reduceOnly) {
+      blockers.push("Reduce-only mode active — close orders only.");
+    }
   }
 
   if (!input.isCloseOrder) {

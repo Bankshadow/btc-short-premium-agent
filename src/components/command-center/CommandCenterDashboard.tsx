@@ -26,6 +26,7 @@ import { getOpenPerpPositions } from "@/lib/multi-asset/perp-paper-store";
 import { loadClientRiskBudget } from "@/lib/risk-budget-optimizer/client-store";
 import { loadAdaptationProposals } from "@/lib/strategy-adaptation/proposal-store";
 import { loadExperiments } from "@/lib/strategy-experiments/experiment-store";
+import { loadOptionsDryRunHistory } from "@/lib/options-dry-run/dry-run-client-store";
 import { loadPersistedRegistry } from "@/lib/strategy-registry/strategy-registry-store";
 
 function Panel({
@@ -82,6 +83,7 @@ export default function CommandCenterDashboard() {
           experiments: loadExperiments(),
           registry: loadPersistedRegistry(),
           automationEnabled: loadAutomationSettings().enabled,
+          dryRunHistory: loadOptionsDryRunHistory(),
         }),
       });
       const data = await res.json();
@@ -167,6 +169,55 @@ export default function CommandCenterDashboard() {
         </div>
       )}
 
+      {report?.realTimeRisk && (
+        <section className="rounded-xl border border-rose-900/40 bg-rose-950/15 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-rose-200">Real-time risk</h2>
+            <Link
+              href="/real-time-risk"
+              className="text-xs text-rose-300/80 hover:text-rose-200"
+            >
+              Open dashboard →
+            </Link>
+          </div>
+          <p className="mt-2 text-sm font-medium text-rose-100/90">
+            {report.realTimeRisk.riskStatus}
+            {report.realTimeRisk.blockNewTrades ? " — new trades blocked" : ""}
+            {report.realTimeRisk.reduceOnlyMode ? " — reduce-only" : ""}
+          </p>
+          {report.realTimeRisk.triggeredLimits.length > 0 && (
+            <p className="mt-1 text-xs text-rose-300/70">
+              Limits: {report.realTimeRisk.triggeredLimits.join(", ")}
+            </p>
+          )}
+        </section>
+      )}
+
+      {report?.optionsRisk && (
+        <section className="rounded-xl border border-violet-900/40 bg-violet-950/15 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-violet-200">Options portfolio risk</h2>
+            <Link
+              href="/options-risk"
+              className="text-xs text-violet-300/80 hover:text-violet-200"
+            >
+              Open dashboard →
+            </Link>
+          </div>
+          <p className="mt-2 text-sm font-medium text-violet-100/90">
+            {report.optionsRisk.overallStatus}
+            {report.optionsRisk.liveReadinessBlocked ? " — live options blocked" : ""}
+          </p>
+          <p className="mt-1 text-xs text-violet-300/70">
+            Δ {report.optionsRisk.portfolio.netDelta} · Γ {report.optionsRisk.portfolio.netGamma} ·
+            Θ {report.optionsRisk.portfolio.netThetaPerDay}/day · V {report.optionsRisk.portfolio.netVega}
+            {report.optionsRisk.margin.marginUsagePct != null
+              ? ` · margin ${report.optionsRisk.margin.marginUsagePct}%`
+              : ""}
+          </p>
+        </section>
+      )}
+
       {report && report.blockers.length > 0 && (
         <section className="rounded-xl border border-rose-900/50 bg-rose-950/20 p-4">
           <h2 className="text-sm font-semibold text-rose-200">Hard blockers</h2>
@@ -217,6 +268,20 @@ export default function CommandCenterDashboard() {
           />
           <OpsKpi label="Paper open" value={String(p.openPaperPositions.totalOpen)} hint="Positions" />
           <OpsKpi label="Live open" value={String(p.openLivePositions.pilotOpen)} hint="Pilot journal" />
+          <OpsKpi
+            label="Risk RT"
+            value={report.realTimeRisk.riskStatus}
+            hint={report.realTimeRisk.blockNewTrades ? "Blocked" : "OK"}
+          />
+          <OpsKpi
+            label="Options risk"
+            value={report.optionsRisk.overallStatus}
+            hint={
+              report.optionsRisk.greeksEstimable && report.optionsRisk.marginEstimable
+                ? "Greeks OK"
+                : "Greeks/margin gap"
+            }
+          />
         </div>
       )}
 

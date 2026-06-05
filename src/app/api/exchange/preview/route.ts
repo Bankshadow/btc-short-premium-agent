@@ -1,14 +1,24 @@
 import { previewOrderTicket, previewPerpSignal } from "@/lib/exchange/order-preview";
 import type { PerpDirectionalSignal } from "@/lib/multi-asset/types";
 import type { OrderTicket } from "@/lib/trade-control/trade-control-types";
+import {
+  enrichRealTimeRiskInput,
+  evaluateAndCheckOrder,
+} from "@/lib/real-time-risk";
+import type { RealTimeRiskInput } from "@/lib/real-time-risk";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type RiskContext = Partial<RealTimeRiskInput> & {
+  isCloseOrder?: boolean;
+  increaseExposure?: boolean;
+};
+
 type PreviewBody =
-  | { source: "perp_signal"; signal: PerpDirectionalSignal }
-  | { source: "order_ticket"; ticket: OrderTicket };
+  | ({ source: "perp_signal"; signal: PerpDirectionalSignal } & RiskContext)
+  | ({ source: "order_ticket"; ticket: OrderTicket } & RiskContext);
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +32,14 @@ export async function POST(request: Request) {
         );
       }
       const result = await previewPerpSignal(body.signal);
-      return NextResponse.json(result);
+      const riskInput = await enrichRealTimeRiskInput(body);
+      const riskCheck = evaluateAndCheckOrder({
+        riskInput,
+        preview: result,
+        isCloseOrder: body.isCloseOrder,
+        increaseExposure: body.increaseExposure,
+      });
+      return NextResponse.json({ ...result, realTimeRiskCheck: riskCheck });
     }
 
     if (body.source === "order_ticket") {

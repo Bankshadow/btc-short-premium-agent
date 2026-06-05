@@ -70,6 +70,7 @@ export async function buildOptionsOrderPreview(input: {
   incidents?: DeskIncident[];
   journal?: OptionsPreviewJournalEntry[];
   paperOrders?: PaperOrder[];
+  realTimeRiskReport?: import("@/lib/real-time-risk/types").RealTimeRiskReport | null;
 }): Promise<OptionsOrderPreview> {
   const previewId = `opt-preview-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const candidate =
@@ -134,6 +135,7 @@ export async function buildOptionsOrderPreview(input: {
     incidents: input.incidents,
     journal: input.journal,
     preMortem: input.data?.preMortem ?? null,
+    realTimeRiskReport: input.realTimeRiskReport ?? null,
   });
 
   if (errors.length > 0) {

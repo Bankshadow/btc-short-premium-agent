@@ -22,6 +22,7 @@ import {
   setPilotEmergencyStop,
   updateLivePilotJournalEntry,
 } from "@/lib/live-pilot/journal-store";
+import { loadClientScaleStage } from "@/lib/live-scale-up/scale-client-store";
 import type {
   LiveTradeJournalEntry,
   PilotPreviewQueueItem,
@@ -181,6 +182,7 @@ export default function LivePilotDashboard() {
           decisionLogId: item.decisionLogId,
           readinessStatus,
           riskBudget: loadClientRiskBudget(),
+          scaleStage: loadClientScaleStage(),
         }),
       });
       const data = await res.json();

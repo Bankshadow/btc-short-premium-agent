@@ -1,3 +1,4 @@
+import { writeThroughDecisionLogs } from "@/lib/db/write-through";
 import type { JournalSyncPayload } from "@/lib/journal/journal-cloud-sync";
 import {
   fetchDecisionLogFromSupabase,
@@ -43,8 +44,17 @@ export async function POST(request: Request) {
   }
 
   try {
-    const synced = await upsertDecisionLogToSupabase(entries);
-    return NextResponse.json({ ok: true, synced });
+    const warehouse = await writeThroughDecisionLogs(entries);
+    let synced = warehouse.written;
+    if (isSupabaseConfigured()) {
+      synced = await upsertDecisionLogToSupabase(entries);
+    }
+    return NextResponse.json({
+      ok: warehouse.ok || synced > 0,
+      synced,
+      warehouseOk: warehouse.ok,
+      warehouseError: warehouse.errors[0] ?? null,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upsert failed";
     return NextResponse.json({ ok: false, synced: 0, error: message }, { status: 500 });

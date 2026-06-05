@@ -6,6 +6,7 @@ import type { RegimeBrainResult } from "@/lib/market-regime-brain/types";
 import type { RiskBudgetResult } from "@/lib/risk-budget-optimizer/types";
 import type { DataConfidenceResult } from "@/lib/data-trust/types";
 import type { MarketSnapshot } from "@/lib/types/market";
+import type { RealTimeRiskReport } from "@/lib/real-time-risk/types";
 
 export const LIVE_SUPERVISOR_SAFETY_NOTICE =
   "Live Trade Supervisor monitors open positions and recommends actions only. No automatic close by default. Cannot open positions or increase exposure. Human approval required for all actions.";
@@ -105,6 +106,7 @@ export interface LiveSupervisorReport {
   governancePaused: boolean;
   emergencyStopActive: boolean;
   autoCloseEnabled: false;
+  realTimeRisk: RealTimeRiskReport | null;
   safetyNotice: string;
 }
 
@@ -120,6 +122,7 @@ export interface LiveSupervisorInput {
   emergencyStopActive?: boolean;
   entryFundingRate?: number | null;
   entryLiquidation24h?: number | null;
+  realTimeRisk?: RealTimeRiskReport | null;
 }
 
 export interface SupervisorConfig {
