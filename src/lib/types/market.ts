@@ -255,6 +255,8 @@ export interface AnalyzeApiResponse extends DecisionEngineOutput {
   /** MVP 18 — pre-mortem before TRADE ticket */
   preMortem?: PreMortemResult;
   learningSnapshot?: LearningSnapshot;
+  /** MVP 37 — portfolio-aware risk budget optimizer */
+  riskBudget?: import("@/lib/risk-budget-optimizer/types").RiskBudgetResult;
 }
 
 /** @deprecated Use DecisionEngineInput */
@@ -274,6 +276,8 @@ export interface AnalysisInput {
   strategyRegistry?: import("@/lib/strategy-registry/strategy-registry-types").StrategyRegistryAnalyzePayload;
   /** MVP 14 — governance / safe mode / hard rules for committee */
   governance?: import("@/lib/governance/governance-types").GovernanceAnalyzePayload;
+  /** MVP 32 — self-learning leaderboard + adaptive weighting settings */
+  adaptiveWeighting?: import("@/lib/adaptive-agent-weighting/types").AdaptiveWeightingAnalyzePayload;
 }
 
 /** @deprecated Use DecisionEngineOutput — kept for dashboard compatibility */

@@ -1,5 +1,7 @@
 import type { AgentRecommendation } from "@/lib/agents/types";
 import type { HypotheticalAction } from "@/lib/types/market";
+import type { PaperMode } from "./paper-relaxed-types";
+import { DEFAULT_RELAXED_PAPER_SETTINGS } from "./paper-relaxed-types";
 
 export type PaperOrderStatus = "OPEN" | "CLOSED" | "CANCELLED";
 
@@ -27,15 +29,26 @@ export interface PaperOrder {
   unrealizedPnlPct: number | null;
   lastMarkAt: string | null;
   lastMarkBtcPrice: number | null;
-  openedBy: "committee_auto" | "manual" | "operator_approved";
+  openedBy: "committee_auto" | "manual" | "operator_approved" | "relaxed_auto";
   notes: string;
   supabaseId?: string;
+  /** MVP 23 — paper mode trace */
+  paperMode?: PaperMode;
+  relaxedReason?: string | null;
+  strictVerdict?: AgentRecommendation;
+  relaxedVerdict?: AgentRecommendation;
 }
 
 export interface PaperTradingSettings {
   autoOpenOnTrade: boolean;
   autoMarkToMarket: boolean;
   syncSupabase: boolean;
+  /** MVP 23 */
+  paperMode: PaperMode;
+  relaxedMinConfidence: number;
+  relaxedMaxPositionSizePct: number;
+  relaxedRequireOptionsAgentAgree: boolean;
+  relaxedAllowWaitToPaperTrade: boolean;
 }
 
 export interface PaperPortfolioSummary {
@@ -60,4 +73,5 @@ export const DEFAULT_PAPER_SETTINGS: PaperTradingSettings = {
   autoOpenOnTrade: true,
   autoMarkToMarket: true,
   syncSupabase: true,
+  ...DEFAULT_RELAXED_PAPER_SETTINGS,
 };

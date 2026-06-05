@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { loadDecisionLog } from "@/lib/journal/decision-log";
 import { loadPaperOrders } from "@/lib/paper/paper-orders";
+import { loadPerpPositions } from "@/lib/multi-asset/perp-paper-store";
 import { loadDeskSettings } from "@/lib/desk/desk-settings";
 import { loadCapitalSettings } from "@/lib/capital/capital-settings";
 import { buildCapitalReport } from "@/lib/capital/build-capital-report";
@@ -18,6 +19,9 @@ import type {
   CouncilSessionResult,
 } from "@/lib/council/types";
 import { COUNCIL_GUARDRAILS } from "@/lib/council/types";
+import { loadAdaptationProposals } from "@/lib/strategy-adaptation/proposal-store";
+import { loadIncidents } from "@/lib/governance/incidents-store";
+import { buildStrategyRegistry } from "@/lib/strategy-registry/build-strategy-registry";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
 import { OPS_ACCENT } from "@/components/ops/ops-theme";
 import {
@@ -128,7 +132,16 @@ export default function CouncilDashboard() {
       goalCapital: 20_000,
       entries: loadDecisionLog(),
       orders: loadPaperOrders(),
+      perpPositions: loadPerpPositions(),
       riskProfile: loadDeskSettings().riskProfile,
+      adaptationProposals: loadAdaptationProposals(),
+      incidents: loadIncidents(),
+      councilSessions: loadCouncilSessions(),
+      registryStrategies: buildStrategyRegistry({
+        entries: loadDecisionLog(),
+        orders: loadPaperOrders(),
+        riskProfile: loadDeskSettings().riskProfile,
+      }).strategies,
     };
 
     try {
@@ -150,7 +163,12 @@ export default function CouncilDashboard() {
         request: body,
         entries: body.entries ?? [],
         orders: body.orders ?? [],
+        perpPositions: body.perpPositions ?? [],
         riskProfile: body.riskProfile ?? "balanced",
+        adaptationProposals: body.adaptationProposals ?? [],
+        incidents: body.incidents ?? [],
+        councilSessions: body.councilSessions ?? [],
+        registryStrategies: body.registryStrategies ?? [],
       });
       saveCouncilSession(local);
       setSession(local);
@@ -548,6 +566,45 @@ export default function CouncilDashboard() {
                     </li>
                   ))}
                 </ul>
+              </section>
+
+              <section className="desk-panel px-5 py-5">
+                <h2 className="desk-section-title">Adaptation engine (reference)</h2>
+                <p className="mt-1 text-[11px] text-zinc-600">
+                  Council sees adaptation proposals for context only — cannot approve or
+                  apply. Use /adaptation for human approval.
+                </p>
+                {(session.adaptationProposalsReferenced ?? []).length === 0 ? (
+                  <p className="mt-3 text-xs text-zinc-500">
+                    No adaptation proposals in this session. Run analysis on{" "}
+                    <Link href="/adaptation" className="text-indigo-400 hover:underline">
+                      /adaptation
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-2">
+                    {(session.adaptationProposalsReferenced ?? []).map((p) => (
+                      <li
+                        key={p.proposalId}
+                        className="rounded border border-indigo-900/40 bg-indigo-950/20 px-3 py-2 text-[11px]"
+                      >
+                        <span className="font-semibold text-indigo-200">
+                          {p.type}
+                        </span>{" "}
+                        <span className="text-zinc-300">{p.targetStrategy}</span> ·{" "}
+                        {p.status} · conf {p.confidence}%
+                        <p className="mt-1 text-zinc-500">{p.reason}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Link
+                  href="/adaptation"
+                  className="mt-3 inline-block text-xs text-indigo-400 hover:underline"
+                >
+                  Open adaptation desk →
+                </Link>
               </section>
 
               <section className="desk-panel px-5 py-5">

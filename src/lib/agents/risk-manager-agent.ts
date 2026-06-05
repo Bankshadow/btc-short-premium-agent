@@ -104,6 +104,15 @@ export function runRiskManagerAgent(
     );
   }
 
+  if (ctx.regimeBrain) {
+    for (const risk of ctx.regimeBrain.regimeRisks.slice(0, 2)) {
+      risks.push(`Regime Brain: ${risk}`);
+    }
+    if (ctx.regimeBrain.tradeFrequencyRecommendation === "PAUSE") {
+      reasons.push("Regime Brain recommends PAUSE — advisory (veto rules still apply).");
+    }
+  }
+
   reasons.push("No martingale — never increase size after losses.");
   reasons.push("No futures average down — Risk Manager blocks DCA perps.");
   reasons.push("No auto execution.");
@@ -137,7 +146,7 @@ export function runRiskManagerAgent(
       marketView: "Risk overlay — challenges bull & bear",
       recommendation: veto ? "SKIP" : recommendation,
       confidence: veto ? 95 : 70,
-      reasons: withDeskMemoryReasons(ctx, reasons),
+      reasons: withDeskMemoryReasons(ctx, reasons, "Risk Manager Agent"),
       risks: [
         ...risks,
         "Binding veto authority over committee.",

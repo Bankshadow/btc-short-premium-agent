@@ -2,6 +2,7 @@ import type {
   CapitalAllocationRecommendation,
   StrategyId,
 } from "@/lib/validation/validation-types";
+import type { StrategyAdaptationProposal } from "@/lib/strategy-adaptation/types";
 
 export type CouncilCommitteeDecision =
   | "APPROVE_FOR_PAPER_TEST"
@@ -97,6 +98,7 @@ export interface CouncilSessionResult {
   committeeDecision: CouncilCommitteeOutcome;
   councilMemo: string;
   guardrails: string[];
+  adaptationProposalsReferenced?: StrategyAdaptationProposal[];
 }
 
 export interface CouncilRunRequest {
@@ -112,4 +114,5 @@ export const COUNCIL_GUARDRAILS = [
   "Draft rules never affect live committee decisions without human approval.",
   "All proposals start as DRAFT — promotion requires operator action on /council.",
   "AI cannot increase position size or enable aggressive mode automatically.",
+  "Adaptation engine proposals are referenced for context only — council cannot apply them; use /adaptation for human approval.",
 ] as const;

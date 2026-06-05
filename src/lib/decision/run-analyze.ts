@@ -5,6 +5,7 @@ import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import type { SpotQuote } from "@/lib/types/market";
 import type { StrategyRegistryAnalyzePayload } from "@/lib/strategy-registry/strategy-registry-types";
 import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
+import type { AdaptiveWeightingAnalyzePayload } from "@/lib/adaptive-agent-weighting/types";
 import type {
   AnalysisInput,
   AnalyzeApiResponse,
@@ -50,6 +51,9 @@ export async function runAnalyzeRequest(
   const governance = (raw as AnalyzeRequestBody).governance as
     | GovernanceAnalyzePayload
     | undefined;
+  const adaptiveWeighting = (raw as AnalyzeRequestBody).adaptiveWeighting as
+    | AdaptiveWeightingAnalyzePayload
+    | undefined;
   applyDeskRiskProfile(deskRiskProfile);
 
   if (hasFullEngineInput(body)) {
@@ -60,6 +64,7 @@ export async function runAnalyzeRequest(
       ethQuote,
       strategyRegistry,
       governance,
+      adaptiveWeighting,
     );
   }
 
@@ -69,5 +74,6 @@ export async function runAnalyzeRequest(
     ethQuote,
     strategyRegistry,
     governance,
+    adaptiveWeighting,
   });
 }

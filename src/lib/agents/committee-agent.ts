@@ -140,10 +140,20 @@ export function runCommitteeAgent(input: CommitteeInput): {
   );
 
   const topReasons: string[] = [];
+  if (ctx.regimeBrain) {
+    topReasons.push(
+      `Regime Brain: ${ctx.regimeBrain.primaryRegime} (${ctx.regimeBrain.regimeConfidence}%) — ${ctx.regimeBrain.tradeFrequencyRecommendation} frequency`,
+    );
+  }
   if (research.summaryBullets.length > 0) {
     topReasons.push(`Research: ${research.summaryBullets[0]}`);
   }
-  if (deskMemory.bullets.length > 0) {
+  const topLesson = deskMemory.relevantMemory?.lessons[0];
+  if (topLesson) {
+    topReasons.push(
+      `Memory graph: ${topLesson.bullet} (${topLesson.whyUsed})`,
+    );
+  } else if (deskMemory.bullets.length > 0) {
     topReasons.push(`Desk memory: ${deskMemory.bullets[0]}`);
   }
   if (riskVeto && riskManager.vetoReasons?.length) {

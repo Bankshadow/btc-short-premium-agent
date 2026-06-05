@@ -15,6 +15,7 @@ import type {
 } from "@/lib/automation/automation-types";
 import { loadDecisionLog } from "@/lib/journal/decision-log";
 import { loadPaperOrders } from "@/lib/paper/paper-orders";
+import { loadPerpPositions } from "@/lib/multi-asset/perp-paper-store";
 import { loadDeskSettings } from "@/lib/desk/desk-settings";
 
 const MODULE_LABELS: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function AutomationDashboard() {
         body: JSON.stringify({
           entries: loadDecisionLog(),
           orders: loadPaperOrders(),
+          perpPositions: loadPerpPositions(),
           riskProfile: loadDeskSettings().riskProfile,
           topic: "Manual automation run from /automation",
         }),

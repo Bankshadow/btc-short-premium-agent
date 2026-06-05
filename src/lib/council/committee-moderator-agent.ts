@@ -1,3 +1,4 @@
+import type { StrategyAdaptationProposal } from "@/lib/strategy-adaptation/types";
 import type { CouncilGoalStatus } from "./types";
 import type {
   CouncilAgentDebateRow,
@@ -6,7 +7,6 @@ import type {
   CouncilProposal,
   CouncilRiskReview,
 } from "./types";
-import type { CouncilSessionResult } from "./types";
 
 export function runCommitteeModeratorAgent(input: {
   topic: string;
@@ -15,6 +15,7 @@ export function runCommitteeModeratorAgent(input: {
   proposals: CouncilProposal[];
   riskReview: CouncilRiskReview;
   capitalNote: string;
+  adaptationProposals?: StrategyAdaptationProposal[];
 }): {
   committeeDecision: CouncilCommitteeOutcome;
   councilMemo: string;
@@ -87,6 +88,15 @@ export function runCommitteeModeratorAgent(input: {
       (p, i) =>
         `${i + 1}. **${p.title}** — ${proposalDecisions.find((d) => d.proposalId === p.id)?.decision ?? "NEED_MORE_DATA"}`,
     ),
+    ``,
+    `## Adaptation engine (reference only — /adaptation)`,
+    ...(input.adaptationProposals?.length
+      ? input.adaptationProposals.map(
+          (p, i) =>
+            `${i + 1}. [${p.type}] ${p.targetStrategy} (${p.status}, conf ${p.confidence}%) — ${p.reason.slice(0, 120)}${p.reason.length > 120 ? "…" : ""}`,
+        )
+      : ["No pending adaptation proposals — run analysis on /adaptation."]),
+    "Council cannot approve or apply adaptation proposals — operator must use /adaptation.",
     ``,
     `## Guardrails`,
     "- Hard risk rules locked",

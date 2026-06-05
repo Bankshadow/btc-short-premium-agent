@@ -7,8 +7,17 @@ import { MISSION_GOAL_USD, MISSION_DEFAULT_START_USD } from "@/lib/capital/capit
 import { buildValidationReport } from "@/lib/validation/build-validation-report";
 import { buildAgentScoreboard } from "@/lib/journal/agent-scoreboard";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
+import { buildUnifiedPortfolioSnapshot } from "@/lib/portfolio/build-unified-portfolio";
+import type { PerpPaperPosition } from "@/lib/multi-asset/types";
+import type { UnifiedPortfolioSnapshot } from "@/lib/portfolio/unified-types";
 import { evaluateHardRuleLocks } from "@/lib/governance/hard-rule-lock";
-import type { CouncilRunRequest } from "./types";
+import type { StrategyAdaptationProposal } from "@/lib/strategy-adaptation/types";
+import type { DeskIncident } from "@/lib/governance/governance-types";
+import type { StrategySkill } from "@/lib/strategy-registry/strategy-registry-types";
+import { buildMemoryGraph } from "@/lib/memory-graph/build-graph";
+import { getRelevantMemory } from "@/lib/memory-graph/get-relevant-memory";
+import type { RelevantMemoryResult } from "@/lib/memory-graph/types";
+import type { CouncilRunRequest, CouncilSessionResult } from "./types";
 
 export interface CouncilSessionContext {
   topic: string;
@@ -22,14 +31,23 @@ export interface CouncilSessionContext {
   validation: ReturnType<typeof buildValidationReport>;
   scoreboard: ReturnType<typeof buildAgentScoreboard>;
   portfolio: ReturnType<typeof buildDeskPortfolioSnapshot>;
+  unifiedPortfolio: UnifiedPortfolioSnapshot;
   hardRulesLocked: ReturnType<typeof evaluateHardRuleLocks>;
+  adaptationProposals: StrategyAdaptationProposal[];
+  relevantMemory: RelevantMemoryResult;
+  memoryGraphNodeCount: number;
 }
 
 export function buildCouncilContext(input: {
   request: CouncilRunRequest;
   entries: DecisionLogEntry[];
   orders: PaperOrder[];
+  perpPositions?: PerpPaperPosition[];
   riskProfile: DeskRiskProfile;
+  adaptationProposals?: StrategyAdaptationProposal[];
+  incidents?: DeskIncident[];
+  councilSessions?: CouncilSessionResult[];
+  registryStrategies?: StrategySkill[];
 }): CouncilSessionContext {
   const settings = loadCapitalSettings();
   const startingCapitalUsd =
@@ -45,6 +63,21 @@ export function buildCouncilContext(input: {
 
   const currentEquityUsd =
     input.request.currentEquity ?? capitalReport.stage.equityUsd;
+
+  const graphSnapshot = buildMemoryGraph({
+    entries: input.entries,
+    orders: input.orders,
+    incidents: input.incidents ?? [],
+    councilSessions: input.councilSessions ?? [],
+    adaptationProposals: input.adaptationProposals ?? [],
+    registryStrategies: input.registryStrategies ?? [],
+  });
+
+  const relevantMemory = getRelevantMemory(graphSnapshot, {
+    marketRegime: input.entries[0]?.marketRegime,
+    riskProfile: input.riskProfile,
+    limit: 6,
+  });
 
   return {
     topic:
@@ -64,10 +97,19 @@ export function buildCouncilContext(input: {
     }),
     scoreboard: buildAgentScoreboard(input.entries),
     portfolio: buildDeskPortfolioSnapshot(input.entries, input.orders),
+    unifiedPortfolio: buildUnifiedPortfolioSnapshot({
+      entries: input.entries,
+      orders: input.orders,
+      perpPositions: input.perpPositions ?? [],
+      riskProfile: input.riskProfile,
+    }),
     hardRulesLocked: evaluateHardRuleLocks({
       entries: input.entries,
       orders: input.orders,
       riskProfile: input.riskProfile,
     }),
+    adaptationProposals: input.adaptationProposals ?? [],
+    relevantMemory,
+    memoryGraphNodeCount: graphSnapshot.nodeCount,
   };
 }

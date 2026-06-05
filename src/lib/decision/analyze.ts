@@ -282,6 +282,7 @@ export function runDecisionEngineFromInput(
   ethQuote?: SpotQuote | null,
   strategyRegistry?: StrategyRegistryAnalyzePayload | null,
   governance?: GovernanceAnalyzePayload | null,
+  adaptiveWeighting?: import("@/lib/adaptive-agent-weighting/types").AdaptiveWeightingAnalyzePayload | null,
 ): AnalyzeApiResponse {
   applyDeskRiskProfile(input.deskRiskProfile);
   const engineInput = withAppliedOverrides(input, derivativesOverrides);
@@ -316,6 +317,7 @@ export function runDecisionEngineFromInput(
     ethQuote,
     strategyRegistry,
     governance,
+    adaptiveWeighting,
   );
 }
 
@@ -350,6 +352,7 @@ export async function runAnalysisEngine(
   const ethQuote = overrides.ethQuote ?? null;
   const strategyRegistry = overrides.strategyRegistry ?? null;
   const governance = overrides.governance ?? null;
+  const adaptiveWeighting = overrides.adaptiveWeighting ?? null;
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
   const base = buildAnalyzeApiResponse(output, sourceErrors);
@@ -360,6 +363,7 @@ export async function runAnalysisEngine(
     ethQuote,
     strategyRegistry,
     governance,
+    adaptiveWeighting,
   );
 
   if (isBybitCriticalFailure(response.marketSnapshot, response.dataSourceIssues)) {
@@ -378,6 +382,7 @@ export async function runAnalysisEngine(
       ethQuote,
       strategyRegistry,
       governance,
+      adaptiveWeighting,
     );
   }
 

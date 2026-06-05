@@ -60,6 +60,12 @@ export interface TradingDeskOutput {
   bearThesis: AgentOutput;
   riskManager: AgentOutput;
   committee: CommitteeVerdict;
+  /** MVP 32 — performance-weighted committee overlay (advisory; paper-first) */
+  weightedCommittee?: import("@/lib/adaptive-agent-weighting/types").WeightedCommitteeVerdict | null;
+  /** MVP 35 — deep regime classification and strategy routing */
+  regimeBrain?: import("@/lib/market-regime-brain/types").RegimeBrainResult;
+  /** MVP 37 — risk budget and position sizing */
+  riskBudget?: import("@/lib/risk-budget-optimizer/types").RiskBudgetResult;
   debate: AgentDebateRow[];
   disclaimer: string;
 }

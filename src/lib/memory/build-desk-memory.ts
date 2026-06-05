@@ -2,6 +2,10 @@ import type { AgentRecommendation } from "@/lib/agents/types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { DraftRule } from "@/lib/journal/draft-rules";
 import { buildAgentScoreboard } from "@/lib/journal/agent-scoreboard";
+import type { CouncilSessionResult } from "@/lib/council/types";
+import type { DeskIncident } from "@/lib/governance/governance-types";
+import type { StrategyAdaptationProposal } from "@/lib/strategy-adaptation/types";
+import type { StrategySkill } from "@/lib/strategy-registry/strategy-registry-types";
 import type { DeskMemoryBuckets, DeskMemoryClientPayload } from "./types";
 
 const MAX_LOGS_FOR_MEMORY = 30;
@@ -10,11 +14,21 @@ export function buildClientMemoryPayload(
   logs: DecisionLogEntry[],
   rules: DraftRule[],
   pinnedNotes: string[],
+  extras?: {
+    incidents?: DeskIncident[];
+    councilSessions?: CouncilSessionResult[];
+    adaptationProposals?: StrategyAdaptationProposal[];
+    registryStrategies?: StrategySkill[];
+  },
 ): DeskMemoryClientPayload {
   return {
     pinnedNotes,
     recentLogs: logs.slice(0, MAX_LOGS_FOR_MEMORY),
     draftRules: rules,
+    incidents: extras?.incidents,
+    councilSessions: extras?.councilSessions,
+    adaptationProposals: extras?.adaptationProposals,
+    registryStrategies: extras?.registryStrategies,
   };
 }
 

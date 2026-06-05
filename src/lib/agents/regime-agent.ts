@@ -16,6 +16,18 @@ export function runRegimeAgent(
   const reasons: string[] = [];
   const risks: string[] = [];
 
+  const brain = ctx.regimeBrain;
+  if (brain) {
+    reasons.push(
+      `Regime Brain: ${brain.primaryRegime} (${brain.regimeConfidence}% confidence)`,
+    );
+    if (brain.secondaryRegimes.length > 0) {
+      reasons.push(`Secondary: ${brain.secondaryRegimes.join(", ")}`);
+    }
+    reasons.push(
+      `Strategy routing: ${brain.recommendedStrategies.join(", ") || "none"}`,
+    );
+  }
   reasons.push(`Desk regime: ${regimeLabel}`);
   reasons.push(`Daily trend: ${daily.trend} · 4H ${ctx.input.technical4h.trend}`);
   reasons.push(`Playbook combination: ${combo.pattern}`);

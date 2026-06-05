@@ -13,7 +13,7 @@ export function loadPaperSettings(): PaperTradingSettings {
   try {
     const raw = localStorage.getItem(PAPER_SETTINGS_STORAGE_KEY);
     if (!raw) return DEFAULT_PAPER_SETTINGS;
-    return { ...DEFAULT_PAPER_SETTINGS, ...JSON.parse(raw) };
+    return { ...DEFAULT_PAPER_SETTINGS, ...(JSON.parse(raw) as Partial<PaperTradingSettings>) };
   } catch {
     return DEFAULT_PAPER_SETTINGS;
   }
@@ -52,6 +52,12 @@ function normalizeOrder(raw: Record<string, unknown>): PaperOrder | null {
     openedBy: (raw.openedBy as PaperOrder["openedBy"]) ?? "manual",
     notes: String(raw.notes ?? ""),
     supabaseId: raw.supabaseId != null ? String(raw.supabaseId) : undefined,
+    paperMode: raw.paperMode as PaperOrder["paperMode"] | undefined,
+    relaxedReason:
+      raw.relaxedReason != null ? String(raw.relaxedReason) : undefined,
+    strictVerdict: raw.strictVerdict as PaperOrder["strictVerdict"] | undefined,
+    relaxedVerdict:
+      raw.relaxedVerdict as PaperOrder["relaxedVerdict"] | undefined,
   };
 }
 

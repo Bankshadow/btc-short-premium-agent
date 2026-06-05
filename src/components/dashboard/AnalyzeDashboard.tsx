@@ -26,6 +26,9 @@ import DashboardView from "./DashboardView";
 import TestAutomationPanel from "./TestAutomationPanel";
 import { buildClientMemoryPayload } from "@/lib/memory/build-desk-memory";
 import { loadPinnedNotes } from "@/lib/memory/pinned-notes";
+import { loadIncidents } from "@/lib/governance/incidents-store";
+import { loadCouncilSessions } from "@/lib/council/council-session-store";
+import { loadAdaptationProposals } from "@/lib/strategy-adaptation/proposal-store";
 import { useDecisionLog } from "./useDecisionLog";
 import TradingDeskLayout from "@/components/desk/TradingDeskLayout";
 import DeskControlsSidebar from "@/components/desk/DeskControlsSidebar";
@@ -57,7 +60,13 @@ import { loadPaperOrders } from "@/lib/paper/paper-orders";
 import { buildStrategyRegistry } from "@/lib/strategy-registry/build-strategy-registry";
 import { loadGovernanceState } from "@/lib/governance/governance-state";
 import { buildGovernancePayloadForAnalyze } from "@/lib/governance/build-governance-payload";
+import {
+  appendAdaptiveWeightingAudit,
+  buildAdaptiveWeightingPayload,
+} from "@/lib/adaptive-agent-weighting";
+import { loadEvaluationResults } from "@/lib/self-learning";
 import TradeControlPanel from "@/components/trade-control/TradeControlPanel";
+import OptionsPreviewPanel from "@/components/options-execution/OptionsPreviewPanel";
 import {
   applyWorkspaceSideEffects,
   loadWorkspaceConfig,
@@ -168,6 +177,10 @@ export default function AnalyzeDashboard({
   const persistAnalysis = useCallback(
     async (result: AnalyzeApiResponse) => {
       setData(result);
+      const weighted = result.tradingDesk?.weightedCommittee;
+      if (weighted && result.tradingDesk) {
+        appendAdaptiveWeightingAudit(weighted, result.tradingDesk.marketRegime);
+      }
       const entry = saveFromAnalysis(result);
       setLastLogId(entry.id);
       const fresh =
@@ -202,26 +215,35 @@ export default function AnalyzeDashboard({
 
     const derivativesOverrides = DEFAULT_DERIVATIVES_OVERRIDES;
     const macroEvent = DEFAULT_MACRO_EVENT_STATUS;
-    const deskMemory = buildClientMemoryPayload(
-      logEntries,
-      draftRules,
-      loadPinnedNotes(),
-    );
     const ethQuote = await fetchEthQuoteForDesk();
     const deskSettings = loadDeskSettings();
     const logSnapshot = loadDecisionLog();
     const ordersSnapshot = loadPaperOrders();
-    const strategyRegistry = buildRegistryPayloadForAnalyze(
-      buildStrategyRegistry({
-        entries: logSnapshot,
-        orders: ordersSnapshot,
-        riskProfile: deskSettings.riskProfile,
-      }),
+    const registrySnapshot = buildStrategyRegistry({
+      entries: logSnapshot,
+      orders: ordersSnapshot,
+      riskProfile: deskSettings.riskProfile,
+    });
+    const deskMemory = buildClientMemoryPayload(
+      logEntries,
+      draftRules,
+      loadPinnedNotes(),
+      {
+        incidents: loadIncidents(),
+        councilSessions: loadCouncilSessions(),
+        adaptationProposals: loadAdaptationProposals(),
+        registryStrategies: registrySnapshot.strategies,
+      },
     );
+    const strategyRegistry = buildRegistryPayloadForAnalyze(registrySnapshot);
     const governance = buildGovernancePayloadForAnalyze({
       entries: logSnapshot,
       orders: ordersSnapshot,
       riskProfile: deskSettings.riskProfile,
+    });
+    const adaptiveWeighting = buildAdaptiveWeightingPayload({
+      entries: logSnapshot,
+      storedResults: loadEvaluationResults(),
     });
 
     const analyzeRequest = {
@@ -232,6 +254,7 @@ export default function AnalyzeDashboard({
       deskRiskProfile: deskSettings.riskProfile,
       strategyRegistry,
       governance,
+      adaptiveWeighting,
       ...derivativesOverrides,
       derivativesOverrides,
     };
@@ -286,6 +309,7 @@ export default function AnalyzeDashboard({
           ethQuote,
           strategyRegistry,
           governance,
+          adaptiveWeighting,
           ...derivativesOverrides,
           derivativesOverrides,
         });
@@ -413,6 +437,11 @@ export default function AnalyzeDashboard({
           className={`flex flex-col gap-4 transition-opacity ${loading ? "pointer-events-none opacity-60" : ""}`}
           aria-busy={loading}
         >
+          {paper.settings.paperMode === "RELAXED_PAPER" && (
+            <p className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-3 py-2 text-[11px] font-semibold text-amber-200">
+              Paper Relaxed — learning mode only · live execution blocked
+            </p>
+          )}
           {automation.lastRun && (
             <p className="rounded-lg border border-cyan-800/40 bg-cyan-950/30 px-3 py-2 text-[11px] text-cyan-100/90">
               <span className="font-semibold text-cyan-300">AI automation</span> —{" "}
@@ -450,6 +479,15 @@ export default function AnalyzeDashboard({
               }}
             />
           )}
+          {modeEffects.allowOrderTickets &&
+            tradeControlEntry?.orderTicket &&
+            (tradeControlEntry.orderTicket.instrument === "sell_call" ||
+              tradeControlEntry.orderTicket.instrument === "sell_put") && (
+              <OptionsPreviewPanel
+                data={data}
+                ticket={tradeControlEntry.orderTicket}
+              />
+            )}
           <PortfolioMilestonesPanel portfolio={portfolio} />
           <PaperTradingPanel
             orders={paper.orders}

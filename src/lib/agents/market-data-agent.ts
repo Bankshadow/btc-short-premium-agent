@@ -52,7 +52,7 @@ export function runMarketDataAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: "Bybit public tape + combination read",
       recommendation,
       confidence: combo.dataStatus === "complete" ? 72 : 40,
-      reasons: withDeskMemoryReasons(ctx, reasons),
+      reasons: withDeskMemoryReasons(ctx, reasons, "Market Data Agent"),
       risks,
       proposedAction: "Feed desk with live derivatives context — no execution.",
     },

@@ -2,6 +2,7 @@ import { runDeskAutomation } from "@/lib/automation/run-desk-automation";
 import type { DeskAutomationInput } from "@/lib/automation/automation-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export const maxDuration = 60;
 type Body = DeskAutomationInput & {
   entries?: DecisionLogEntry[];
   orders?: PaperOrder[];
+  perpPositions?: PerpPaperPosition[];
 };
 
 export async function POST(request: Request) {
@@ -25,6 +27,7 @@ export async function POST(request: Request) {
     const result = await runDeskAutomation({
       entries: body.entries,
       orders: body.orders,
+      perpPositions: body.perpPositions,
       riskProfile: body.riskProfile,
       currentEquity: body.currentEquity,
       modules: body.modules,

@@ -18,6 +18,7 @@ import { checkTradeFrequency } from "@/lib/frequency/trade-frequency-governor";
 import { buildExchangeStatus } from "@/lib/exchange/build-exchange-status";
 import { buildOperatorBehaviorAnalytics } from "@/lib/operator/operator-behavior-analytics";
 import { buildOperatorDisciplineReport } from "@/lib/operator/operator-discipline-score";
+import { buildUnifiedPortfolioSnapshot } from "@/lib/portfolio/build-unified-portfolio";
 import type {
   AutomationModuleId,
   DeskAutomationInput,
@@ -76,6 +77,7 @@ export async function runDeskAutomation(
 ): Promise<DeskAutomationResult> {
   const entries = input.entries ?? [];
   const orders = input.orders ?? [];
+  const perpPositions = input.perpPositions ?? [];
   const riskProfile = input.riskProfile ?? "balanced";
   const modules = input.modules?.length ? input.modules : ALL_MODULES;
   const runId = `auto-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -114,6 +116,7 @@ export async function runDeskAutomation(
           },
           entries,
           orders,
+          perpPositions,
           riskProfile,
         }),
       ),
@@ -241,6 +244,13 @@ export async function runDeskAutomation(
     meta.operator = r.meta;
   }
 
+  const unifiedPortfolio = buildUnifiedPortfolioSnapshot({
+    entries,
+    orders,
+    perpPositions,
+    riskProfile,
+  });
+
   const partial = {
     runId,
     timestamp: new Date().toISOString(),
@@ -257,6 +267,7 @@ export async function runDeskAutomation(
     frequency,
     exchange,
     operator,
+    unifiedPortfolio,
   };
 
   const actions = deriveAutomationActions(partial);

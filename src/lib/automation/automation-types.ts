@@ -5,6 +5,8 @@ import type { ExchangeStatusResult } from "@/lib/exchange/types";
 import type { LiveExecuteResult } from "@/lib/exchange/types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import type { PerpPaperPosition } from "@/lib/multi-asset/types";
+import type { UnifiedPortfolioSnapshot } from "@/lib/portfolio/unified-types";
 import type { RegretMetrics } from "@/lib/mortem/types";
 import type { TradeFrequencyGovernorOutput } from "@/lib/frequency/trade-frequency-governor";
 import type { CapitalReport } from "@/lib/capital/capital-types";
@@ -49,6 +51,7 @@ export interface AutomationAction {
 export interface DeskAutomationInput {
   entries?: DecisionLogEntry[];
   orders?: PaperOrder[];
+  perpPositions?: PerpPaperPosition[];
   riskProfile?: "balanced" | "aggressive";
   currentEquity?: number;
   modules?: AutomationModuleId[];
@@ -81,6 +84,7 @@ export interface DeskAutomationResult {
   frequency: TradeFrequencyGovernorOutput | null;
   exchange: ExchangeStatusResult | null;
   operator: { disciplineScore: number; grade: string } | null;
+  unifiedPortfolio: UnifiedPortfolioSnapshot | null;
   actions: AutomationAction[];
   summary: string;
   aiBrief: string;

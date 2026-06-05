@@ -6,6 +6,8 @@ import { attachTradeControlToEntry } from "@/lib/trade-control/trade-control-log
 import { enrichResolvedEntry } from "@/lib/mortem/resolve-learning";
 import { createDraftRuleFromReflection } from "./draft-rules";
 import { computePaperPnl } from "./paper-pnl";
+import { runPostTradeEvaluation } from "@/lib/self-learning/run-evaluation";
+import type { PostTradeEvaluationSource } from "@/lib/self-learning/types";
 import type {
   DecisionLogEntry,
   OutcomeStatus,
@@ -254,7 +256,10 @@ export interface ResolveOutcomeResult {
 export function resolveDecisionOutcome(
   id: string,
   input: ResolveOutcomeInput,
-  options: { createDraftRule?: boolean } = { createDraftRule: true },
+  options: {
+    createDraftRule?: boolean;
+    evaluationSource?: PostTradeEvaluationSource;
+  } = { createDraftRule: true },
 ): ResolveOutcomeResult | null {
   const existing = loadDecisionLog().find((e) => e.id === id);
   if (!existing || existing.outcomeStatus === "RESOLVED") return null;
@@ -289,6 +294,12 @@ export function resolveDecisionOutcome(
     createDraftRuleFromReflection(id, reflection);
     draftRuleCreated = true;
   }
+
+  runPostTradeEvaluation({
+    entry,
+    source: options.evaluationSource ?? "manual_resolve",
+    pnlOverride: paperPnl,
+  });
 
   return { entry, draftRuleCreated };
 }

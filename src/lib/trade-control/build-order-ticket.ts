@@ -12,6 +12,7 @@ import { buildRegistryPayloadFromDesk } from "@/lib/strategy-registry/build-stra
 import { allowOrderTicketsInCurrentMode } from "@/lib/trading-os/trading-os-runtime";
 import { preMortemBlocksTicket } from "@/lib/mortem/apply-mortem-layer";
 import type { StrategyRegistryAnalyzePayload } from "@/lib/strategy-registry/strategy-registry-types";
+import { resolveRiskBudgetSizePct } from "@/lib/risk-budget-optimizer/apply-risk-budget";
 
 function primaryStrategyLabel(ids: StrategyId[]): string {
   if (ids.length === 0) return "Committee TRADE";
@@ -57,7 +58,9 @@ export function buildOrderTicket(
   const candidate = data.step5_verdict.candidate;
   const market = data.step1_marketSnapshot;
   const sl = plan.slIndexPrice > 0 ? plan.slIndexPrice : computeSlIndexPrice(candidate);
-  const sizePct = plan.suggestedSizePct > 0 ? plan.suggestedSizePct : 1.75;
+  const rawSize = plan.suggestedSizePct > 0 ? plan.suggestedSizePct : 1.75;
+  const sizePct = resolveRiskBudgetSizePct(data, rawSize);
+  if (sizePct <= 0) return null;
   const tradeRec = agentRecToTrade(verdict);
   const confidence = data.step5_verdict.confidence;
   const confidenceLevel = resolveConfidenceLevel(confidence, tradeRec);

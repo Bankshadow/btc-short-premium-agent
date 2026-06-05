@@ -51,6 +51,14 @@ export function runOptionsStrategyAgent(ctx: TradingDeskContext): AgentOutput {
   if (market.ivHvRatio > 0 && market.ivHvRatio < IV_HV_SKIP_THRESHOLD) {
     reasons.push(`IV/HV ${market.ivHvRatio.toFixed(2)} < ${IV_HV_SKIP_THRESHOLD}.`);
   }
+  if (ctx.regimeBrain) {
+    reasons.push(
+      `Regime context: ${ctx.regimeBrain.primaryRegime} · sizing ×${ctx.regimeBrain.sizingMultiplier}`,
+    );
+    if (ctx.regimeBrain.blockedStrategies.includes("options_short_premium")) {
+      risks.push("Regime Brain blocks options short premium in current tape.");
+    }
+  }
   reasons.push(verdict.summary);
 
   const action =
@@ -65,7 +73,7 @@ export function runOptionsStrategyAgent(ctx: TradingDeskContext): AgentOutput {
       marketView: `Options · ${ctx.input.macroView ?? "neutral"} playbook`,
       recommendation,
       confidence,
-      reasons: withDeskMemoryReasons(ctx, reasons.slice(0, 6)),
+      reasons: withDeskMemoryReasons(ctx, reasons.slice(0, 6), "Options Strategy Agent"),
       risks,
       proposedAction: formatProposedAction({
         instrument: candidate?.symbol ?? "BTC options",

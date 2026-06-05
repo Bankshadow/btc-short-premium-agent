@@ -111,7 +111,10 @@ export function usePaperTrading() {
         (isHumanApprovalRequired() || gov.pausePaperAutoOpen);
       const opened = skipOpen
         ? null
-        : tryAutoOpenPaperOrder(data, decisionLogId);
+        : tryAutoOpenPaperOrder(data, decisionLogId, {
+            operatorPaused: gov.operatorPaused,
+            safeMode: gov.safeMode,
+          });
 
       refresh();
 

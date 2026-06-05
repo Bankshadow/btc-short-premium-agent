@@ -103,6 +103,10 @@ export function runStrategyOptimizerAgent(
     });
   }
 
+  const pendingAdaptation = ctx.adaptationProposals.filter(
+    (p) => p.status === "PENDING" || p.status === "APPROVED",
+  );
+
   const debate: CouncilAgentDebateRow = {
     agentName: "Strategy Optimizer Agent",
     role: "Improvement proposals (draft only)",
@@ -112,6 +116,12 @@ export function runStrategyOptimizerAgent(
       bestRow
         ? `Favor paper tests on ${bestRow.label} before any ACTIVE promotion.`
         : "Need more signals before optimization.",
+      pendingAdaptation.length > 0
+        ? `${pendingAdaptation.length} adaptation proposal(s) on /adaptation for operator review — council references only, cannot apply.`
+        : "No adaptation proposals queued — run /adaptation analysis after more paper outcomes.",
+      ctx.relevantMemory.lessons[1]
+        ? `Memory graph lesson: ${ctx.relevantMemory.lessons[1].bullet}`
+        : "Memory graph has no secondary lesson for this regime.",
       "Entry/exit filters must pass human draft-rule approval before committee use.",
       "Allocation changes defer to Capital Allocator Agent output.",
     ],

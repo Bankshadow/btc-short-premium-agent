@@ -11,6 +11,7 @@ import DeskMemoryPanel from "../DeskMemoryPanel";
 import ResearchDeskPanel from "../research/ResearchDeskPanel";
 import BullBearThesis from "./BullBearThesis";
 import CommitteeFinalVerdict from "./CommitteeFinalVerdict";
+import AgentWeightPanel from "./AgentWeightPanel";
 import DataTrustPanel from "./DataTrustPanel";
 import MultiAgentDebate from "./MultiAgentDebate";
 import RiskVetoPanel from "./RiskVetoPanel";
@@ -53,6 +54,12 @@ export default function TradingDeskView({
         committee={desk.committee}
         marketRegime={desk.marketRegime}
         conflictGate={conflictGate}
+      />
+
+      <AgentWeightPanel
+        committee={desk.committee}
+        weighted={desk.weightedCommittee}
+        marketRegime={desk.marketRegime}
       />
 
       <div className="grid gap-4 xl:grid-cols-2">

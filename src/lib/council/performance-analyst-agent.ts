@@ -44,6 +44,9 @@ export function runPerformanceAnalystAgent(
       vetoCount > 0
         ? `Risk vetoes: ${vetoCount} sessions, accuracy ${vetoAccuracy}% — ${vetoAccuracy >= 50 ? "useful protection" : "review veto calibration"}.`
         : "Few risk vetoes logged — ensure Risk Manager outputs are captured.",
+      ctx.relevantMemory.lessons[0]
+        ? `Memory graph (${ctx.memoryGraphNodeCount} nodes): ${ctx.relevantMemory.lessons[0].bullet}`
+        : "Memory graph thin — resolve more outcomes to populate lessons.",
       `Resolved sessions: ${ctx.scoreboard.totalResolved} · Net log PnL ${ctx.scoreboard.netPaperPnlPct}%.`,
     ],
   };

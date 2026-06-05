@@ -3,6 +3,7 @@ import {
   verifyCronOrTestAuthorization,
 } from "@/lib/cron/cron-auth";
 import { runDeskAutomation } from "@/lib/automation/run-desk-automation";
+import { runDeskManagerCycle } from "@/lib/autonomous-desk-manager/run-manager-cycle";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,11 @@ export async function GET(request: Request) {
       topic: "Scheduled desk automation — server cycle",
     });
 
+    const manager = await runDeskManagerCycle({
+      cycleType: "operational",
+      automationResult: result,
+    });
+
     return NextResponse.json({
       ok: true,
       test,
@@ -27,6 +33,14 @@ export async function GET(request: Request) {
       actionCount: result.actions.length,
       aiBrief: result.aiBrief,
       modules: result.meta,
+      deskManager: {
+        runId: manager.runId,
+        blocked: manager.blocked,
+        headline: manager.briefing.headline,
+        pendingActions: manager.actionQueue.filter((a) => a.status === "PENDING")
+          .length,
+        escalationLevel: manager.riskSummary.escalationLevel,
+      },
     });
   } catch (error) {
     const message =

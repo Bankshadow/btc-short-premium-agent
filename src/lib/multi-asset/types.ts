@@ -1,3 +1,5 @@
+import type { AgentRecommendation } from "@/lib/agents/types";
+import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { PerpAssetId } from "./asset-config";
 
 export type PerpDirection = "LONG" | "SHORT" | "FLAT";
@@ -62,4 +64,10 @@ export interface PerpPaperPosition {
   closedAt: string | null;
   exitPrice: number | null;
   realizedPnlPct: number | null;
+  /** MVP 22 — optional decision log trace (migration adds if missing) */
+  decisionLogId?: string;
+  sourceAgent?: string;
+  strategyName?: string;
+  verdict?: AgentRecommendation;
+  riskProfile?: DeskRiskProfile;
 }

@@ -17,8 +17,15 @@ import {
   updatePaperOrder,
 } from "./paper-orders";
 import type { AgentRecommendation } from "@/lib/agents/types";
-import type { PaperOrder } from "./paper-order-types";
+import type { PaperOrder, PaperTradingSettings } from "./paper-order-types";
 import { PAPER_ACCOUNT_NOTIONAL_USD } from "./paper-order-types";
+import {
+  evaluatePaperOpenEligibility,
+  relaxedPaperBlocksLiveExecution,
+} from "./paper-relaxed-gate";
+import type { PaperOpenEligibility } from "./paper-relaxed-types";
+import type { GovernanceDeskState } from "@/lib/governance/governance-types";
+import { resolveRiskBudgetSizePct } from "@/lib/risk-budget-optimizer/apply-risk-budget";
 
 function mapInstrument(
   action: AnalyzeApiResponse["step6_actionPlan"]["action"],
@@ -34,15 +41,23 @@ function mapSide(
   return "none";
 }
 
-export function buildPaperOrderFromAnalysis(
+export function evaluatePaperOpenFromAnalysis(
+  data: AnalyzeApiResponse,
+  settings: Partial<PaperTradingSettings> = loadPaperSettings(),
+  governance?: Pick<GovernanceDeskState, "operatorPaused" | "safeMode"> | null,
+): PaperOpenEligibility {
+  return evaluatePaperOpenEligibility(data, settings, governance);
+}
+
+export function buildPaperOrderFromEligibility(
   data: AnalyzeApiResponse,
   decisionLogId: string,
+  eligibility: PaperOpenEligibility,
 ): PaperOrder | null {
-  const desk = data.tradingDesk;
-  const verdict = desk?.committee.finalVerdict ?? "WAIT";
-  if (verdict !== "TRADE") return null;
-  if (desk?.committee.riskVeto) return null;
-  if (desk?.riskManager.veto) return null;
+  if (!eligibility.eligible) return null;
+  if (relaxedPaperBlocksLiveExecution(eligibility.paperMode)) {
+    /* paper-only path — live execution must never consume this builder */
+  }
 
   const plan = data.step6_actionPlan;
   const instrument = mapInstrument(plan.action);
@@ -50,12 +65,18 @@ export function buildPaperOrderFromAnalysis(
 
   const candidate = data.step5_verdict.candidate;
   const market = data.step1_marketSnapshot;
-  const sizePct = plan.suggestedSizePct > 0 ? plan.suggestedSizePct : 1;
+  const baseSize =
+    plan.suggestedSizePct > 0 ? plan.suggestedSizePct : 1;
+  const budgetCapped = resolveRiskBudgetSizePct(data, baseSize);
+  const sizePct = Math.min(budgetCapped, eligibility.sizePctCap);
+
+  const committeeVerdict =
+    data.tradingDesk?.committee.finalVerdict ?? eligibility.strictVerdict;
 
   return {
     id: `po-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     decisionLogId,
-    committeeVerdict: verdict,
+    committeeVerdict,
     instrument,
     symbol: candidate?.symbol ?? "BTCUSDT",
     side: mapSide(instrument),
@@ -72,12 +93,35 @@ export function buildPaperOrderFromAnalysis(
     unrealizedPnlPct: 0,
     lastMarkAt: data.step5_verdict.analyzedAt,
     lastMarkBtcPrice: market.spotPrice,
-    openedBy: "committee_auto",
-    notes: plan.entryNotes || desk?.committee.finalActionPlan || "",
+    openedBy:
+      eligibility.paperMode === "RELAXED_PAPER" &&
+      eligibility.strictVerdict !== "TRADE"
+        ? "relaxed_auto"
+        : "committee_auto",
+    notes: plan.entryNotes || data.tradingDesk?.committee.finalActionPlan || "",
+    paperMode: eligibility.paperMode,
+    relaxedReason: eligibility.relaxedReason,
+    strictVerdict: eligibility.strictVerdict,
+    relaxedVerdict: eligibility.relaxedVerdict,
   };
 }
 
-/** Auto-close open paper when committee flips to SKIP/WAIT. */
+/** @deprecated Use buildPaperOrderFromEligibility — kept for strict callers */
+export function buildPaperOrderFromAnalysis(
+  data: AnalyzeApiResponse,
+  decisionLogId: string,
+): PaperOrder | null {
+  const eligibility = evaluatePaperOpenEligibility(data, {
+    ...loadPaperSettings(),
+    paperMode: "STRICT_PAPER",
+  });
+  if (!eligibility.eligible || eligibility.paperMode !== "STRICT_PAPER") {
+    return null;
+  }
+  return buildPaperOrderFromEligibility(data, decisionLogId, eligibility);
+}
+
+/** Auto-close open paper when committee flips to SKIP/WAIT (strict path only for relaxed entries). */
 export function tryAutoClosePaperOnSkip(
   data: AnalyzeApiResponse,
   verdict?: AgentRecommendation,
@@ -91,6 +135,13 @@ export function tryAutoClosePaperOnSkip(
 
   let closed = 0;
   for (const order of getOpenPaperOrders()) {
+    if (
+      order.paperMode === "RELAXED_PAPER" &&
+      order.strictVerdict !== "TRADE" &&
+      finalVerdict === "WAIT"
+    ) {
+      continue;
+    }
     const result = closePaperOrderAndSyncLog(order.id, {
       exitBtcPrice: btc,
       notes: `Auto-close: committee ${finalVerdict}.`,
@@ -100,17 +151,22 @@ export function tryAutoClosePaperOnSkip(
   return closed;
 }
 
-/** Open paper position when committee approves TRADE (one open position at a time). */
 export function tryAutoOpenPaperOrder(
   data: AnalyzeApiResponse,
   decisionLogId: string,
+  governance?: Pick<GovernanceDeskState, "operatorPaused" | "safeMode"> | null,
 ): PaperOrder | null {
   const settings = loadPaperSettings();
   if (!settings.autoOpenOnTrade) return null;
   if (hasOpenPaperOrder()) return null;
   if (findOrderByLogId(decisionLogId)) return null;
 
-  const order = buildPaperOrderFromAnalysis(data, decisionLogId);
+  const eligibility = evaluatePaperOpenEligibility(data, settings, governance);
+  const order = buildPaperOrderFromEligibility(
+    data,
+    decisionLogId,
+    eligibility,
+  );
   if (!order) return null;
 
   savePaperOrder(order);
@@ -120,7 +176,6 @@ export function tryAutoOpenPaperOrder(
 export interface ClosePaperOrderInput {
   exitBtcPrice: number;
   notes?: string;
-  /** Override win/loss; otherwise derived from PnL */
   tradeWouldWin?: boolean | null;
 }
 
@@ -129,7 +184,6 @@ export interface ClosePaperOrderResult {
   logSynced: boolean;
 }
 
-/** Close paper order and sync PnL into linked decision log + reflection. */
 export function closePaperOrderAndSyncLog(
   orderId: string,
   input: ClosePaperOrderInput,
@@ -145,7 +199,7 @@ export function closePaperOrderAndSyncLog(
   });
   const tradeWouldWin =
     input.tradeWouldWin ??
-    (order.committeeVerdict === "TRADE"
+    (order.committeeVerdict === "TRADE" || order.paperMode === "RELAXED_PAPER"
       ? tradeWouldWinFromPnl(realized)
       : null);
 
@@ -167,15 +221,20 @@ export function closePaperOrderAndSyncLog(
   const syncNotes = [
     input.notes?.trim(),
     `Paper close @ BTC ${input.exitBtcPrice.toLocaleString()} · PnL ${realized >= 0 ? "+" : ""}${realized}%`,
+    order.paperMode === "RELAXED_PAPER" ? "Relaxed paper outcome." : null,
   ]
     .filter(Boolean)
     .join(" · ");
 
-  const resolved = resolveDecisionOutcome(order.decisionLogId, {
-    btcPriceAfter: input.exitBtcPrice,
-    tradeWouldWin,
-    notes: syncNotes || "Closed via paper trading desk.",
-  });
+  const resolved = resolveDecisionOutcome(
+    order.decisionLogId,
+    {
+      btcPriceAfter: input.exitBtcPrice,
+      tradeWouldWin,
+      notes: syncNotes || "Closed via paper trading desk.",
+    },
+    { evaluationSource: "paper_close" },
+  );
 
   if (resolved) {
     updateDecisionLogEntry(order.decisionLogId, (e) => ({

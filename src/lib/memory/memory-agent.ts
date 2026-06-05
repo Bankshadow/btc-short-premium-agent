@@ -1,9 +1,9 @@
 import type { AgentOutput } from "@/lib/agents/types";
 import { buildAgentOutput, type TradingDeskContext } from "@/lib/agents/shared";
+import { prepareDeskMemoryGraph } from "@/lib/memory-graph/prepare-desk-memory";
 import {
   buildDeskMemoryBuckets,
   countLogs,
-  flattenMemoryBullets,
   recentVerdictBias,
 } from "./build-desk-memory";
 import type { DeskMemoryClientPayload, DeskMemorySnapshot } from "./types";
@@ -14,7 +14,15 @@ export function runDeskMemoryAgent(
 ): DeskMemorySnapshot {
   const currentRegime = ctx.deskMemoryRegime ?? "Unknown";
   const buckets = buildDeskMemoryBuckets(payload, currentRegime);
-  const bullets = flattenMemoryBullets(buckets);
+  const graphPrep =
+    ctx.deskMemoryGraphSnapshot && ctx.deskMemoryRelevant
+      ? {
+          snapshot: ctx.deskMemoryGraphSnapshot,
+          relevant: ctx.deskMemoryRelevant,
+          bullets: ctx.deskMemoryBullets ?? [],
+        }
+      : prepareDeskMemoryGraph(payload, currentRegime, ctx.input.deskRiskProfile);
+  const bullets = graphPrep.bullets;
   const counts = countLogs(payload);
   const bias = recentVerdictBias(payload?.recentLogs ?? []);
 
@@ -52,7 +60,7 @@ export function runDeskMemoryAgent(
       confidence: bullets.length >= 3 ? 75 : 45,
       reasons,
       risks: [
-        "Memory is advisory — does not override Risk Manager hard veto.",
+        "Memory graph is advisory — cannot place trades or bypass governance or risk veto.",
         "Approved rules are hints only until explicitly integrated into engine.",
       ],
       proposedAction:
@@ -70,5 +78,7 @@ export function runDeskMemoryAgent(
     resolvedCount: counts.resolved,
     pendingCount: counts.pending,
     agent,
+    graphSnapshot: graphPrep.snapshot,
+    relevantMemory: graphPrep.relevant,
   };
 }

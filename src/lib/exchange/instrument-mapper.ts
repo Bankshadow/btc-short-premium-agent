@@ -17,7 +17,7 @@ export interface MappedLinearOrder {
 export interface MappedOptionOrder {
   category: "option";
   symbol: string;
-  side: "Sell";
+  side: "Sell" | "Buy";
   orderType: "Limit";
   qty: string;
   price: string;
@@ -72,6 +72,26 @@ export function mapPerpSignalToLinearOrder(
   return order;
 }
 
+export function mapCloseLinearPosition(input: {
+  symbol: string;
+  positionSide: "Buy" | "Sell";
+  qty: number;
+  instrument: LinearInstrumentInfo;
+}): MappedLinearOrder | null {
+  const qty = roundQtyToStep(input.qty, input.instrument.qtyStep);
+  if (qty <= 0) return null;
+
+  return {
+    category: "linear",
+    symbol: input.symbol,
+    side: input.positionSide === "Buy" ? "Sell" : "Buy",
+    orderType: "Market",
+    qty: String(qty),
+    timeInForce: "IOC",
+    reduceOnly: true,
+  };
+}
+
 /** BTC options short premium — limit sell at mark. */
 export function mapOrderTicketToOptionOrder(
   ticket: OrderTicket,
@@ -99,6 +119,28 @@ export function mapOrderTicketToOptionOrder(
     price: String(ticket.entryOptionMark),
     timeInForce: "GTC",
     reduceOnly: false,
+  };
+}
+
+/** Close BTC option position — limit buy/sell with reduceOnly. */
+export function mapCloseOptionPosition(input: {
+  symbol: string;
+  positionSide: "Buy" | "Sell";
+  qty: number;
+  limitPrice: number;
+}): MappedOptionOrder | null {
+  const qty = Math.max(1, Math.floor(input.qty));
+  if (qty <= 0 || input.limitPrice <= 0) return null;
+
+  return {
+    category: "option",
+    symbol: input.symbol,
+    side: input.positionSide === "Sell" ? "Buy" : "Sell",
+    orderType: "Limit",
+    qty: String(qty),
+    price: String(input.limitPrice),
+    timeInForce: "GTC",
+    reduceOnly: true,
   };
 }
 

@@ -20,6 +20,7 @@ import type {
 } from "./trade-control-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import { getTradingOsModeEffects } from "@/lib/trading-os/trading-os-runtime";
+import { isRelaxedPaperMode } from "@/lib/paper/paper-relaxed-gate";
 
 export interface ExecuteTradeControlInput {
   action: TradeControlActionType;
@@ -159,6 +160,17 @@ export async function executeTradeControl(
   }
 
   if (input.action === "APPROVE") {
+    if (
+      isRelaxedPaperMode(loadPaperSettings()) &&
+      mode === "MANUAL_APPROVED_LIVE_PLACEHOLDER"
+    ) {
+      return {
+        ok: false,
+        error:
+          "Relaxed paper learning mode — live execution paths are blocked.",
+      };
+    }
+
     if (mode === "COPY_ONLY") {
       const log = appendTradeControlAction(
         input.logEntryId,

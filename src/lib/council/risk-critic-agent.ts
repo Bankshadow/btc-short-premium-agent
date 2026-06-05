@@ -78,6 +78,9 @@ export function runRiskCriticAgent(
       ctx.capitalReport.riskOfRuin.level !== "low"
         ? `Ruin warning level ${ctx.capitalReport.riskOfRuin.level} — bias to PAPER_ONLY.`
         : "Ruin indicators acceptable for controlled paper tests.",
+      ctx.relevantMemory.lessons.find((l) => l.bullet.toLowerCase().includes("drawdown"))
+        ? `Memory graph flags drawdown pattern: ${ctx.relevantMemory.lessons.find((l) => l.bullet.toLowerCase().includes("drawdown"))!.bullet}`
+        : "No drawdown pattern in memory graph for current context.",
     ],
   };
 

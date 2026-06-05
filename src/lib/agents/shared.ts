@@ -13,6 +13,14 @@ import type {
 } from "./types";
 import { tradeRecToAgent } from "./types";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
+import {
+  getRelevantMemory,
+  memoryLessonsToBullets,
+} from "@/lib/memory-graph/get-relevant-memory";
+import type {
+  MemoryGraphSnapshot,
+  RelevantMemoryResult,
+} from "@/lib/memory-graph/types";
 import { LIQUIDATION_SKIP } from "@/lib/decision/thresholds";
 import { riskDailyLossStreakFlag } from "@/lib/desk/desk-risk-policy";
 
@@ -41,9 +49,14 @@ export interface TradingDeskContext {
   deskMemoryBullets?: string[];
   deskMemoryRegime?: string;
   deskMemoryPayload?: DeskMemoryClientPayload;
+  /** MVP 28 — structured memory graph (advisory only) */
+  deskMemoryGraphSnapshot?: MemoryGraphSnapshot;
+  deskMemoryRelevant?: RelevantMemoryResult;
   /** MVP 5 — research layer bullets for downstream agents */
   researchBullets?: string[];
   ethQuote?: SpotQuote | null;
+  /** MVP 35 — market regime brain snapshot (advisory routing) */
+  regimeBrain?: import("@/lib/market-regime-brain/types").RegimeBrainResult;
 }
 
 export function buildTradingDeskContext(
@@ -175,13 +188,28 @@ export function fromEngineRecommendation(
 export function withDeskMemoryReasons(
   ctx: TradingDeskContext,
   reasons: string[],
+  agentName?: string,
 ): string[] {
   const researchLines = (ctx.researchBullets ?? [])
     .slice(0, 1)
     .map((b) => `[Research] ${b}`);
-  const memoryLines = (ctx.deskMemoryBullets ?? [])
-    .slice(0, 2)
-    .map((b) => `[Memory] ${b}`);
+
+  let memoryBullets: string[] = [];
+  if (ctx.deskMemoryGraphSnapshot && agentName) {
+    const scoped = getRelevantMemory(ctx.deskMemoryGraphSnapshot, {
+      marketRegime: ctx.deskMemoryRegime,
+      riskProfile: ctx.input.deskRiskProfile,
+      agentsInvolved: [agentName],
+      limit: 2,
+    });
+    memoryBullets = memoryLessonsToBullets(scoped.lessons);
+  } else {
+    memoryBullets = (ctx.deskMemoryBullets ?? []).slice(0, 2);
+  }
+
+  const memoryLines = memoryBullets.map((b) =>
+    b.startsWith("[Memory]") ? b : `[Memory] ${b}`,
+  );
   if (researchLines.length === 0 && memoryLines.length === 0) return reasons;
   return [...researchLines, ...memoryLines, ...reasons];
 }

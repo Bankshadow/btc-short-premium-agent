@@ -1,6 +1,11 @@
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
+import type { StrategyAdaptationProposal } from "@/lib/strategy-adaptation/types";
+import type { DeskIncident } from "@/lib/governance/governance-types";
+import type { StrategySkill } from "@/lib/strategy-registry/strategy-registry-types";
+import type { CouncilSessionResult } from "./types";
 import { buildCouncilContext } from "./council-context";
 import { runGoalStrategistAgent } from "./goal-strategist-agent";
 import { runPerformanceAnalystAgent } from "./performance-analyst-agent";
@@ -8,13 +13,18 @@ import { runStrategyOptimizerAgent } from "./strategy-optimizer-agent";
 import { runRiskCriticAgent } from "./risk-critic-agent";
 import { runCapitalAllocatorAgent } from "./capital-allocator-agent";
 import { runCommitteeModeratorAgent } from "./committee-moderator-agent";
-import { COUNCIL_GUARDRAILS, type CouncilRunRequest, type CouncilSessionResult } from "./types";
+import { COUNCIL_GUARDRAILS, type CouncilRunRequest } from "./types";
 
 export function runCouncilSession(input: {
   request: CouncilRunRequest;
   entries: DecisionLogEntry[];
   orders: PaperOrder[];
+  perpPositions?: PerpPaperPosition[];
   riskProfile: DeskRiskProfile;
+  adaptationProposals?: StrategyAdaptationProposal[];
+  incidents?: DeskIncident[];
+  councilSessions?: CouncilSessionResult[];
+  registryStrategies?: StrategySkill[];
 }): CouncilSessionResult {
   const ctx = buildCouncilContext(input);
   const { goalStatus, debate: goalDebate } = runGoalStrategistAgent(ctx);
@@ -39,6 +49,7 @@ export function runCouncilSession(input: {
     proposals,
     riskReview,
     capitalNote: capitalRecommendation.councilNote,
+    adaptationProposals: ctx.adaptationProposals,
   });
 
   return {
@@ -53,5 +64,6 @@ export function runCouncilSession(input: {
     committeeDecision,
     councilMemo,
     guardrails: [...COUNCIL_GUARDRAILS],
+    adaptationProposalsReferenced: ctx.adaptationProposals,
   };
 }

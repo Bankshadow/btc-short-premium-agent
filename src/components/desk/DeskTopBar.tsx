@@ -112,6 +112,12 @@ export default function DeskTopBar({
             AI
           </Link>
           <Link
+            href="/portfolio"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-teal-300/95 hover:bg-teal-900/45"
+          >
+            Portfolio
+          </Link>
+          <Link
             href="/assets"
             className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95 hover:bg-emerald-900/45"
           >
@@ -146,6 +152,24 @@ export default function DeskTopBar({
             className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-400/90 hover:bg-violet-950/50"
           >
             Capital
+          </Link>
+          <Link
+            href="/adaptation"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400/90 hover:bg-indigo-950/50"
+          >
+            Adapt
+          </Link>
+          <Link
+            href="/live-readiness"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90 hover:bg-emerald-950/50"
+          >
+            Ready
+          </Link>
+          <Link
+            href="/live-pilot"
+            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90 hover:bg-emerald-950/50"
+          >
+            Pilot
           </Link>
           <Link
             href="/strategies"
