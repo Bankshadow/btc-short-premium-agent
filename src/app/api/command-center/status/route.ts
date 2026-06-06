@@ -1,6 +1,7 @@
 import { buildCommandCenterReport } from "@/lib/command-center/evaluate-status";
 import { buildCommandCenterServerContext } from "@/lib/command-center/server-context";
 import { buildObservabilitySnapshot } from "@/lib/observability";
+import { runAnomalyDetectionSnapshot } from "@/lib/anomaly-detection";
 import { COMMAND_CENTER_SAFETY_NOTICE } from "@/lib/command-center/types";
 import type { CommandCenterInput } from "@/lib/command-center/types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
@@ -19,6 +20,10 @@ export async function GET() {
   try {
     const serverContext = await buildCommandCenterServerContext();
     const observabilityReport = await buildObservabilitySnapshot("server-default");
+    const anomalySummary = await runAnomalyDetectionSnapshot({
+      persist: true,
+      useCache: true,
+    });
     const report = buildCommandCenterReport({
       entries: [],
       orders: [],
@@ -31,6 +36,7 @@ export async function GET() {
       ok: true,
       serverContext,
       report,
+      anomalySummary,
       cannotIncreaseRisk: true,
       cannotAutoApproveProposals: true,
       cannotBypassGovernance: true,
@@ -55,6 +61,10 @@ export async function POST(request: Request) {
     }
 
     const observabilityReport = await buildObservabilitySnapshot("server-default");
+    const anomalySummary = await runAnomalyDetectionSnapshot({
+      persist: true,
+      useCache: true,
+    });
     const report = buildCommandCenterReport({
       entries: body.entries ?? [],
       orders: body.orders ?? [],
@@ -81,6 +91,7 @@ export async function POST(request: Request) {
       ok: true,
       serverContext,
       report,
+      anomalySummary,
       cannotIncreaseRisk: true,
       cannotAutoApproveProposals: true,
       cannotBypassGovernance: true,

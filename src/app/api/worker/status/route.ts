@@ -1,6 +1,7 @@
 import { WORKER_SAFETY_NOTICE } from "@/lib/background-worker/config";
 import { loadFailedWorkerJobs, loadWorkerState } from "@/lib/background-worker/state-store";
 import { evaluateServerBackboneHealth } from "@/lib/background-worker/server-backbone";
+import { runAnomalyDetectionSnapshot } from "@/lib/anomaly-detection";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,10 @@ export async function GET() {
     const state = await loadWorkerState();
     const failed = await loadFailedWorkerJobs();
     const backbone = await evaluateServerBackboneHealth();
+    const anomalySummary = await runAnomalyDetectionSnapshot({
+      persist: true,
+      useCache: true,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -22,6 +27,7 @@ export async function GET() {
         nextRunAt: state.nextRunAt,
       },
       failedJobs: failed,
+      anomalySummary,
       backboneHealthy: backbone.healthy,
       backboneHealth: backbone.health,
       safetyNotice: WORKER_SAFETY_NOTICE,

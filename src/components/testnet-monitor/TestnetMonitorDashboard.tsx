@@ -3,17 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
+import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 import { loadDecisionLog } from "@/lib/journal/decision-log";
 import { loadPaperOrders } from "@/lib/paper/paper-orders";
 import { loadGovernanceState } from "@/lib/governance/governance-state";
 import { appendBinanceTestnetJournalClient } from "@/lib/exchange/binance/binance-testnet-journal";
 import { buildDecisionLinkage } from "@/lib/testnet-monitor/decision-linkage";
-import {
-  generateReflectionForTrade,
-  loadLearningQueue,
-  markTradeAsLearned,
-  syncLearningQueueFromClosedTrades,
-} from "@/lib/testnet-monitor/learning-queue";
 import type {
   TestnetClosedTrade,
   TestnetDecisionLinkage,
@@ -71,6 +66,13 @@ export default function TestnetMonitorDashboard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const applySnapshot = useCallback((data: unknown) => {
+    const payload = data as { snapshot?: TestnetMonitorSnapshot } & Partial<TestnetMonitorSnapshot>;
+    const next = (payload.snapshot ?? payload) as TestnetMonitorSnapshot;
+    setSnapshot(next);
+    setLearningQueue(next.learningQueue ?? []);
+  }, []);
+
   const refresh = useCallback(async () => {
     setBusy(true);
     setError(null);
@@ -81,11 +83,7 @@ export default function TestnetMonitorDashboard({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Refresh failed");
-      setSnapshot(data as TestnetMonitorSnapshot);
-      const queue = syncLearningQueueFromClosedTrades(
-        (data.closedTrades ?? []) as TestnetClosedTrade[],
-      );
-      setLearningQueue(queue);
+      applySnapshot(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Refresh failed");
       const fallback = await fetch("/api/testnet-monitor/snapshot", {
@@ -93,18 +91,14 @@ export default function TestnetMonitorDashboard({
       });
       if (fallback.ok) {
         const data = await fallback.json();
-        setSnapshot(data as TestnetMonitorSnapshot);
-        setLearningQueue(
-          syncLearningQueueFromClosedTrades(data.closedTrades ?? []),
-        );
+        applySnapshot(data);
       }
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [applySnapshot]);
 
   useEffect(() => {
-    setLearningQueue(loadLearningQueue());
     void refresh();
     const id = setInterval(() => void refresh(), 60_000);
     return () => clearInterval(id);
@@ -164,22 +158,65 @@ export default function TestnetMonitorDashboard({
     }
   };
 
-  const handleMarkLearned = (closedTradeId: string) => {
-    markTradeAsLearned(closedTradeId);
-    setLearningQueue(loadLearningQueue());
+  const updateLearningStatus = async (input: {
+    route: string;
+    learningRecordId?: string;
+    notes?: string;
+  }) => {
+    if (!input.learningRecordId) {
+      await refresh();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(input.route, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          learningRecordId: input.learningRecordId,
+          notes: input.notes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Learning action failed");
+      applySnapshot(data.snapshot ?? data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Learning action failed");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleGenerateReflection = (item: TestnetLearningQueueItem) => {
+  const handleMarkLearned = async (item: TestnetLearningQueueItem) => {
+    await updateLearningStatus({
+      route: "/api/testnet-monitor/learning/mark-learned",
+      learningRecordId: item.learningRecordId,
+    });
+  };
+
+  const handleGenerateReflection = async (item: TestnetLearningQueueItem) => {
     const notes = `TESTNET ${item.result} on ${item.symbol}: net PnL ${fmtUsd(item.netPnl)}. ${
       item.decisionLogId
         ? `Linked decision ${item.decisionLogId.slice(0, 8)}…`
         : "No AI decision link — operational validation only."
     }`;
-    generateReflectionForTrade(item.closedTradeId, notes);
-    setLearningQueue(loadLearningQueue());
+    await updateLearningStatus({
+      route: "/api/testnet-monitor/learning/generate-reflection",
+      learningRecordId: item.learningRecordId,
+      notes,
+    });
+  };
+
+  const handleExcludeLearning = async (item: TestnetLearningQueueItem) => {
+    await updateLearningStatus({
+      route: "/api/testnet-monitor/learning/exclude",
+      learningRecordId: item.learningRecordId,
+    });
   };
 
   const summary = snapshot?.summary;
+  const eq = snapshot?.executionQuality;
   const liveBlocked = summary?.liveTradingDisabled ?? true;
 
   return (
@@ -216,6 +253,7 @@ export default function TestnetMonitorDashboard({
         <span className="text-[11px] text-zinc-500">
           Connection: {snapshot?.connected ? "Connected" : "Disconnected"}
         </span>
+        <IncidentsV2Badge compact />
       </div>
 
       {error && (
@@ -269,6 +307,11 @@ export default function TestnetMonitorDashboard({
           label="Risk Status"
           value={summary?.riskStatus ?? "CAUTION"}
           hint="TESTNET monitor"
+        />
+        <OpsKpi
+          label="Avg Slippage"
+          value={`${eq?.averageSlippageBps ?? 0} bps`}
+          hint="Execution quality"
         />
       </div>
 
@@ -380,6 +423,7 @@ export default function TestnetMonitorDashboard({
                     <th className="py-1 pr-2">Result</th>
                     <th className="py-1 pr-2">Duration</th>
                     <th className="py-1">Strategy</th>
+                    <th className="py-1 text-right">Flow</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -400,6 +444,15 @@ export default function TestnetMonitorDashboard({
                       <td className="py-2 pr-2">{t.result}</td>
                       <td className="py-2 pr-2">{durationLabel(t.durationMs)}</td>
                       <td className="py-2">{t.strategy ?? "—"}</td>
+                      <td className="py-2 text-right">
+                        <Link
+                          href={`/trades/${encodeURIComponent(t.id)}`}
+                          className="text-cyan-400 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Timeline
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -461,6 +514,40 @@ export default function TestnetMonitorDashboard({
           </div>
         </Panel>
 
+        <Panel title="Execution Quality (TESTNET)">
+          {!eq ? (
+            <p className="text-xs text-zinc-500">Execution quality not available.</p>
+          ) : (
+            <div className="space-y-2 text-xs text-zinc-400">
+              <p>
+                Avg slippage: <span className="font-mono text-zinc-200">{eq.averageSlippageBps} bps</span>
+              </p>
+              <p>
+                Latency: <span className="font-mono text-zinc-200">{Math.round(eq.averageLatencyMs)} ms</span>
+              </p>
+              <p>
+                Rejection rate: <span className="font-mono text-zinc-200">{eq.rejectionRatePct}%</span>
+              </p>
+              <p>
+                Failed close rate: <span className="font-mono text-zinc-200">{eq.failedCloseRatePct}%</span>
+              </p>
+              <p>
+                Fee impact: <span className="font-mono text-zinc-200">{fmtUsd(eq.feeImpactUsd)}</span>
+              </p>
+              <p>
+                Failed orders: <span className="font-mono text-zinc-200">{eq.failedOrderCount}</span> · close failures{" "}
+                <span className="font-mono text-zinc-200">{eq.closeFailureCount}</span>
+              </p>
+              <p className={eq.liveQualityGate.status === "FAIL" ? "text-rose-300" : "text-amber-300"}>
+                Live quality gate: {eq.liveQualityGate.status}
+              </p>
+              <Link href="/execution-quality" className="text-cyan-400 hover:underline">
+                Open execution quality dashboard →
+              </Link>
+            </div>
+          )}
+        </Panel>
+
         <Panel title="AI Signal Linkage">
           {!selectedTrade ? (
             <p className="text-xs text-zinc-500">
@@ -496,7 +583,7 @@ export default function TestnetMonitorDashboard({
           )}
         </Panel>
 
-        <Panel title="Learning Queue">
+        <Panel title="Learning Queue (TESTNET)">
           {learningQueue.length === 0 ? (
             <p className="text-xs text-zinc-500">
               No closed trades pending learning review.
@@ -511,22 +598,49 @@ export default function TestnetMonitorDashboard({
                   <span className="text-zinc-200">{item.symbol}</span> ·{" "}
                   {item.result} · {fmtUsd(item.netPnl)} · {item.status}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {item.status !== "LEARNED" && (
+                    {item.status !== "LEARNED" && item.status !== "EXCLUDED" && (
                       <button
                         type="button"
-                        onClick={() => handleMarkLearned(item.closedTradeId)}
+                        disabled={busy}
+                        onClick={() => void handleMarkLearned(item)}
                         className="rounded border border-emerald-800/50 px-2 py-0.5 text-emerald-300 hover:bg-emerald-950/40"
                       >
                         Mark as learned
                       </button>
                     )}
+                    {item.status !== "PENDING_REVIEW" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void updateLearningStatus({
+                            route: "/api/testnet-monitor/learning/pending-review",
+                            learningRecordId: item.learningRecordId,
+                          })
+                        }
+                        className="rounded border border-cyan-800/50 px-2 py-0.5 text-cyan-300 hover:bg-cyan-950/40"
+                      >
+                        Pending review
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => handleGenerateReflection(item)}
+                      disabled={busy || item.status === "EXCLUDED"}
+                      onClick={() => void handleGenerateReflection(item)}
                       className="rounded border border-violet-800/50 px-2 py-0.5 text-violet-300 hover:bg-violet-950/40"
                     >
                       Generate reflection
                     </button>
+                    {item.status !== "EXCLUDED" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleExcludeLearning(item)}
+                        className="rounded border border-zinc-700/60 px-2 py-0.5 text-zinc-300 hover:bg-zinc-900/60"
+                      >
+                        Exclude from learning
+                      </button>
+                    )}
                   </div>
                   {item.reflectionNotes && (
                     <p className="mt-1 text-[10px] text-zinc-500">
@@ -537,6 +651,27 @@ export default function TestnetMonitorDashboard({
               ))}
             </ul>
           )}
+          <div className="mt-3 grid gap-2 text-[11px] text-zinc-400 sm:grid-cols-3">
+            <div className="rounded border border-zinc-800/80 p-2">
+              <p className="text-zinc-500">TESTNET Agent scoreboard</p>
+              <p className="font-mono text-zinc-200">
+                {snapshot?.agentScoreboardSegment.totalLearned ?? 0} learned
+              </p>
+            </div>
+            <div className="rounded border border-zinc-800/80 p-2">
+              <p className="text-zinc-500">TESTNET Strategy performance</p>
+              <p className="font-mono text-zinc-200">
+                {snapshot?.strategyPerformanceSegment.totalLearned ?? 0} learned
+              </p>
+            </div>
+            <div className="rounded border border-zinc-800/80 p-2">
+              <p className="text-zinc-500">TESTNET Validation metrics</p>
+              <p className="font-mono text-zinc-200">
+                win {(snapshot?.validationMetricsSegment.winRate ?? 0).toFixed(0)}% · R{" "}
+                {(snapshot?.validationMetricsSegment.averageR ?? 0).toFixed(2)}
+              </p>
+            </div>
+          </div>
           <p className="mt-2 text-[10px] text-zinc-600">
             TESTNET learning updates testnet performance segment only — not mixed
             with PAPER or LIVE metrics.

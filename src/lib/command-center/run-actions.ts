@@ -147,7 +147,7 @@ export function runCommandCenterAction(
         action: request.action,
         riskReducingOnly: true,
         clientMustPersist: false,
-        navigateTo: "/incidents",
+        navigateTo: "/incidents-v2",
         message: "Navigate to incident review.",
       };
 

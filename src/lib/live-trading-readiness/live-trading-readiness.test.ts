@@ -3,6 +3,10 @@ import { describe, it } from "node:test";
 import { buildLiveReadinessReport } from "@/lib/live-readiness/build-readiness-report";
 import type { ServerReadinessContext } from "@/lib/live-readiness/types";
 import { computeStrictPaperMetrics } from "@/lib/live-readiness/strict-paper-metrics";
+import {
+  buildStrategyHealthSignal,
+  buildStrategyHealthSummary,
+} from "@/lib/strategy-health";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import { buildLiveTradingPlanReport } from "./build-plan-report";
@@ -134,5 +138,26 @@ describe("Live Trading Readiness Plan", () => {
 
   it("documents options live hard block message", () => {
     assert.ok(OPTIONS_LIVE_HARD_BLOCK.toLowerCase().includes("disabled"));
+  });
+
+  it("includes strategy health category in readiness", () => {
+    const healthSignal = buildStrategyHealthSignal(
+      buildStrategyHealthSummary({
+        entries: [sampleEntry()],
+        orders: [sampleOrder()],
+      }),
+    );
+    const report = buildLiveReadinessReport({
+      entries: [sampleEntry()],
+      orders: [sampleOrder()],
+      riskProfile: "balanced",
+      strategyHealthSignal: healthSignal,
+      serverContext: serverContext(),
+      killSwitchTested: true,
+      auditEnabled: true,
+    });
+    assert.ok(
+      report.categories.some((c) => c.id === "strategy_health_readiness"),
+    );
   });
 });

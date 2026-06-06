@@ -1,8 +1,10 @@
 import {
+  getMarkPrice,
   closeTestnetPositionReduceOnly,
   getPositions,
   placeTestnetMarketOrder,
 } from "./binance-futures-testnet";
+import { evaluateRiskyActionGate } from "@/lib/anomaly-detection/safety";
 import { getStoredPreview } from "./binance-order-preview";
 import { closeSideForPosition } from "./binance-position-monitor";
 import { validateOrderAgainstRiskGate } from "./binance-risk-gate";
@@ -31,7 +33,49 @@ export async function executeBinanceTestnetOrder(input: {
   orders?: PaperOrder[];
   operatorNote?: string;
 }): Promise<BinanceExecuteResult> {
+  const anomalyGate = await evaluateRiskyActionGate("binance testnet execute");
+  if (!anomalyGate.allowed) {
+    const preview = await getStoredPreview(input.execute.previewId);
+    const blockedEntry = preview
+      ? buildJournalEntryFromPreview(preview, {
+          status: "BLOCKED",
+          blockReasons: [anomalyGate.reason ?? "Blocked by CRITICAL incident."],
+        })
+      : buildJournalEntryFromPreview(
+          {
+            previewId: input.execute.previewId,
+            symbol: "UNKNOWN",
+            side: "BUY",
+            estimatedQty: "0",
+            notionalUsd: 0,
+            markPrice: null,
+            riskChecks: [],
+            blocked: true,
+            blockReasons: ["Preview not found or blocked by incident"],
+            requiresDoubleConfirm: true,
+            expiresAt: new Date(0).toISOString(),
+            source: "manual_test",
+            reason: "incident-blocked",
+            decisionLogId: null,
+            generatedAt: new Date().toISOString(),
+          },
+          {
+            status: "BLOCKED",
+            blockReasons: [anomalyGate.reason ?? "Blocked by CRITICAL incident."],
+          },
+        );
+    await recordTestnetTradeJournal(blockedEntry);
+    return {
+      ok: false,
+      blocked: true,
+      exchangeOrderId: null,
+      journalEntry: blockedEntry,
+      error: anomalyGate.reason ?? "Blocked by CRITICAL incident.",
+    };
+  }
+
   const preview = await getStoredPreview(input.execute.previewId);
+
   if (!preview) {
     const stub = buildJournalEntryFromPreview(
       {
@@ -65,6 +109,11 @@ export async function executeBinanceTestnetOrder(input: {
 
   const positions = await getPositions().catch(() => []);
   const journal = await loadServerBinanceTestnetJournal();
+  const duplicateSubmission = journal.some(
+    (j) =>
+      j.previewId === input.execute.previewId &&
+      ["SUBMITTED", "FILLED", "CLOSING", "CLOSED"].includes(j.status),
+  );
 
   const gate = validateOrderAgainstRiskGate({
     preview,
@@ -84,11 +133,24 @@ export async function executeBinanceTestnetOrder(input: {
   }
 
   try {
+    const submitStartedAt = Date.now();
+    const markAtSubmit = await getMarkPrice(preview.symbol).catch(() => null);
     const order = await placeTestnetMarketOrder({
       symbol: preview.symbol,
       side: preview.side,
       quantity: preview.estimatedQty,
     });
+
+    const fillPrice = markAtSubmit ?? preview.markPrice ?? null;
+    const previewPrice = preview.markPrice ?? null;
+    const slippage =
+      previewPrice != null && fillPrice != null
+        ? Number((fillPrice - previewPrice).toFixed(6))
+        : null;
+    const slippageBps =
+      previewPrice != null && fillPrice != null
+        ? Number((((fillPrice - previewPrice) / previewPrice) * 10_000).toFixed(3))
+        : null;
 
     const journalEntry = buildJournalEntryFromPreview(preview, {
       status: "SUBMITTED",
@@ -97,6 +159,15 @@ export async function executeBinanceTestnetOrder(input: {
       operatorNote: input.operatorNote ?? input.execute.operatorNote ?? null,
       blockReasons: [],
       executedAt: new Date().toISOString(),
+      previewPrice: previewPrice,
+      markPriceAtSubmit: markAtSubmit,
+      fillPrice,
+      slippage,
+      slippageBps,
+      latencyMs: Date.now() - submitStartedAt,
+      partialFill: false,
+      duplicateSubmission,
+      retryCount: 0,
     });
     await recordTestnetTradeJournal(journalEntry);
 
@@ -113,6 +184,8 @@ export async function executeBinanceTestnetOrder(input: {
       status: "FAILED",
       blockReasons: [message],
       operatorNote: input.operatorNote ?? null,
+      duplicateSubmission,
+      retryCount: 0,
     });
     await recordTestnetTradeJournal(journalEntry);
     return {
@@ -132,6 +205,17 @@ export async function executeBinanceTestnetClose(input: {
   entries?: DecisionLogEntry[];
   orders?: PaperOrder[];
 }): Promise<BinanceCloseResult> {
+  const anomalyGate = await evaluateRiskyActionGate("binance testnet close");
+  if (!anomalyGate.allowed) {
+    return {
+      ok: false,
+      blocked: true,
+      exchangeOrderId: null,
+      journalEntry: null,
+      error: anomalyGate.reason ?? "Blocked by CRITICAL incident.",
+    };
+  }
+
   const positions = await getPositions();
   const pos = positions.find((p) => p.symbol === input.close.symbol);
   if (!pos || Math.abs(Number(pos.positionAmt)) === 0) {
@@ -166,6 +250,8 @@ export async function executeBinanceTestnetClose(input: {
   }
 
   try {
+    const closeStartedAt = Date.now();
+    const markAtSubmit = await getMarkPrice(input.close.symbol).catch(() => null);
     const order = await closeTestnetPositionReduceOnly({
       symbol: input.close.symbol,
       side,
@@ -185,6 +271,10 @@ export async function executeBinanceTestnetClose(input: {
           status: "CLOSING" as const,
           exchangeOrderId: String(order.orderId),
           operatorNote: input.close.operatorNote ?? null,
+          closeAttempt: true,
+          closeFailed: false,
+          markPriceAtSubmit: markAtSubmit,
+          latencyMs: Date.now() - closeStartedAt,
         }
       : null;
 
@@ -205,6 +295,24 @@ export async function executeBinanceTestnetClose(input: {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Close failed";
+    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const openTrade = journal.find(
+      (j) =>
+        j.symbol === input.close.symbol &&
+        ["SUBMITTED", "FILLED"].includes(j.status),
+    );
+    if (openTrade) {
+      await recordTestnetTradeJournal({
+        ...openTrade,
+        binanceTestnetTradeId: `${openTrade.binanceTestnetTradeId}-close-failed-${Date.now()}`,
+        status: "FAILED",
+        closeAttempt: true,
+        closeFailed: true,
+        blockReasons: [message],
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     return {
       ok: false,
       blocked: false,

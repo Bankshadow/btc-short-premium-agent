@@ -131,7 +131,12 @@ export interface TestnetMonitorSnapshot {
   pnlBySymbol: TestnetPnlByGroup[];
   pnlByStrategy: TestnetPnlByGroup[];
   equitySeries: Array<{ timestamp: string; equity: number }>;
+  learningRecords: TestnetLearningRecord[];
   learningQueue: TestnetLearningQueueItem[];
+  agentScoreboardSegment: TestnetAgentScoreboardSegment;
+  strategyPerformanceSegment: TestnetStrategyPerformanceSegment;
+  validationMetricsSegment: TestnetValidationMetricsSegment;
+  executionQuality: import("@/lib/execution-quality/types").ExecutionQualitySummary;
   lastUpdatedAt: string;
   connected: boolean;
   mismatches: string[];
@@ -151,13 +156,14 @@ export interface TestnetMonitorJournalEvent {
 }
 
 export interface TestnetLearningQueueItem {
+  learningRecordId?: string;
   closedTradeId: string;
   symbol: string;
   decisionLogId: string | null;
   netPnl: number;
   result: TestnetTradeResult;
   closedAt: string;
-  status: "PENDING" | "LEARNED" | "REFLECTION_READY";
+  status: "PENDING_REVIEW" | "LEARNED" | "REFLECTION_READY" | "EXCLUDED";
   reflectionNotes: string | null;
 }
 
@@ -170,4 +176,74 @@ export interface TestnetDecisionLinkage {
   riskVeto: boolean;
   linked: boolean;
   message: string | null;
+}
+
+export interface TestnetLearningRecord {
+  learningRecordId: string;
+  environment: "TESTNET";
+  symbol: string;
+  decisionLogId: string | null;
+  previewId: string | null;
+  orderId: string | null;
+  positionId: string | null;
+  closedTradeId: string;
+  strategy: string | null;
+  sourceAgent: string | null;
+  finalVerdict: string | null;
+  confidence: number | null;
+  grossPnl: number;
+  netPnl: number;
+  fee: number;
+  rMultiple: number;
+  maxFavorableExcursion: number;
+  maxAdverseExcursion: number;
+  durationMs: number;
+  result: TestnetTradeResult;
+  includeInLearning: boolean;
+  status: "PENDING_REVIEW" | "REFLECTION_READY" | "LEARNED" | "EXCLUDED";
+  reflectionNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TestnetAgentScoreRow {
+  sourceAgent: string;
+  totalLearned: number;
+  winningTrades: number;
+  winRate: number;
+  netPnl: number;
+}
+
+export interface TestnetAgentScoreboardSegment {
+  environment: "TESTNET";
+  totalLearned: number;
+  rows: TestnetAgentScoreRow[];
+  updatedAt: string;
+}
+
+export interface TestnetStrategyPerformanceRow {
+  strategy: string;
+  totalLearned: number;
+  winRate: number;
+  netPnl: number;
+  averageR: number;
+}
+
+export interface TestnetStrategyPerformanceSegment {
+  environment: "TESTNET";
+  totalLearned: number;
+  rows: TestnetStrategyPerformanceRow[];
+  updatedAt: string;
+}
+
+export interface TestnetValidationMetricsSegment {
+  environment: "TESTNET";
+  totalClosedTrades: number;
+  includedInLearning: number;
+  excludedFromLearning: number;
+  learnedCount: number;
+  winRate: number;
+  netPnl: number;
+  averageR: number;
+  updatedAt: string;
 }

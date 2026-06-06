@@ -1,5 +1,6 @@
 import { executeBinanceTestnetOrder } from "@/lib/exchange/binance";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
+import { evaluateRiskyActionGate } from "@/lib/anomaly-detection";
 import type { BinanceExecuteInput } from "@/lib/exchange/binance/binance-types";
 import { buildPolicyInput } from "@/lib/policy-engine";
 import { enforcePolicy } from "@/lib/policy-engine/enforce";
@@ -20,6 +21,21 @@ type Body = BinanceExecuteInput & {
 
 export async function POST(request: Request) {
   try {
+    const anomalyGate = await evaluateRiskyActionGate(
+      "binance testnet execute",
+    );
+    if (!anomalyGate.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          blocked: true,
+          error: anomalyGate.reason,
+          blockedByIncidents: anomalyGate.criticalIncidentIds,
+        },
+        { status: 422 },
+      );
+    }
+
     const productionBlock = blockBinanceProductionOrder();
     if (productionBlock) {
       return NextResponse.json(

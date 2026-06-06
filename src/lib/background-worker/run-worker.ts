@@ -1,4 +1,5 @@
 import { DEFAULT_WORKER_JOBS, WORKER_SAFETY_NOTICE } from "./config";
+import { runAnomalyDetectionSnapshot } from "@/lib/anomaly-detection";
 import { buildWorkerIdempotencyKey, isDuplicateWorkerRun } from "./idempotency";
 import { acquireWorkerLock, releaseWorkerLock } from "./lock";
 import { runWorkerJob } from "./run-jobs";
@@ -196,6 +197,11 @@ export async function runWorkerCycle(
     lastRunAt: completedAt,
     nextRunAt,
   });
+  try {
+    await runAnomalyDetectionSnapshot({ persist: true, useCache: false });
+  } catch {
+    // Anomaly refresh is best-effort and must not fail worker completion.
+  }
 
   return result;
 }

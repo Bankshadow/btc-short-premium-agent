@@ -16,6 +16,7 @@ export type ReadinessStatus = "PASS" | "WARNING" | "FAIL";
 export type ReadinessCategoryId =
   | "data_readiness"
   | "paper_performance_readiness"
+  | "strategy_health_readiness"
   | "risk_control_readiness"
   | "governance_readiness"
   | "exchange_connectivity_readiness"
@@ -85,6 +86,7 @@ export interface LiveReadinessInput {
   serverContext: ServerReadinessContext;
   commandCenterStatus?: string | null;
   realTimeRiskStatus?: string | null;
+  strategyHealthSignal?: import("@/lib/strategy-health").StrategyHealthSignal | null;
   killSwitchTested?: boolean;
   auditEnabled?: boolean;
 }

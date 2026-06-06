@@ -8,6 +8,10 @@ import type { OperatorOverrideLogEntry } from "@/lib/governance/governance-types
 import { evaluateHardRuleLocks } from "@/lib/governance/hard-rule-lock";
 import { buildOperatorBehaviorAnalytics } from "@/lib/operator/operator-behavior-analytics";
 import { buildOperatorDisciplineReport } from "@/lib/operator/operator-discipline-score";
+import {
+  buildStrategyHealthSignal,
+  buildStrategyHealthSummary,
+} from "@/lib/strategy-health";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
 import { countProductionResolved } from "@/lib/journal/production-filter";
@@ -258,6 +262,55 @@ function evaluateRiskControl(
     reasons,
     blockingIssues: blocking,
     recommendedActions: actions,
+  });
+}
+
+function evaluateStrategyHealthReadiness(input: LiveReadinessInput): ReadinessCategoryResult {
+  const reasons: string[] = [];
+  const blocking: string[] = [];
+  const actions: string[] = [];
+
+  const signal =
+    input.strategyHealthSignal ??
+    buildStrategyHealthSignal(
+      buildStrategyHealthSummary({
+        entries: input.entries,
+        orders: input.orders,
+      }),
+    );
+
+  reasons.push(
+    `Health score ${signal.healthScorePct}/100 from ${signal.totalStrategies} strategies.`,
+  );
+  reasons.push(
+    `Healthy ${signal.healthyStrategies}, review-required ${signal.reviewRequiredCount}, paused ${signal.pausedCount}.`,
+  );
+
+  if (signal.pausedCount > 0) {
+    blocking.push(`${signal.pausedCount} strategy(ies) paused by health logic.`);
+    actions.push("Run /risk-replay and clear paused strategy root causes before live scaling.");
+  }
+  if (signal.reviewRequiredCount >= 2) {
+    actions.push("Resolve review-required strategies before promoting live stage.");
+  }
+  if (signal.candidateForLiveCount > 0) {
+    reasons.push(
+      `${signal.candidateForLiveCount} strategy(ies) are candidate-for-live.`,
+    );
+  }
+
+  return category({
+    id: "strategy_health_readiness",
+    label: "Strategy health readiness",
+    reasons,
+    blockingIssues: blocking,
+    recommendedActions: actions,
+    score:
+      signal.healthScorePct >= 70
+        ? 88
+        : signal.healthScorePct >= 50
+          ? 65
+          : 35,
   });
 }
 
@@ -733,6 +786,7 @@ export function evaluateAllCategories(
   const categories: ReadinessCategoryResult[] = [
     evaluateDataReadiness(input.latestAnalysis),
     paper.category,
+    evaluateStrategyHealthReadiness(input),
     evaluateRiskControl(
       input.entries,
       input.orders,

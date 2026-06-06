@@ -9,6 +9,7 @@ import type { CommandCenterStatus } from "@/lib/command-center/types";
 import { AUTOPILOT_MODE_LABELS } from "@/lib/autopilot/config";
 import StatusBadge from "@/components/ux/StatusBadge";
 import DeskEmptyState from "@/components/desk/DeskEmptyState";
+import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 import RecentNotificationsStrip from "./RecentNotificationsStrip";
 import {
   ACTIONS_EMPTY,
@@ -168,6 +169,7 @@ export default function CommandCockpit({
           >
             Alerts
           </Link>
+          <IncidentsV2Badge compact />
         </div>
       </div>
 

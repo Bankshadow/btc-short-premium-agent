@@ -17,14 +17,25 @@ export default function WorkerCockpitBadge() {
             lastSuccessfulRunAt: string | null;
           };
           failedJobs?: unknown[];
+          anomalySummary?: {
+            criticalOpenCount: number;
+            blocksRiskyActions: boolean;
+          };
           backboneHealthy?: boolean;
         };
         if (!data.ok || !data.state) return;
         const status = data.state.lastRun?.status ?? "IDLE";
         const failed = data.failedJobs?.length ?? 0;
         const backbone = data.backboneHealthy ? "" : " · backbone check";
+        const incidents =
+          data.anomalySummary?.criticalOpenCount && data.anomalySummary.criticalOpenCount > 0
+            ? ` · ${data.anomalySummary.criticalOpenCount} critical`
+            : "";
+        const blocked = data.anomalySummary?.blocksRiskyActions
+          ? " · actions blocked"
+          : "";
         setLabel(
-          `Worker ${status}${failed > 0 ? ` · ${failed} failed` : ""}${backbone}`,
+          `Worker ${status}${failed > 0 ? ` · ${failed} failed` : ""}${incidents}${blocked}${backbone}`,
         );
       } catch {
         setLabel("Worker offline");

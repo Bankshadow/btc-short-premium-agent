@@ -1,4 +1,5 @@
 import { executeLivePerpOrder } from "@/lib/exchange/live-execution-gate";
+import { evaluateRiskyActionGate } from "@/lib/anomaly-detection";
 import type { PerpDirectionalSignal } from "@/lib/multi-asset/types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import { NextResponse } from "next/server";
@@ -17,6 +18,18 @@ type ExecuteBody = {
 
 export async function POST(request: Request) {
   try {
+    const anomalyGate = await evaluateRiskyActionGate("live exchange execute");
+    if (!anomalyGate.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: anomalyGate.reason,
+          blockedByIncidents: anomalyGate.criticalIncidentIds,
+        },
+        { status: 422 },
+      );
+    }
+
     const body = (await request.json()) as ExecuteBody;
     if (!body.signal?.symbol || !body.confirmToken || !body.confirmExpiresAt) {
       return NextResponse.json(

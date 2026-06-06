@@ -15,6 +15,10 @@ import { loadLatestAnalyzeCache } from "@/lib/live-trading-readiness/latest-anal
 import { isKillSwitchTested } from "@/lib/live-trading-readiness/operational-gates";
 import { loadPilotEmergencyStop } from "@/lib/live-pilot/journal-store";
 import { loadClientRiskBudget } from "@/lib/risk-budget-optimizer/client-store";
+import {
+  buildStrategyHealthSignal,
+  buildStrategyHealthSummary,
+} from "@/lib/strategy-health";
 import { enrichRealTimeRiskInput } from "@/lib/real-time-risk/build-server-context";
 import { evaluateRealTimeRisk } from "@/lib/real-time-risk/evaluate-realtime-risk";
 import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
@@ -119,6 +123,13 @@ export default function LiveReadinessDashboard() {
       market: latestAnalysis,
       commandCenter,
     });
+    const strategyHealthSignal = buildStrategyHealthSignal(
+      buildStrategyHealthSummary({
+        entries,
+        orders,
+        liveTrades: livePilotJournal,
+      }),
+    );
     const realTimeRisk = evaluateRealTimeRisk(riskInput);
 
     return {
@@ -135,6 +146,7 @@ export default function LiveReadinessDashboard() {
       riskBudget: loadClientRiskBudget(),
       commandCenterStatus: commandCenter.status,
       realTimeRiskStatus: realTimeRisk.riskStatus,
+      strategyHealthSignal,
       killSwitchTested: isKillSwitchTested(),
       auditEnabled: deskSettings.auditLiveActions,
       ledgerHealth: ledger.health,
@@ -215,6 +227,7 @@ export default function LiveReadinessDashboard() {
       nav={[
         { href: "/", label: "← Desk" },
         { href: "/live-trading", label: "Live plan", primary: true },
+        { href: "/live-evidence", label: "Evidence pack" },
         { href: "/live-pilot", label: "Pilot" },
         { href: "/governance", label: "Governance" },
       ]}

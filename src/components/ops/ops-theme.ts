@@ -85,7 +85,10 @@ export const OPS_ACCENT: Record<
 };
 
 export const OPS_MODULE_LINKS = [
-  { href: "/", label: "Cockpit", accent: "amber" as OpsAccent },
+  { href: "/", label: "Dashboard", accent: "emerald" as OpsAccent },
+  { href: "/cockpit", label: "Cockpit", accent: "amber" as OpsAccent },
+  { href: "/trades", label: "Trades", accent: "cyan" as OpsAccent },
+  { href: "/ai-status", label: "AI Status", accent: "indigo" as OpsAccent },
   { href: "/autopilot", label: "Autopilot", accent: "cyan" as OpsAccent },
   { href: "/actions", label: "Actions", accent: "indigo" as OpsAccent },
   { href: "/notifications", label: "Alerts", accent: "amber" as OpsAccent },
@@ -103,6 +106,10 @@ export const OPS_MODULE_LINKS = [
   { href: "/simulation", label: "Simulation", accent: "violet" as OpsAccent },
   { href: "/backtest", label: "Backtest", accent: "violet" as OpsAccent },
   { href: "/risk-budget", label: "Risk Budget", accent: "rose" as OpsAccent },
+  { href: "/risk-replay", label: "Risk Replay", accent: "rose" as OpsAccent },
+  { href: "/execution-quality", label: "Exec Quality", accent: "cyan" as OpsAccent },
+  { href: "/strategy-health", label: "Strat Health", accent: "indigo" as OpsAccent },
+  { href: "/live-evidence", label: "Live Evidence", accent: "emerald" as OpsAccent },
   { href: "/war-room", label: "War room", accent: "rose" as OpsAccent },
   { href: "/capital", label: "Capital", accent: "violet" as OpsAccent },
   { href: "/adaptation", label: "Adaptation", accent: "indigo" as OpsAccent },
@@ -120,11 +127,13 @@ export const OPS_MODULE_LINKS = [
   { href: "/options-testnet", label: "Options TN", accent: "cyan" as OpsAccent },
   { href: "/binance-testnet", label: "Binance TN", accent: "cyan" as OpsAccent },
   { href: "/testnet-monitor", label: "TN Monitor", accent: "cyan" as OpsAccent },
+  { href: "/trades/bn-tn-sample", label: "Timeline", accent: "indigo" as OpsAccent },
   { href: "/options-dry-run", label: "Options DR", accent: "violet" as OpsAccent },
   { href: "/options-risk", label: "Options Risk", accent: "violet" as OpsAccent },
   { href: "/strategies", label: "Strategies", accent: "indigo" as OpsAccent },
   { href: "/validation", label: "Validation", accent: "teal" as OpsAccent },
   { href: "/governance", label: "Governance", accent: "rose" as OpsAccent },
+  { href: "/incidents-v2", label: "Incidents V2", accent: "rose" as OpsAccent },
   { href: "/workspace", label: "Workspace", accent: "cyan" as OpsAccent },
   { href: "/reports", label: "Reports", accent: "cyan" as OpsAccent },
 ] as const;

@@ -70,6 +70,17 @@ export function buildJournalEntryFromPreview(
     closedAt: null,
     realizedPnl: null,
     fees: null,
+    previewPrice: preview.markPrice ?? null,
+    markPriceAtSubmit: preview.markPrice ?? null,
+    fillPrice: null,
+    slippage: null,
+    slippageBps: null,
+    latencyMs: null,
+    partialFill: false,
+    duplicateSubmission: false,
+    retryCount: 0,
+    closeAttempt: false,
+    closeFailed: false,
     ...patch,
   };
 }

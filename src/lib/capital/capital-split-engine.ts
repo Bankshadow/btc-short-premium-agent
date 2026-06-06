@@ -119,8 +119,9 @@ function normalizeBuckets(
 export function buildCapitalSplitRecommendation(input: {
   stage: CapitalStageSnapshot;
   validationAllocation: CapitalAllocationRecommendation;
+  strategyHealthSignal?: import("@/lib/strategy-health").StrategyHealthSignal | null;
 }): CapitalSplitRecommendation {
-  const { stage, validationAllocation: v } = input;
+  const { stage, validationAllocation: v, strategyHealthSignal } = input;
   const tpl =
     STAGE_SPLIT_TEMPLATES[
       Math.min(stage.stageIndex, STAGE_SPLIT_TEMPLATES.length - 1)
@@ -136,6 +137,19 @@ export function buildCapitalSplitRecommendation(input: {
     core = 10;
     growth = 5;
     experimental = 0;
+  }
+
+  if (strategyHealthSignal) {
+    if (strategyHealthSignal.pausedCount > 0) {
+      reserve = Math.min(90, reserve + 10);
+      core = Math.max(5, core - 5);
+      growth = Math.max(0, growth - 5);
+      experimental = Math.max(0, experimental - 2);
+    } else if (strategyHealthSignal.candidateForLiveCount > 0 && strategyHealthSignal.healthScorePct >= 70) {
+      reserve = Math.max(20, reserve - 5);
+      core += 3;
+      growth += 2;
+    }
   }
 
   const buckets = normalizeBuckets(
@@ -154,7 +168,7 @@ export function buildCapitalSplitRecommendation(input: {
     buckets,
     totalPct: buckets.reduce((s, b) => s + b.pct, 0),
     trigger,
-    summary: `${tpl.note} Blended with MVP 10 validation allocation (kill switch / regime aware).`,
+    summary: `${tpl.note} Blended with MVP 10 validation allocation (kill switch / regime aware) and MVP 52 strategy-health signal.`,
     validationAllocation: v,
   };
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import OpsShell from "@/components/ops/OpsShell";
+import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 import { useBackgroundWorker } from "@/hooks/useBackgroundWorker";
 import {
   WORKER_JOB_LABELS,
@@ -60,6 +61,9 @@ export default function WorkerDashboard() {
       <p className="rounded-lg border border-cyan-900/40 bg-cyan-950/20 px-4 py-2 text-xs text-cyan-200/90">
         {WORKER_SAFETY_NOTICE}
       </p>
+      <div className="flex flex-wrap gap-2">
+        <IncidentsV2Badge />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">

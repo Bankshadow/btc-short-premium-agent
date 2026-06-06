@@ -259,6 +259,13 @@ export default function LearningDashboard() {
                     {r.decisionLogId.slice(0, 10)}
                   </span>{" "}
                   · {r.source} · PnL {r.pnlPct}% · {r.marketRegime}
+                  {" · "}
+                  <Link
+                    href={`/trades/${encodeURIComponent(r.decisionLogId)}`}
+                    className="text-cyan-400/90 hover:underline"
+                  >
+                    timeline
+                  </Link>
                   <br />
                   <span className="text-xs text-zinc-500">
                     {r.improvementHints[0] ?? "No hints"}

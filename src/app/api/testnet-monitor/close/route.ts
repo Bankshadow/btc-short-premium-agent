@@ -1,5 +1,6 @@
 import { executeBinanceTestnetClose } from "@/lib/exchange/binance/binance-execution";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
+import { evaluateRiskyActionGate } from "@/lib/anomaly-detection";
 import { recordMonitorEvent } from "@/lib/testnet-monitor/monitor-journal-server";
 import { NextResponse } from "next/server";
 
@@ -18,6 +19,19 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
+    const anomalyGate = await evaluateRiskyActionGate("testnet monitor close");
+    if (!anomalyGate.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          blocked: true,
+          error: anomalyGate.reason,
+          blockedByIncidents: anomalyGate.criticalIncidentIds,
+        },
+        { status: 422 },
+      );
+    }
+
     const liveBlock = blockBinanceProductionOrder();
     if (liveBlock) {
       return NextResponse.json(

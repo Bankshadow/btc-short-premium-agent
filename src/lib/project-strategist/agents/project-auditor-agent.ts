@@ -12,6 +12,8 @@ export function runProjectAuditorAgent(input: StrategistAgentInput): AuditDiagno
   const monitorConnected = Boolean(ctx.latestTestnetMonitor?.connected);
   const automationHasRun = Boolean(ctx.latestAutomationStatus?.state.lastRun);
   const pendingActions = ctx.latestAutomationStatus?.pendingOperatorActions.length ?? 0;
+  const strategyPaused = ctx.strategyHealthSummary?.paused ?? 0;
+  const strategyReviewRequired = ctx.strategyHealthSummary?.reviewRequired ?? 0;
 
   const cockpitRoutes = countRoutesByPrefix(ctx.routeList, "/");
   const automationRoutes = countRoutesByPrefix(ctx.routeList, "/automation");
@@ -25,6 +27,12 @@ export function runProjectAuditorAgent(input: StrategistAgentInput): AuditDiagno
   if (decisionLogCount < 5) topProblems.push("Learning loop has low sample size from decision logs.");
   if (pendingActions > 8) topProblems.push("Operator queue is noisy and likely causing action paralysis.");
   if (routeCount > 45) topProblems.push("Cockpit surface is too wide; primary vs advanced paths are mixed.");
+  if (strategyPaused > 0) {
+    topProblems.push(`${strategyPaused} strategy(ies) are paused by health dashboard signals.`);
+  }
+  if (strategyReviewRequired > 1) {
+    topProblems.push(`${strategyReviewRequired} strategy(ies) require review before promotion.`);
+  }
 
   if (apiCount > 90) hiddenRisks.push("Large API surface raises maintenance and discoverability overhead.");
   if (cockpitRoutes > 20) hiddenRisks.push("Too many visible modules can hide critical daily workflow paths.");
@@ -33,6 +41,11 @@ export function runProjectAuditorAgent(input: StrategistAgentInput): AuditDiagno
   }
   if (monitorRoutes > 0 && !monitorConnected) {
     hiddenRisks.push("Trading readiness appears available in UI while core monitor loop is degraded.");
+  }
+  if (strategyPaused > 0 || strategyReviewRequired > 2) {
+    hiddenRisks.push(
+      "Strategy quality drift can leak into allocation and live readiness if risk replay is not enforced.",
+    );
   }
 
   const redSignals = Number(!monitorConnected) + Number(!automationHasRun);

@@ -1,4 +1,8 @@
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
+import {
+  buildStrategyHealthSignal,
+  buildStrategyHealthSummary,
+} from "@/lib/strategy-health";
 import { REALTIME_RISK_THRESHOLDS } from "./config";
 import type {
   RealTimeRiskCheck,
@@ -533,6 +537,49 @@ export function evaluateRealTimeRisk(input: RealTimeRiskInput): RealTimeRiskRepo
       ),
     );
     triggeredLimits.push("risk_budget");
+  }
+
+  const strategyHealthSignal =
+    input.strategyHealthSignal ??
+    buildStrategyHealthSignal(
+      buildStrategyHealthSummary({
+        entries: input.entries,
+        orders: input.orders,
+        liveTrades: input.liveTrades,
+      }),
+    );
+  if (strategyHealthSignal.pausedCount > 0) {
+    checks.push(
+      check(
+        "strategy_health_guard",
+        "Strategy health guard",
+        "FAIL",
+        `${strategyHealthSignal.pausedCount} strategy(ies) paused by health policy.`,
+        true,
+        "strategy_health",
+      ),
+    );
+    triggeredLimits.push("strategy_health");
+  } else if (strategyHealthSignal.reviewRequiredCount >= 2) {
+    checks.push(
+      check(
+        "strategy_health_guard",
+        "Strategy health guard",
+        "WARNING",
+        `${strategyHealthSignal.reviewRequiredCount} strategy(ies) require review.`,
+        false,
+      ),
+    );
+  } else {
+    checks.push(
+      check(
+        "strategy_health_guard",
+        "Strategy health guard",
+        "PASS",
+        `Health score ${strategyHealthSignal.healthScorePct}/100.`,
+        false,
+      ),
+    );
   }
 
   const cc = input.commandCenter;

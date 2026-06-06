@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
+import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 import { loadLedgerAnalyticsInput } from "@/lib/ledger/analytics";
 import type {
   LedgerEntry,
@@ -146,6 +147,9 @@ export default function LedgerDashboard() {
         {ledger.health.entryCount} entries · {entries.length} decisions ·{" "}
         {orders.length} paper orders · live entries append-only
       </p>
+      <div className="flex flex-wrap gap-2">
+        <IncidentsV2Badge />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <OpsKpi
@@ -265,7 +269,17 @@ export default function LedgerDashboard() {
         </section>
 
         <section className="desk-panel px-4 py-4">
-          <h2 className="text-sm font-semibold text-zinc-100">Linked event timeline</h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-100">Linked event timeline</h2>
+            {selectedTimeline && (
+              <Link
+                href={`/trades/${encodeURIComponent(selectedTimeline.tradeId)}`}
+                className="rounded border border-indigo-800/50 px-2 py-1 text-[10px] text-indigo-300 hover:bg-indigo-950/40"
+              >
+                Open full lifecycle
+              </Link>
+            )}
+          </div>
           {!selectedTimeline ? (
             <p className="mt-2 text-xs text-zinc-500">
               Select an entry to view SIGNAL → LEARNED lifecycle chain.

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import OpsShell from "@/components/ops/OpsShell";
+import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 import {
   SMART_BRIEFING_SAFETY_NOTICE,
 } from "@/lib/smart-briefing/config";
@@ -80,6 +81,9 @@ export default function NotificationsDashboard() {
       <p className="rounded-lg border border-amber-900/40 bg-amber-950/20 px-4 py-2 text-xs text-amber-200/90">
         {SMART_BRIEFING_SAFETY_NOTICE}
       </p>
+      <div className="flex flex-wrap gap-2">
+        <IncidentsV2Badge />
+      </div>
 
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="rounded-full border border-zinc-700 px-2 py-1 text-zinc-300">

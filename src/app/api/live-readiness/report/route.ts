@@ -23,6 +23,7 @@ type ReportBody = {
   overrideLog?: OperatorOverrideLogEntry[];
   deskSettings?: DeskCloudSettings;
   latestAnalysis?: AnalyzeApiResponse | null;
+  strategyHealthSignal?: import("@/lib/strategy-health").StrategyHealthSignal | null;
   format?: "markdown" | "text" | "json" | "all";
 };
 
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
       overrideLog: body.overrideLog,
       deskSettings: body.deskSettings,
       latestAnalysis: body.latestAnalysis ?? null,
+      strategyHealthSignal: body.strategyHealthSignal ?? null,
       serverContext,
     });
 

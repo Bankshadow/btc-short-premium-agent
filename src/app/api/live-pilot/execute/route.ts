@@ -1,5 +1,6 @@
 import { assertLiveWriteHealthy } from "@/lib/db/write-health";
 import { writeThroughLiveTrades } from "@/lib/db/write-through";
+import { evaluateRiskyActionGate } from "@/lib/anomaly-detection";
 import { executePilotPerpOrder } from "@/lib/live-pilot/pilot-execution";
 import type { PilotExecuteInput } from "@/lib/live-pilot/pilot-execution";
 import { enforcePolicy } from "@/lib/policy-engine/enforce";
@@ -12,6 +13,18 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const anomalyGate = await evaluateRiskyActionGate("live pilot execute");
+    if (!anomalyGate.allowed) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: anomalyGate.reason,
+          blockedByIncidents: anomalyGate.criticalIncidentIds,
+        },
+        { status: 422 },
+      );
+    }
+
     const body = (await request.json()) as PilotExecuteInput;
 
     if (!body.signal?.symbol || !body.confirmToken || !body.confirmExpiresAt) {

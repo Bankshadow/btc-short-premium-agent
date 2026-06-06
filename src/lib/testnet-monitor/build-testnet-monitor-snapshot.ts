@@ -8,7 +8,16 @@ import type { BinanceOpenOrder, BinancePosition } from "@/lib/exchange/binance/b
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import { loadServerBinanceTestnetJournal } from "@/lib/exchange/binance/binance-testnet-journal-server";
 import { reconcileBinancePositions } from "@/lib/exchange/binance/binance-position-monitor";
+import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { mapBinanceSource } from "./decision-linkage";
+import { buildExecutionQualitySummary } from "@/lib/execution-quality";
+import {
+  buildAgentScoreboardSegmentFromRecords,
+  buildLearningQueueFromRecords,
+  buildStrategyPerformanceSegmentFromRecords,
+  buildValidationMetricsSegmentFromRecords,
+  syncLearningRecordsFromClosedTradesServer,
+} from "./learning-records-server";
 import {
   buildEquitySeries,
   calculateDailyPnl,
@@ -265,6 +274,22 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
   );
 
   const closedTrades = buildClosedTrades(journal);
+  const decisions = await loadServerAnalysisJournal().catch(() => []);
+  const learningRecords = await syncLearningRecordsFromClosedTradesServer({
+    closedTrades,
+    journal,
+    decisions,
+  });
+  const learningQueue = buildLearningQueueFromRecords(learningRecords);
+  const agentScoreboardSegment =
+    buildAgentScoreboardSegmentFromRecords(learningRecords);
+  const strategyPerformanceSegment =
+    buildStrategyPerformanceSegmentFromRecords(learningRecords);
+  const validationMetricsSegment =
+    buildValidationMetricsSegmentFromRecords(learningRecords);
+  const executionQuality = buildExecutionQualitySummary({
+    testnetJournal: journal,
+  });
   const equitySeries = buildEquitySeries(closedTrades, openPositions);
   const riskStatus = resolveRiskStatus({
     liveBlock,
@@ -282,18 +307,12 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
     pnlBySymbol: groupPnlBySymbol(closedTrades),
     pnlByStrategy: groupPnlByStrategy(closedTrades),
     equitySeries,
-    learningQueue: closedTrades
-      .filter((t) => !t.learned)
-      .map((t) => ({
-        closedTradeId: t.id,
-        symbol: t.symbol,
-        decisionLogId: t.decisionLogId,
-        netPnl: t.netPnl,
-        result: t.result,
-        closedAt: t.closedAt,
-        status: "PENDING" as const,
-        reflectionNotes: null,
-      })),
+    learningRecords,
+    learningQueue,
+    agentScoreboardSegment,
+    strategyPerformanceSegment,
+    validationMetricsSegment,
+    executionQuality,
     lastUpdatedAt: new Date().toISOString(),
     connected,
     mismatches,

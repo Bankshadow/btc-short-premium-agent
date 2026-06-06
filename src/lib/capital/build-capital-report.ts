@@ -8,6 +8,10 @@ import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
 import { buildValidationReport } from "@/lib/validation/build-validation-report";
+import {
+  buildStrategyHealthSignal,
+  buildStrategyHealthSummary,
+} from "@/lib/strategy-health";
 import { loadCapitalSettings, type CapitalMissionSettings } from "./capital-settings";
 import {
   buildCapitalStageSnapshot,
@@ -41,9 +45,16 @@ export function buildCapitalReport(input: {
   });
 
   const stage = buildCapitalStageSnapshot({ settings, portfolio });
+  const strategyHealthSignal = buildStrategyHealthSignal(
+    buildStrategyHealthSummary({
+      entries,
+      orders,
+    }),
+  );
   const split = buildCapitalSplitRecommendation({
     stage,
     validationAllocation: validation.capitalAllocation,
+    strategyHealthSignal,
   });
   const scalePermission = buildDeskScalePermission({
     strategyMatrix: validation.strategyMatrix,

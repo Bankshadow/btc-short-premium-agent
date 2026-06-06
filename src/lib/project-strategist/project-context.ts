@@ -4,6 +4,8 @@ import {
   loadServerPendingOperatorActions,
 } from "@/lib/automation-control-plane/state-store";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
+import { buildStrategyHealthSummary } from "@/lib/strategy-health";
+import { buildStrategyHealthInputServer } from "@/lib/strategy-health/build-server-context";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
 import { buildTestnetMonitorSnapshot } from "@/lib/testnet-monitor/build-testnet-monitor-snapshot";
@@ -18,6 +20,12 @@ export interface ProjectStrategistContext {
   apiList: string[];
   featureStatus: string[];
   knownGaps: string[];
+  strategyHealthSummary: {
+    totalStrategies: number;
+    reviewRequired: number;
+    paused: number;
+    candidateForLive: number;
+  } | null;
   latestDecisionLogs: DecisionLogEntry[];
   latestTestnetMonitor: TestnetMonitorSnapshot | null;
   latestPortfolioSummary: ReturnType<typeof buildDeskPortfolioSnapshot> | null;
@@ -92,6 +100,7 @@ function detectFeatureStatus(input: {
   routes: string[];
   latestTestnetMonitor: TestnetMonitorSnapshot | null;
   automationStatus: AutomationStatusSnapshot | null;
+  strategyHealthSummary: ProjectStrategistContext["strategyHealthSummary"];
 }): string[] {
   const statuses: string[] = [];
   const hasMonitor = input.routes.includes("/testnet-monitor");
@@ -105,11 +114,21 @@ function detectFeatureStatus(input: {
   } else {
     statuses.push("Binance testnet connectivity degraded.");
   }
+  if (input.latestTestnetMonitor?.validationMetricsSegment) {
+    statuses.push(
+      `TESTNET learning metrics ready (${input.latestTestnetMonitor.validationMetricsSegment.learnedCount} learned).`,
+    );
+  }
   const automation = input.automationStatus?.state.settings;
   if (automation?.automationEnabled && !automation.paused) {
     statuses.push("Automation control plane enabled.");
   } else {
     statuses.push("Automation control plane paused or disabled.");
+  }
+  if (input.strategyHealthSummary) {
+    statuses.push(
+      `Strategy health dashboard ready (${input.strategyHealthSummary.totalStrategies} strategies, ${input.strategyHealthSummary.reviewRequired} review-required).`,
+    );
   }
   return statuses;
 }
@@ -119,6 +138,7 @@ function detectKnownGaps(input: {
   latestDecisionLogs: DecisionLogEntry[];
   latestTestnetMonitor: TestnetMonitorSnapshot | null;
   automationStatus: AutomationStatusSnapshot | null;
+  strategyHealthSummary: ProjectStrategistContext["strategyHealthSummary"];
 }): string[] {
   const gaps: string[] = [];
   if (!input.routes.includes("/project-strategist")) {
@@ -130,23 +150,43 @@ function detectKnownGaps(input: {
   if (!input.latestTestnetMonitor?.connected) {
     gaps.push("Testnet monitor disconnected — execution loop confidence is low.");
   }
+  if ((input.latestTestnetMonitor?.validationMetricsSegment.learnedCount ?? 0) === 0) {
+    gaps.push("No TESTNET learning records marked as learned yet.");
+  }
   if (!input.automationStatus?.state.lastRun) {
     gaps.push("Automation has no recent successful server run.");
   }
   if ((input.automationStatus?.pendingOperatorActions ?? []).length > 8) {
     gaps.push("Operator action queue is noisy and likely overwhelming.");
   }
+  if ((input.strategyHealthSummary?.paused ?? 0) > 0) {
+    gaps.push(
+      `${input.strategyHealthSummary?.paused ?? 0} strategy(ies) paused by health logic — run risk replay before promotion.`,
+    );
+  }
   return gaps;
 }
 
 export async function buildProjectStrategistContext(): Promise<ProjectStrategistContext> {
   const { routes, apis } = await listRoutesAndApis();
-  const [latestDecisionLogs, latestAutomationStatus, latestTestnetMonitor] =
+  const [latestDecisionLogs, latestAutomationStatus, latestTestnetMonitor, strategyHealthInput] =
     await Promise.all([
       loadServerAnalysisJournal(),
       loadAutomationSnapshot().catch(() => null),
       buildTestnetMonitorSnapshot().catch(() => null),
+      buildStrategyHealthInputServer().catch(() => null),
     ]);
+  const strategyHealth = strategyHealthInput
+    ? buildStrategyHealthSummary(strategyHealthInput)
+    : null;
+  const strategyHealthSummary = strategyHealth
+    ? {
+        totalStrategies: strategyHealth.totals.strategies,
+        reviewRequired: strategyHealth.totals.reviewRequired,
+        paused: strategyHealth.totals.paused,
+        candidateForLive: strategyHealth.totals.candidateForLive,
+      }
+    : null;
 
   const latestPortfolioSummary =
     latestDecisionLogs.length > 0
@@ -162,13 +202,16 @@ export async function buildProjectStrategistContext(): Promise<ProjectStrategist
       routes,
       latestTestnetMonitor,
       automationStatus: latestAutomationStatus,
+      strategyHealthSummary,
     }),
     knownGaps: detectKnownGaps({
       routes,
       latestDecisionLogs,
       latestTestnetMonitor,
       automationStatus: latestAutomationStatus,
+      strategyHealthSummary,
     }),
+    strategyHealthSummary,
     latestDecisionLogs: latestDecisionLogs.slice(0, 30),
     latestTestnetMonitor,
     latestPortfolioSummary,

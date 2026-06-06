@@ -4,6 +4,7 @@ import { checkOrderAgainstRealTimeRisk } from "./check-order";
 import { evaluateRealTimeRisk } from "./evaluate-realtime-risk";
 import { applyRealTimeRiskToBudget } from "./bridge-risk-budget";
 import { applyRealTimeRiskToOptionsChecks } from "./bridge-options";
+import { buildStrategyHealthSignal, buildStrategyHealthSummary } from "@/lib/strategy-health";
 import type { RealTimeRiskInput } from "./types";
 import type { OrderPreviewResult } from "@/lib/exchange/types";
 import { optimizeRiskBudget } from "@/lib/risk-budget-optimizer/optimize-risk-budget";
@@ -156,5 +157,27 @@ describe("real-time risk MVP 42", () => {
     );
     const checks = applyRealTimeRiskToOptionsChecks(report);
     assert.ok(checks.some((c) => c.id === "realtime_risk_status" && c.blocking));
+  });
+
+  it("blocks on paused strategy health signal", () => {
+    const health = buildStrategyHealthSignal(
+      buildStrategyHealthSummary({
+        entries: [],
+        orders: [],
+      }),
+    );
+    const report = evaluateRealTimeRisk(
+      baseInput({
+        strategyHealthSignal: {
+          ...health,
+          pausedCount: 1,
+          reviewRequiredCount: 2,
+        },
+      }),
+    );
+    assert.equal(report.blockNewTrades, true);
+    assert.ok(
+      report.checks.some((c) => c.id === "strategy_health_guard" && c.blocking),
+    );
   });
 });

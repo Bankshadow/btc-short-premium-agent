@@ -25,8 +25,41 @@ export function runMvpPlannerAgent(input: {
   const used = existingTitleSet(input.agentInput.previousMvpProposals);
   const monitor = ctx.latestTestnetMonitor;
   const automation = ctx.latestAutomationStatus;
+  const strategyHealth = ctx.strategyHealthSummary;
 
   const candidates: MVPProposal[] = [];
+
+  candidates.push(
+    createMvp({
+      title: "Strategy Health Guided Promotion Rules",
+      problem:
+        "Strategy status transitions can lag behind current health and create inconsistent promotion decisions.",
+      whyNow:
+        "MVP 52 adds health telemetry; turning it into explicit promotion rules reduces drift and review debt.",
+      expectedImpact:
+        "Fewer weak strategies slip into higher-risk stages; clearer next actions per strategy.",
+      implementationScope:
+        "Wire strategy-health statuses/recommendations into strategist rule proposals and promotion checklist.",
+      affectedPages: ["/strategy-health", "/project-strategist", "/validation"],
+      affectedAPIs: ["/api/strategy-health", "/api/project-strategist/proposals"],
+      affectedModules: ["strategy-health", "project-strategist", "validation"],
+      estimatedComplexity: "SMALL",
+      oneDayPlan: [
+        "Add strategist guardrails that block promotion when strategy health is REVIEW_REQUIRED or PAUSED.",
+        "Auto-create rule suggestions when false TRADE/SKIP count breaches threshold.",
+        "Show strategy-health-based next MVP hint inside strategist output.",
+      ],
+      risks: ["Too rigid thresholds may slow down iteration if not tuned."],
+      acceptanceCriteria: [
+        "Strategist includes strategy health signal in recommended MVP/rules.",
+        "Promotion proposals cite strategy health status and recommendation.",
+        "Operator sees deterministic rationale for pause/review/progress suggestions.",
+      ],
+      cursorPrompt:
+        "Integrate MVP 52 strategy-health statuses and recommendations into project strategist MVP/rule proposals and promotion guardrails.",
+      status: "PROPOSED",
+    }),
+  );
 
   candidates.push(
     createMvp({
@@ -119,6 +152,7 @@ export function runMvpPlannerAgent(input: {
       let s = 0;
       if (m.title.includes("Testnet") && (!monitor?.connected || (monitor?.mismatches.length ?? 0) > 0)) s += 5;
       if (m.title.includes("Automation") && (!automation?.state.lastRun || (automation.failedJobs.length ?? 0) > 0)) s += 4;
+      if (m.title.includes("Strategy Health") && ((strategyHealth?.reviewRequired ?? 0) > 0 || (strategyHealth?.paused ?? 0) > 0)) s += 6;
       if (m.title.includes("Cockpit") && ctx.routeList.length > 40) s += 3;
       if (m.estimatedComplexity === "SMALL") s += 2;
       return s;

@@ -178,6 +178,17 @@ export interface BinanceTestnetJournalEntry {
   closedAt: string | null;
   realizedPnl: number | null;
   fees: number | null;
+  previewPrice?: number | null;
+  markPriceAtSubmit?: number | null;
+  fillPrice?: number | null;
+  slippage?: number | null;
+  slippageBps?: number | null;
+  latencyMs?: number | null;
+  partialFill?: boolean;
+  duplicateSubmission?: boolean;
+  retryCount?: number;
+  closeAttempt?: boolean;
+  closeFailed?: boolean;
 }
 
 export interface BinanceExecuteInput {

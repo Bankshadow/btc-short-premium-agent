@@ -34,6 +34,7 @@ export type RiskCheckId =
   | "open_order_mismatch"
   | "live_position_mismatch"
   | "unresolved_incident"
+  | "strategy_health_guard"
   | "governance_pause"
   | "kill_switch";
 
@@ -91,6 +92,7 @@ export interface RealTimeRiskInput {
   governance?: GovernanceDeskState;
   incidents?: DeskIncident[];
   riskBudget?: RiskBudgetResult | null;
+  strategyHealthSignal?: import("@/lib/strategy-health").StrategyHealthSignal | null;
   commandCenter?: CommandCenterReport | null;
   emergencyStopActive?: boolean;
   dailyPnlPct?: number;

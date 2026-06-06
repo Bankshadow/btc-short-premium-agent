@@ -1,4 +1,9 @@
 import { runAnalysisEngine } from "@/lib/decision/analyze";
+import {
+  appendObservabilityError,
+  loadObservabilityMetrics,
+  saveObservabilityMetrics,
+} from "@/lib/observability/store";
 import type { AnalysisInput } from "@/lib/types/market";
 import {
   sendTelegramMessage,
@@ -21,6 +26,11 @@ export async function POST(request: Request) {
     const analysis = await runAnalysisEngine(body);
     const text = formatAnalysisNotification(analysis);
     const { messageId } = await sendTelegramMessage(text);
+    const metrics = await loadObservabilityMetrics();
+    await saveObservabilityMetrics({
+      lastAlertDeliveryAt: new Date().toISOString(),
+      alertDeliveryFailures: Math.max(0, metrics.alertDeliveryFailures - 1),
+    });
 
     return NextResponse.json({
       ok: true,
@@ -32,6 +42,17 @@ export async function POST(request: Request) {
       sourceErrors: analysis.sourceErrors,
     });
   } catch (error) {
+    const metrics = await loadObservabilityMetrics();
+    await saveObservabilityMetrics({
+      alertDeliveryFailures: metrics.alertDeliveryFailures + 1,
+    });
+    await appendObservabilityError({
+      workspaceId: "server-default",
+      source: "api:notify",
+      message: error instanceof Error ? error.message : "Notification failed",
+      severity: "high",
+    });
+
     if (error instanceof TelegramConfigError) {
       return NextResponse.json({ error: error.message }, { status: 503 });
     }

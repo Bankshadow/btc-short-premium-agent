@@ -105,6 +105,12 @@ export default function StrategiesDashboard() {
           >
             ← Trading desk
           </Link>
+          <Link
+            href="/strategy-health"
+            className="rounded-lg border border-indigo-900/50 px-3 py-1.5 text-xs text-indigo-200 hover:bg-indigo-950/40"
+          >
+            Strategy health
+          </Link>
           <button
             type="button"
             onClick={refresh}

@@ -117,6 +117,7 @@ function PositionsTable({
                 <th className="py-2 pr-3">Log</th>
                 <th className="py-2 pr-3">Notional</th>
                 <th className="py-2 pr-3">PnL</th>
+                <th className="py-2 pr-3">Timeline</th>
                 <th className="py-2">Opened</th>
               </tr>
             </thead>
@@ -148,6 +149,14 @@ function PositionsTable({
                     {row.status === "OPEN"
                       ? fmtUsd(row.unrealizedPnlUsd)
                       : fmtUsd(row.realizedPnlUsd)}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <Link
+                      href={`/trades/${encodeURIComponent(row.id)}`}
+                      className="text-cyan-400/90 hover:underline"
+                    >
+                      View flow
+                    </Link>
                   </td>
                   <td className="py-2 font-mono text-[10px] text-zinc-500">
                     {new Date(row.createdAt).toLocaleString()}

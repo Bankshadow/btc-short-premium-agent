@@ -47,7 +47,7 @@ export function syncLearningQueueFromClosedTrades(
         netPnl: trade.netPnl,
         result: trade.result,
         closedAt: trade.closedAt,
-        status: trade.learned ? "LEARNED" : "PENDING",
+        status: trade.learned ? "LEARNED" : "PENDING_REVIEW",
         reflectionNotes: null,
       });
     }

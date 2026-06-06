@@ -1,5 +1,6 @@
 import { buildTestnetMonitorSnapshot } from "@/lib/testnet-monitor";
 import { recordMonitorEvent } from "@/lib/testnet-monitor/monitor-journal-server";
+import { runAnomalyDetectionSnapshot } from "@/lib/anomaly-detection";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
 import { NextResponse } from "next/server";
 
@@ -13,6 +14,7 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: liveBlock }, { status: 422 });
     }
     const snapshot = await buildTestnetMonitorSnapshot();
+    await runAnomalyDetectionSnapshot({ persist: true, useCache: false });
     await recordMonitorEvent({
       exchange: "BINANCE",
       environment: "TESTNET",

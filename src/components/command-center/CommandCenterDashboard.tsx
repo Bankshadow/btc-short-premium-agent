@@ -29,6 +29,7 @@ import { loadAdaptationProposals } from "@/lib/strategy-adaptation/proposal-stor
 import { loadExperiments } from "@/lib/strategy-experiments/experiment-store";
 import { loadOptionsDryRunHistory } from "@/lib/options-dry-run/dry-run-client-store";
 import { loadPersistedRegistry } from "@/lib/strategy-registry/strategy-registry-store";
+import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 
 function Panel({
   title,
@@ -57,6 +58,11 @@ function statusClass(status: CommandCenterStatus): string {
 export default function CommandCenterDashboard() {
   const router = useRouter();
   const [report, setReport] = useState<CommandCenterReport | null>(null);
+  const [anomaly, setAnomaly] = useState<{
+    openCount: number;
+    criticalOpenCount: number;
+    blocksRiskyActions: boolean;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [operatorNote, setOperatorNote] = useState("");
@@ -99,6 +105,17 @@ export default function CommandCenterDashboard() {
         throw new Error(data.error ?? res.statusText);
       }
       setReport(data.report as CommandCenterReport);
+      setAnomaly(
+        data.anomalySummary
+          ? {
+              openCount: Number(data.anomalySummary.openCount ?? 0),
+              criticalOpenCount: Number(data.anomalySummary.criticalOpenCount ?? 0),
+              blocksRiskyActions: Boolean(
+                data.anomalySummary.blocksRiskyActions,
+              ),
+            }
+          : null,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Status refresh failed");
     } finally {
@@ -168,6 +185,9 @@ export default function CommandCenterDashboard() {
       <p className="rounded-lg border border-rose-900/40 bg-rose-950/20 px-4 py-2 text-xs text-rose-200/90">
         {COMMAND_CENTER_SAFETY_NOTICE}
       </p>
+      <div className="flex flex-wrap gap-2">
+        <IncidentsV2Badge />
+      </div>
 
       <DataHealthPanel health={backboneHealth} />
 
@@ -177,6 +197,34 @@ export default function CommandCenterDashboard() {
         >
           {report.status} — {report.statusLabel}
         </div>
+      )}
+
+      {anomaly && (
+        <section
+          className={`rounded-xl border p-4 ${
+            anomaly.blocksRiskyActions
+              ? "border-rose-900/50 bg-rose-950/20"
+              : "border-zinc-800 bg-zinc-950/50"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-100">
+              Incident detector (MVP 51)
+            </h2>
+            <Link
+              href="/incidents-v2"
+              className="text-xs text-rose-300/80 hover:text-rose-200"
+            >
+              Open incidents-v2 →
+            </Link>
+          </div>
+          <p className="mt-2 text-xs text-zinc-300">
+            Open {anomaly.openCount} · Critical {anomaly.criticalOpenCount}
+            {anomaly.blocksRiskyActions
+              ? " · risky testnet/live actions blocked"
+              : " · no CRITICAL action block"}
+          </p>
+        </section>
       )}
 
       {report?.realTimeRisk && (
