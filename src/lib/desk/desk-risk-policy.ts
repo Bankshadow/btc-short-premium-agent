@@ -75,3 +75,28 @@ export function engineAllowsCoreFailureTrade(
 export function engineDeltaWaitAsTradeOk(): boolean {
   return isAggressiveDeskRisk();
 }
+
+export interface TestnetMonitorSettings {
+  stopLossPct: number;
+  takeProfitPct: number;
+  maxHoldHours: number;
+  verdictFlipGraceHours: number;
+}
+
+/** Aggressive autopilot uses wider SL, faster TP, and shorter verdict-flip grace. */
+export function getTestnetMonitorSettings(): TestnetMonitorSettings {
+  if (isAggressiveDeskRisk()) {
+    return {
+      stopLossPct: -3,
+      takeProfitPct: 2,
+      maxHoldHours: 24,
+      verdictFlipGraceHours: 0.5,
+    };
+  }
+  return {
+    stopLossPct: -2,
+    takeProfitPct: 3,
+    maxHoldHours: 24,
+    verdictFlipGraceHours: 1,
+  };
+}

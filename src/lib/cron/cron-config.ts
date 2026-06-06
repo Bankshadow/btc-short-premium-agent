@@ -8,6 +8,7 @@ import {
   macroSelectionToStatus,
   type MacroEventSelection,
 } from "@/lib/decision/macro-event";
+import { loadMissionRiskSettings } from "@/lib/mission-risk/mission-risk-store";
 import type {
   AnalysisInput,
   DecisionEngineInput,
@@ -104,9 +105,15 @@ export async function loadCronAnalysisInput(): Promise<
     loadOverridesFromEnv(),
   );
 
+  const riskSettings = await loadMissionRiskSettings().catch(() => null);
+  const deskRiskProfile =
+    riskSettings?.deskRiskProfile ??
+    (process.env.DESK_RISK_PROFILE === "balanced" ? "balanced" : "aggressive");
+
   return {
     macroView: resolveMacroView(settings),
     macroEvent: resolveMacroEventFromSettings(settings),
+    deskRiskProfile,
     derivativesOverrides:
       Object.keys(derivativesOverrides).length > 0
         ? derivativesOverrides

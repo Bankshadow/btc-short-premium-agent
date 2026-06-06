@@ -1,4 +1,5 @@
 import type { AnalyzeApiResponse } from "@/lib/types/market";
+import { getTestnetMonitorSettings } from "@/lib/desk/desk-risk-policy";
 import {
   isBinanceTestnetAutoExecuteEnabled,
   loadBinanceConfig,
@@ -29,6 +30,8 @@ export interface BinanceAutoMonitorResult {
   summary: string;
   symbol: string | null;
   closeReason: string | null;
+  monitoredCount: number;
+  closedCount: number;
 }
 
 function committeeVerdict(data: AnalyzeApiResponse | null): string {
@@ -53,28 +56,29 @@ function resolveCloseReason(input: {
   verdict: string;
   openedHours: number;
 }): string | null {
-  if (input.uPnLPct <= TESTNET_AUTO_MONITOR_DEFAULTS.stopLossPct) {
-    return `Stop loss ${TESTNET_AUTO_MONITOR_DEFAULTS.stopLossPct}% (uPnL ${input.uPnLPct}%)`;
+  const settings = getTestnetMonitorSettings();
+  if (input.uPnLPct <= settings.stopLossPct) {
+    return `Stop loss ${settings.stopLossPct}% (uPnL ${input.uPnLPct}%)`;
   }
-  if (input.uPnLPct >= TESTNET_AUTO_MONITOR_DEFAULTS.takeProfitPct) {
-    return `Take profit +${TESTNET_AUTO_MONITOR_DEFAULTS.takeProfitPct}% (uPnL ${input.uPnLPct}%)`;
+  if (input.uPnLPct >= settings.takeProfitPct) {
+    return `Take profit +${settings.takeProfitPct}% (uPnL ${input.uPnLPct}%)`;
   }
   if (
-    input.openedHours >= TESTNET_AUTO_MONITOR_DEFAULTS.verdictFlipGraceHours &&
+    input.openedHours >= settings.verdictFlipGraceHours &&
     (input.verdict === "SKIP" ||
       input.verdict === "WAIT" ||
       input.verdict === "LONG")
   ) {
     return `Committee ${input.verdict} — thesis no longer active`;
   }
-  if (input.openedHours >= TESTNET_AUTO_MONITOR_DEFAULTS.maxHoldHours) {
-    return `Max hold ${TESTNET_AUTO_MONITOR_DEFAULTS.maxHoldHours}h reached`;
+  if (input.openedHours >= settings.maxHoldHours) {
+    return `Max hold ${settings.maxHoldHours}h reached`;
   }
   return null;
 }
 
 /**
- * Monitors open testnet futures positions and auto-closes when SL/TP,
+ * Monitors all open testnet futures positions and auto-closes when SL/TP,
  * verdict flip, or max hold time is hit. Testnet-only; requires auto-execute mode.
  */
 export async function runBinanceTestnetAutoMonitor(input: {
@@ -83,6 +87,8 @@ export async function runBinanceTestnetAutoMonitor(input: {
   const base = {
     symbol: null as string | null,
     closeReason: null as string | null,
+    monitoredCount: 0,
+    closedCount: 0,
   };
 
   if (!isBinanceTestnetAutoExecuteEnabled()) {
@@ -123,65 +129,90 @@ export async function runBinanceTestnetAutoMonitor(input: {
     }
 
     const verdict = committeeVerdict(input.analysis);
-    const pos = open[0];
-    const mark = Number(pos.markPrice);
-    const entry = Number(pos.entryPrice);
-    const amt = Number(pos.positionAmt);
-    const uPnLPct = unrealizedPct(entry, mark, amt);
     const journal = await loadServerBinanceTestnetJournal().catch(() => []);
-    const openTrade = journal.find(
-      (j) =>
-        j.symbol === pos.symbol &&
-        ["SUBMITTED", "FILLED", "CLOSING"].includes(j.status),
-    );
-    const openedAt = openTrade?.executedAt ?? openTrade?.createdAt ?? null;
-    const openedHours = openedAt
-      ? (Date.now() - Date.parse(openedAt)) / 3_600_000
-      : 0;
+    const summaries: string[] = [];
+    let closedCount = 0;
+    let lastCloseReason: string | null = null;
+    let lastClosedSymbol: string | null = null;
 
-    const closeReason = resolveCloseReason({
-      uPnLPct,
-      verdict,
-      openedHours,
-    });
+    for (const pos of open) {
+      const mark = Number(pos.markPrice);
+      const entry = Number(pos.entryPrice);
+      const amt = Number(pos.positionAmt);
+      const uPnLPct = unrealizedPct(entry, mark, amt);
+      const openTrade = journal.find(
+        (j) =>
+          j.symbol === pos.symbol &&
+          ["SUBMITTED", "FILLED", "CLOSING"].includes(j.status),
+      );
+      const openedAt = openTrade?.executedAt ?? openTrade?.createdAt ?? null;
+      const openedHours = openedAt
+        ? (Date.now() - Date.parse(openedAt)) / 3_600_000
+        : 0;
 
-    if (!closeReason) {
-      return {
-        ...base,
-        symbol: pos.symbol,
-        outcome: "HOLD",
-        summary: `Holding ${pos.symbol} · uPnL ${uPnLPct >= 0 ? "+" : ""}${uPnLPct}% · verdict ${verdict}`,
-      };
+      const closeReason = resolveCloseReason({
+        uPnLPct,
+        verdict,
+        openedHours,
+      });
+
+      if (!closeReason) {
+        summaries.push(
+          `Hold ${pos.symbol} · uPnL ${uPnLPct >= 0 ? "+" : ""}${uPnLPct}%`,
+        );
+        continue;
+      }
+
+      const close = await executeBinanceTestnetClose({
+        close: {
+          symbol: pos.symbol,
+          doubleConfirm: true,
+          operatorNote: `Autonomous testnet monitor — ${closeReason}`,
+        },
+      });
+
+      if (close.blocked || !close.ok) {
+        summaries.push(`${pos.symbol}: close blocked`);
+        return {
+          symbol: pos.symbol,
+          closeReason,
+          monitoredCount: open.length,
+          closedCount,
+          outcome: "CLOSE_BLOCKED",
+          summary: close.error ?? "Auto-close blocked by risk gate.",
+        };
+      }
+
+      closedCount += 1;
+      lastCloseReason = closeReason;
+      lastClosedSymbol = pos.symbol;
+      summaries.push(`Closed ${pos.symbol} — ${closeReason}`);
+
+      void emitMissionAlert({
+        kind: "trade_closed",
+        title: "Autopilot closed testnet position",
+        body: `${pos.symbol} · ${closeReason}`,
+      });
     }
 
-    const close = await executeBinanceTestnetClose({
-      close: {
-        symbol: pos.symbol,
-        doubleConfirm: true,
-        operatorNote: `Autonomous testnet monitor — ${closeReason}`,
-      },
-    });
-
-    if (close.blocked || !close.ok) {
+    if (closedCount > 0) {
       return {
-        symbol: pos.symbol,
-        closeReason,
-        outcome: "CLOSE_BLOCKED",
-        summary: close.error ?? "Auto-close blocked by risk gate.",
+        symbol: lastClosedSymbol,
+        closeReason: lastCloseReason,
+        monitoredCount: open.length,
+        closedCount,
+        outcome: "CLOSED",
+        summary: summaries.join(" · "),
       };
     }
-
-    void emitMissionAlert({
-      kind: "trade_closed",
-      title: "Autopilot closed testnet position",
-      body: `${pos.symbol} · ${closeReason}`,
-    });
 
     return {
-      symbol: pos.symbol,
-      closeReason,
-      outcome: "CLOSED",
-      summary: `Closed ${pos.symbol} — ${closeReason}`,
+      symbol: open[0]?.symbol ?? null,
+      closeReason: null,
+      monitoredCount: open.length,
+      closedCount: 0,
+      outcome: "HOLD",
+      summary: summaries.join(" · "),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Auto-monitor failed";

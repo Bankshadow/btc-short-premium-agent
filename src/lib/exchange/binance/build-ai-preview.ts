@@ -40,6 +40,9 @@ export function buildBinancePreviewInputFromAiSignal(input: {
   notionalUsd?: number;
   completedTrades?: number;
   minTradesForTrust?: number;
+  symbol?: string;
+  side?: BinanceOrderSide;
+  reason?: string;
 }): BinanceOrderPreviewInput {
   const config = loadBinanceConfig();
   const notionalUsd =
@@ -51,10 +54,10 @@ export function buildBinancePreviewInputFromAiSignal(input: {
     });
   return {
     source: "ai_signal",
-    symbol: inferBinanceSymbolFromAnalysis(input.data),
-    side: inferBinanceSideFromAnalysis(input.data),
+    symbol: input.symbol ?? inferBinanceSymbolFromAnalysis(input.data),
+    side: input.side ?? inferBinanceSideFromAnalysis(input.data),
     notionalUsd,
-    reason: "AI desk signal → Binance testnet preview",
+    reason: input.reason ?? "AI desk signal → Binance testnet preview",
     decisionLogId: input.decisionLogId ?? null,
   };
 }

@@ -14,7 +14,9 @@ import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-serve
 import { buildBinancePreviewInputFromAiSignal } from "./build-ai-preview";
 import { buildOrderPreview } from "./binance-order-preview";
 import { executeBinanceTestnetOrder } from "./binance-execution";
-import { getBinanceStatus } from "./binance-futures-testnet";
+import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
+import { pickAutopilotTradeCandidates } from "./pick-autopilot-symbols";
+import { recordAutopilotCycleOutcome } from "./symbol-rotation-store";
 
 export type BinanceAutoExecuteOutcome =
   | "DISABLED"
@@ -35,6 +37,8 @@ export interface BinanceAutoExecuteResult {
   blockReasons: string[];
   symbol: string | null;
   side: string | null;
+  executedCount: number;
+  executedSymbols: string[];
   /** Machine confirmation is testnet-only — live trading remains hard-blocked. */
   liveBlocked: true;
 }
@@ -50,10 +54,8 @@ function resolveCommitteeVerdict(data: AnalyzeApiResponse | null): string {
 /**
  * Autonomous Binance USD-M Futures **testnet** executor.
  *
- * When the desk committee verdict is TRADE and autonomous testnet mode is enabled,
- * this builds an AI-sourced preview and submits a testnet market order using a
- * machine double-confirmation. This path is testnet-only: production order placement
- * is hard-blocked via `blockBinanceProductionOrder` and `BINANCE_LIVE_ENABLED`.
+ * Scans multiple allowlisted symbols, ranks actionable perp signals, and fills
+ * open position slots up to `maxOpenPositions`. Testnet-only — production blocked.
  */
 export async function runBinanceTestnetAutoExecute(input: {
   analysis: AnalyzeApiResponse | null;
@@ -68,6 +70,8 @@ export async function runBinanceTestnetAutoExecute(input: {
     blockReasons: [],
     symbol: null,
     side: null,
+    executedCount: 0,
+    executedSymbols: [],
     liveBlocked: true,
   };
 
@@ -99,13 +103,6 @@ export async function runBinanceTestnetAutoExecute(input: {
   }
 
   const verdict = resolveCommitteeVerdict(input.analysis);
-  if (verdict !== "TRADE") {
-    return {
-      ...base,
-      outcome: "NO_TRADE_SIGNAL",
-      summary: `Committee verdict ${verdict} — no testnet order.`,
-    };
-  }
 
   try {
     const status = await getBinanceStatus();
@@ -133,66 +130,128 @@ export async function runBinanceTestnetAutoExecute(input: {
       }
     }
 
-    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
-    const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
+    const positions = await getPositions();
+    const openSymbols = positions
+      .filter((p) => Math.abs(Number(p.positionAmt)) > 0)
+      .map((p) => p.symbol);
+    const slots = Math.max(0, config.maxOpenPositions - openSymbols.length);
 
-    const previewInput = buildBinancePreviewInputFromAiSignal({
-      data: input.analysis,
-      decisionLogId: input.decisionLogId ?? null,
-      completedTrades,
-      minTradesForTrust: GOAL_MIN_TRADES_FOR_TRUST,
-    });
-    const preview = await buildOrderPreview(previewInput);
-    base.previewId = preview.previewId;
-    base.symbol = preview.symbol;
-    base.side = preview.side;
-
-    if (preview.blocked) {
+    if (slots === 0) {
       return {
         ...base,
         outcome: "PREVIEW_BLOCKED",
-        blockReasons: preview.blockReasons,
-        summary: `Preview blocked: ${preview.blockReasons[0] ?? "risk gate"}`,
+        blockReasons: [`Max ${config.maxOpenPositions} open positions`],
+        summary: `All ${config.maxOpenPositions} position slots filled.`,
       };
     }
 
-    const result = await executeBinanceTestnetOrder({
-      execute: {
-        previewId: preview.previewId,
-        // Machine double-confirm — testnet-only autonomous mode.
-        doubleConfirm: true,
-        operatorNote: "Autonomous testnet executor (AI committee TRADE)",
-      },
-      commandCenterStatus: input.commandCenterStatus ?? null,
-      entries: input.entries,
-      orders: input.orders,
-      operatorNote: "Autonomous testnet executor (AI committee TRADE)",
+    const candidates = await pickAutopilotTradeCandidates({
+      analysis: input.analysis,
+      openSymbols,
+      maxCandidates: slots,
     });
 
-    if (result.blocked || !result.ok) {
+    if (candidates.length === 0) {
+      await recordAutopilotCycleOutcome({
+        tradedSymbols: [],
+        candidateSymbols: [],
+      });
       return {
         ...base,
-        outcome: result.blocked ? "EXECUTE_BLOCKED" : "ERROR",
-        blockReasons: result.journalEntry?.blockReasons ?? [],
-        exchangeOrderId: result.exchangeOrderId,
-        summary:
-          result.error ??
-          result.journalEntry?.blockReasons?.[0] ??
-          "Testnet execute blocked.",
+        outcome: "NO_TRADE_SIGNAL",
+        summary: `No trade candidates · committee ${verdict}.`,
       };
     }
 
-    void emitMissionAlert({
-      kind: "trade_opened",
-      title: "Autopilot opened testnet trade",
-      body: `${preview.side} ${preview.symbol} qty ${preview.estimatedQty} · order ${result.exchangeOrderId}`,
+    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
+    const executedSymbols: string[] = [];
+    const blockReasons: string[] = [];
+    let lastPreviewId: string | null = null;
+    let lastOrderId: string | null = null;
+    let lastSymbol: string | null = null;
+    let lastSide: string | null = null;
+
+    for (const candidate of candidates) {
+      const previewInput = buildBinancePreviewInputFromAiSignal({
+        data: input.analysis,
+        decisionLogId: input.decisionLogId ?? null,
+        completedTrades,
+        minTradesForTrust: GOAL_MIN_TRADES_FOR_TRUST,
+        symbol: candidate.symbol,
+        side: candidate.side,
+        reason: candidate.reason,
+      });
+      const preview = await buildOrderPreview(previewInput);
+      lastPreviewId = preview.previewId;
+      lastSymbol = preview.symbol;
+      lastSide = preview.side;
+
+      if (preview.blocked) {
+        blockReasons.push(
+          `${candidate.symbol}: ${preview.blockReasons[0] ?? "risk gate"}`,
+        );
+        continue;
+      }
+
+      const result = await executeBinanceTestnetOrder({
+        execute: {
+          previewId: preview.previewId,
+          doubleConfirm: true,
+          operatorNote: `Autopilot ${candidate.source} · ${candidate.reason}`,
+        },
+        commandCenterStatus: input.commandCenterStatus ?? null,
+        entries: input.entries,
+        orders: input.orders,
+        operatorNote: `Autopilot ${candidate.source} · ${candidate.reason}`,
+      });
+
+      if (result.blocked || !result.ok) {
+        blockReasons.push(
+          result.error ??
+            result.journalEntry?.blockReasons?.[0] ??
+            `${candidate.symbol}: execute blocked`,
+        );
+        continue;
+      }
+
+      executedSymbols.push(candidate.symbol);
+      lastOrderId = result.exchangeOrderId;
+
+      void emitMissionAlert({
+        kind: "trade_opened",
+        title: "Autopilot opened testnet trade",
+        body: `${preview.side} ${preview.symbol} qty ${preview.estimatedQty} · order ${result.exchangeOrderId}`,
+      });
+    }
+
+    await recordAutopilotCycleOutcome({
+      tradedSymbols: executedSymbols,
+      candidateSymbols: candidates.map((c) => c.symbol),
     });
+
+    if (executedSymbols.length > 0) {
+      return {
+        ...base,
+        outcome: "EXECUTED",
+        previewId: lastPreviewId,
+        exchangeOrderId: lastOrderId,
+        symbol: lastSymbol,
+        side: lastSide,
+        executedCount: executedSymbols.length,
+        executedSymbols,
+        summary: `Executed ${executedSymbols.length} trade(s): ${executedSymbols.join(", ")}.`,
+      };
+    }
 
     return {
       ...base,
-      outcome: "EXECUTED",
-      exchangeOrderId: result.exchangeOrderId,
-      summary: `Executed ${preview.side} ${preview.symbol} qty ${preview.estimatedQty} (order ${result.exchangeOrderId}).`,
+      previewId: lastPreviewId,
+      symbol: lastSymbol,
+      side: lastSide,
+      blockReasons,
+      outcome: "EXECUTE_BLOCKED",
+      summary: blockReasons[0] ?? "All candidate orders blocked.",
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Auto-execute failed";

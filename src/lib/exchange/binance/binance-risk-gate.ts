@@ -2,6 +2,7 @@ import type { CommandCenterStatus } from "@/lib/command-center/types";
 import type { GovernanceDeskState } from "@/lib/governance/governance-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import { getDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import {
   assertBinanceTestnetOnly,
@@ -176,7 +177,7 @@ export function validateOrderAgainstRiskGate(
   const kill = evaluateKillSwitch({
     entries: ctx.entries ?? [],
     orders: ctx.orders ?? [],
-    riskProfile: "balanced",
+    riskProfile: getDeskRiskProfile(),
   });
   const killOk = !kill.tradingPaused;
   checks.push(

@@ -1,4 +1,4 @@
-export type PerpAssetId = "BTC" | "SOL" | "WLD" | "LINK" | "DOGE";
+export type PerpAssetId = "BTC" | "SOL" | "ETH" | "WLD" | "LINK" | "DOGE";
 
 export interface PerpAssetConfig {
   id: PerpAssetId;
@@ -16,6 +16,7 @@ export interface PerpAssetConfig {
 export const SUPPORTED_PERP_ASSETS: PerpAssetConfig[] = [
   { id: "BTC", symbol: "BTCUSDT", label: "Bitcoin", hasOptions: true },
   { id: "SOL", symbol: "SOLUSDT", label: "Solana", hasOptions: true },
+  { id: "ETH", symbol: "ETHUSDT", label: "Ethereum", hasOptions: true },
   { id: "WLD", symbol: "WLDUSDT", label: "Worldcoin", hasOptions: false },
   { id: "LINK", symbol: "LINKUSDT", label: "Chainlink", hasOptions: false },
   { id: "DOGE", symbol: "DOGEUSDT", label: "Dogecoin", hasOptions: false },

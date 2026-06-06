@@ -62,11 +62,11 @@ export function loadBinanceConfig(): BinanceConfig {
     proxyEnabled: Boolean(proxyUrl),
     allowedSymbols: parseSymbolList(
       process.env.BINANCE_ALLOWED_SYMBOLS,
-      ["BTCUSDT", "SOLUSDT"],
+      ["BTCUSDT", "SOLUSDT", "ETHUSDT", "LINKUSDT", "DOGEUSDT"],
     ),
     maxNotionalUsd: envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 55),
-    maxTradesPerDay: envNumber("BINANCE_TESTNET_MAX_TRADES_PER_DAY", 5),
-    maxOpenPositions: envNumber("BINANCE_TESTNET_MAX_OPEN_POSITIONS", 1),
+    maxTradesPerDay: envNumber("BINANCE_TESTNET_MAX_TRADES_PER_DAY", 15),
+    maxOpenPositions: envNumber("BINANCE_TESTNET_MAX_OPEN_POSITIONS", 3),
     requireDoubleConfirm: envBool("BINANCE_REQUIRE_DOUBLE_CONFIRM", true),
     leverage: 1,
   };

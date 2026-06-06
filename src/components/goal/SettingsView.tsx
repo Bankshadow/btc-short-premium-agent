@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
@@ -54,9 +55,19 @@ export default function SettingsView() {
     useMissionSnapshot();
   const [saved, setSaved] = useState(false);
   const [serverNotifySaved, setServerNotifySaved] = useState(false);
+  const [deskRiskProfile, setDeskRiskProfile] = useState<DeskRiskProfile>("aggressive");
+  const [serverRiskSaved, setServerRiskSaved] = useState(false);
 
   useEffect(() => {
     setSettings(loadSettings());
+    void fetch("/api/goal/mission-risk-settings")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok && json.settings?.deskRiskProfile) {
+          setDeskRiskProfile(json.settings.deskRiskProfile);
+        }
+      })
+      .catch(() => undefined);
     void fetch("/api/goal/notification-settings")
       .then((res) => res.json())
       .then((json) => {
@@ -80,20 +91,30 @@ export default function SettingsView() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     setSaved(true);
     try {
-      const res = await fetch("/api/goal/notification-settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          notifyOnTrade: settings.notifyOnTrade,
-          notifyOnBlocker: settings.notifyOnBlocker,
+      const [notifyRes, riskRes] = await Promise.all([
+        fetch("/api/goal/notification-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notifyOnTrade: settings.notifyOnTrade,
+            notifyOnBlocker: settings.notifyOnBlocker,
+          }),
         }),
-      });
-      const json = await res.json();
-      setServerNotifySaved(res.ok && json.ok);
+        fetch("/api/goal/mission-risk-settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deskRiskProfile }),
+        }),
+      ]);
+      const notifyJson = await notifyRes.json();
+      const riskJson = await riskRes.json();
+      setServerNotifySaved(notifyRes.ok && notifyJson.ok);
+      setServerRiskSaved(riskRes.ok && riskJson.ok);
     } catch {
       setServerNotifySaved(false);
+      setServerRiskSaved(false);
     }
-  }, [settings]);
+  }, [settings, deskRiskProfile]);
 
   return (
     <GoalShell
@@ -246,6 +267,71 @@ export default function SettingsView() {
             Binance Testnet Debug →
           </Link>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          AI aggression
+        </h2>
+        <p className="mt-2 text-[11px] text-zinc-500">
+          Controls how often autopilot opens testnet trades across BTC, SOL, ETH, LINK, and DOGE.
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <label
+            className={`cursor-pointer rounded-lg border px-3 py-3 text-xs ${
+              deskRiskProfile === "balanced"
+                ? "border-emerald-600/60 bg-emerald-950/30 text-emerald-100"
+                : "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+            }`}
+          >
+            <input
+              type="radio"
+              name="deskRiskProfile"
+              value="balanced"
+              checked={deskRiskProfile === "balanced"}
+              onChange={() => {
+                setDeskRiskProfile("balanced");
+                setSaved(false);
+              }}
+              className="sr-only"
+            />
+            <span className="font-semibold text-zinc-200">Balanced</span>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Stricter data quality, fewer trades, wider take-profit.
+            </p>
+          </label>
+          <label
+            className={`cursor-pointer rounded-lg border px-3 py-3 text-xs ${
+              deskRiskProfile === "aggressive"
+                ? "border-amber-600/60 bg-amber-950/30 text-amber-100"
+                : "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+            }`}
+          >
+            <input
+              type="radio"
+              name="deskRiskProfile"
+              value="aggressive"
+              checked={deskRiskProfile === "aggressive"}
+              onChange={() => {
+                setDeskRiskProfile("aggressive");
+                setSaved(false);
+              }}
+              className="sr-only"
+            />
+            <span className="font-semibold text-zinc-200">Aggressive</span>
+            <p className="mt-1 text-[11px] text-zinc-500">
+              Multi-coin scanner, up to 3 positions, faster rotation, WAIT→TRADE when confident.
+            </p>
+          </label>
+        </div>
+        <ul className="mt-3 space-y-1 text-[11px] text-zinc-600">
+          <li>Max open positions: 3 (server default)</li>
+          <li>Max trades/day: 15 · symbols: BTC, SOL, ETH, LINK, DOGE</li>
+          <li>Symbol rotation: skip coin after 3 cycles without a fill</li>
+        </ul>
+        {serverRiskSaved && (
+          <p className="mt-2 text-[11px] text-emerald-400">Server aggression profile synced.</p>
+        )}
       </section>
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
