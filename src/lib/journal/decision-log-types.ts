@@ -14,10 +14,21 @@ import type {
 
 export type OutcomeStatus = "PENDING" | "RESOLVED";
 
+export type OutcomeLabel =
+  | "WIN"
+  | "LOSS"
+  | "BREAKEVEN"
+  | "INVALIDATED"
+  | "EXPIRED";
+
+export type AnalyzePersistStatus = "SUCCESS" | "FAILED" | "DEMO";
+
 export interface PaperResolution {
   btcPriceAfter: number;
   /** null = not applicable (e.g. SKIP with no hypothetical trade) */
   tradeWouldWin: boolean | null;
+  outcomeLabel?: OutcomeLabel;
+  manualPnlPct?: number | null;
   notes: string;
   resolvedAt: string;
 }
@@ -33,6 +44,13 @@ export interface StructuredReflection {
 
 export interface DecisionLogEntry {
   id: string;
+  /** P-MVP 1 — workspace scope */
+  workspaceId?: string;
+  /** Dedup key for analyze cycles — same runId updates instead of duplicating */
+  runId?: string;
+  analyzeStatus?: AnalyzePersistStatus;
+  /** Demo seed data — excluded from live readiness and production learning metrics */
+  isDemoData?: boolean;
   timestamp: string;
   btcPrice: number;
   marketRegime: string;
@@ -78,4 +96,11 @@ export interface ResolveOutcomeInput {
   btcPriceAfter: number;
   tradeWouldWin: boolean | null;
   notes: string;
+  outcomeLabel: OutcomeLabel;
+  manualPnlPct?: number | null;
 }
+
+export type SaveAnalysisResult = {
+  entry: DecisionLogEntry;
+  status: "created" | "updated";
+};

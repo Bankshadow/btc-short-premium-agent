@@ -4,6 +4,9 @@ import type {
   StrategyAdaptationProposal,
 } from "@/lib/strategy-adaptation/types";
 import type { StrategySkill } from "@/lib/strategy-registry/strategy-registry-types";
+import { buildPolicyInput } from "@/lib/policy-engine";
+import { enforcePolicy } from "@/lib/policy-engine/enforce";
+import { enforceApiPermission, parseApiWorkspaceContext } from "@/lib/platform/api-context";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +23,32 @@ export async function POST(request: Request) {
         { ok: false, error: "proposal and action required." },
         { status: 400 },
       );
+    }
+
+    if (body.action === "approve" || body.action === "apply") {
+      const wsCtx = parseApiWorkspaceContext(request, body as unknown as Record<string, unknown>);
+      if (wsCtx.workspaceId) {
+        const perm = enforceApiPermission(wsCtx, "canApproveStrategyChanges");
+        if (!perm.ok) {
+          return NextResponse.json({ ok: false, error: perm.error }, { status: perm.status });
+        }
+      }
+      const policy = enforcePolicy(
+        buildPolicyInput({
+          workspaceId: wsCtx.workspaceId ?? "server-default",
+          userRole: wsCtx.role ?? "TRADER",
+          environmentMode:
+            (body as unknown as Record<string, unknown>).environmentMode as string ?? "PAPER",
+          action: "APPROVE_STRATEGY_CHANGE",
+          governance: (body as unknown as Record<string, unknown>).governance as never,
+        }),
+      );
+      if (!policy.ok) {
+        return NextResponse.json(
+          { ok: false, error: policy.error, policy: policy.result },
+          { status: policy.status },
+        );
+      }
     }
 
     const result = applyAdaptationProposal({

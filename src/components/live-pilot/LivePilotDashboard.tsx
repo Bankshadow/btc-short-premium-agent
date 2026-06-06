@@ -22,6 +22,11 @@ import {
   setPilotEmergencyStop,
   updateLivePilotJournalEntry,
 } from "@/lib/live-pilot/journal-store";
+import { appendLiveActionAudit } from "@/lib/live-trading-readiness/live-action-audit";
+import { markKillSwitchTested } from "@/lib/live-trading-readiness/operational-gates";
+import { usePermission } from "@/contexts/WorkspaceContext";
+import { useWorkspaceFetchHeaders } from "@/components/platform/PlatformWorkspaceHeaders";
+import { emitFromLivePilotAction } from "@/lib/smart-briefing/event-helpers";
 import { loadClientScaleStage } from "@/lib/live-scale-up/scale-client-store";
 import type {
   LiveTradeJournalEntry,
@@ -37,6 +42,8 @@ function modeColor(mode: string): string {
 }
 
 export default function LivePilotDashboard() {
+  const canTriggerKillSwitch = usePermission("canTriggerKillSwitch");
+  const workspaceHeaders = useWorkspaceFetchHeaders();
   const [status, setStatus] = useState<PilotStatusSnapshot | null>(null);
   const [journal, setJournal] = useState<LiveTradeJournalEntry[]>([]);
   const [queue, setQueue] = useState<PilotPreviewQueueItem[]>([]);
@@ -137,16 +144,28 @@ export default function LivePilotDashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? res.statusText);
 
+      const latestTradeLog = loadDecisionLog().find(
+        (e) => e.finalVerdict === "TRADE" && e.outcomeStatus === "PENDING" && !e.isDemoData,
+      );
       const item: PilotPreviewQueueItem = {
         previewId: data.previewId as string,
         signal,
         preview: data.preview as OrderPreviewResult,
         sourceSignalId: `${signal.assetId}-${signal.direction}`,
-        decisionLogId: null,
+        decisionLogId: latestTradeLog?.id ?? null,
         createdAt: new Date().toISOString(),
         status: "QUEUED",
         operatorApprovalNote: null,
       };
+      appendLiveActionAudit({
+        kind: "PREVIEW",
+        liveTradeId: null,
+        symbol: signal.symbol,
+        decisionLogId: item.decisionLogId,
+        operatorNote: null,
+        ok: true,
+        detail: `Preview queued ${signal.symbol} ${signal.direction}`,
+      });
       const next = [item, ...loadPilotPreviewQueue()].slice(0, 20);
       savePilotPreviewQueue(next);
       setQueue(next);
@@ -168,7 +187,7 @@ export default function LivePilotDashboard() {
     try {
       const res = await fetch("/api/live-pilot/execute", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...workspaceHeaders },
         body: JSON.stringify({
           ...payload,
           signal: item.signal,
@@ -189,6 +208,23 @@ export default function LivePilotDashboard() {
       if (data.journalEntry) {
         appendLivePilotJournal(data.journalEntry as LiveTradeJournalEntry);
       }
+      appendLiveActionAudit({
+        kind: data.ok ? "EXECUTE" : "EXECUTE_BLOCKED",
+        liveTradeId: (data.liveTradeId as string) ?? null,
+        symbol: item.signal.symbol,
+        decisionLogId: item.decisionLogId,
+        operatorNote: approveNotes[item.previewId] ?? null,
+        ok: Boolean(data.ok),
+        detail: data.ok
+          ? `Executed ${item.signal.symbol}`
+          : String(data.error ?? data.pilotBlockers?.join("; ") ?? "Blocked"),
+      });
+      void emitFromLivePilotAction({
+        ok: Boolean(data.ok),
+        symbol: item.signal.symbol,
+        liveTradeId: (data.liveTradeId as string) ?? null,
+        error: data.error as string | undefined,
+      });
       const nextQueue: PilotPreviewQueueItem[] = loadPilotPreviewQueue().map(
         (q) =>
           q.previewId === item.previewId
@@ -248,14 +284,25 @@ export default function LivePilotDashboard() {
   };
 
   const toggleEmergencyStop = async (active: boolean) => {
+    if (!canTriggerKillSwitch) return;
     setBusy(true);
     try {
       await fetch("/api/live-pilot/emergency-stop", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...workspaceHeaders },
         body: JSON.stringify({ active, operatorNote: "UI emergency stop" }),
       });
       setPilotEmergencyStop(active);
+      markKillSwitchTested();
+      appendLiveActionAudit({
+        kind: active ? "EMERGENCY_STOP" : "EMERGENCY_RELEASE",
+        liveTradeId: null,
+        symbol: null,
+        decisionLogId: null,
+        operatorNote: "UI emergency stop",
+        ok: true,
+        detail: active ? "Emergency stop activated" : "Emergency stop released",
+      });
       setEmergencyStop(active);
       void refresh();
     } catch (e) {
@@ -365,16 +412,21 @@ export default function LivePilotDashboard() {
             </p>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || !canTriggerKillSwitch}
               onClick={() => void toggleEmergencyStop(!emergencyStop)}
               className={`mt-3 rounded-lg px-4 py-2 text-xs font-bold ${
                 emergencyStop
                   ? "bg-emerald-800 text-zinc-100"
                   : "bg-rose-800 text-zinc-100"
-              }`}
+              } disabled:opacity-40`}
             >
               {emergencyStop ? "Release emergency stop" : "ACTIVATE EMERGENCY STOP"}
             </button>
+            {!canTriggerKillSwitch && (
+              <p className="mt-2 text-[10px] text-zinc-500">
+                Emergency stop requires RISK_MANAGER or OWNER role.
+              </p>
+            )}
           </section>
 
           <section className="desk-panel px-5 py-4">

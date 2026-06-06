@@ -1,4 +1,8 @@
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
+import {
+  filterProductionEntries,
+  filterProductionOrders,
+} from "@/lib/journal/production-filter";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { StrictPaperMetrics } from "./types";
 
@@ -54,9 +58,14 @@ export function computeStrictPaperMetrics(
   entries: DecisionLogEntry[],
   orders: PaperOrder[],
 ): StrictPaperMetrics {
+  entries = filterProductionEntries(entries);
+  orders = filterProductionOrders(orders);
+
   const relaxedExcludedCount = orders.filter(
     (o) => o.paperMode === "RELAXED_PAPER",
   ).length;
+
+  const resolvedTrades = entries.filter((e) => e.outcomeStatus === "RESOLVED").length;
 
   const strictClosed = orders.filter(
     (o) => isStrictOrder(o) && o.status === "CLOSED",
@@ -95,6 +104,7 @@ export function computeStrictPaperMetrics(
 
   return {
     closedTrades,
+    resolvedTrades,
     winRate,
     avgPnlPct,
     maxDrawdownPct: maxDrawdown(pnlSeries),

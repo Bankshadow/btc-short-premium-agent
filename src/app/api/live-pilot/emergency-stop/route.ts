@@ -1,5 +1,6 @@
 import { loadLivePilotRiskConfig } from "@/lib/live-pilot/pilot-config";
 import { PILOT_SAFETY_NOTICE } from "@/lib/live-pilot/pilot-mode";
+import { enforceApiPermission, parseApiWorkspaceContext } from "@/lib/platform/api-context";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,13 @@ type Body = { active: boolean; operatorNote?: string };
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Body;
+    const wsCtx = parseApiWorkspaceContext(request, body as unknown as Record<string, unknown>);
+    if (wsCtx.workspaceId && body.active) {
+      const perm = enforceApiPermission(wsCtx, "canTriggerKillSwitch");
+      if (!perm.ok) {
+        return NextResponse.json({ error: perm.error }, { status: perm.status });
+      }
+    }
     const config = loadLivePilotRiskConfig();
 
     return NextResponse.json({

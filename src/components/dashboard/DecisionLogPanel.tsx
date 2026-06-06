@@ -1,6 +1,10 @@
 "use client";
 
 import type { DecisionLogEntry } from "@/lib/journal/decision-log";
+import type { ResolveOutcomeInput } from "@/lib/journal/decision-log-types";
+import { getTradeLifecycleForEntry } from "@/lib/journal/trade-lifecycle";
+import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import { DEMO_SEED_LABEL } from "@/lib/demo/demo-seed";
 import { recBadgeClass } from "./trading-desk/agent-display";
 import ResolveOutcomeForm from "./ResolveOutcomeForm";
 import { formatTimestamp, formatUsd } from "./utils";
@@ -8,14 +12,8 @@ import { useState } from "react";
 
 interface DecisionLogPanelProps {
   entries: DecisionLogEntry[];
-  onResolve: (
-    id: string,
-    input: {
-      btcPriceAfter: number;
-      tradeWouldWin: boolean | null;
-      notes: string;
-    },
-  ) => void;
+  orders?: PaperOrder[];
+  onResolve: (id: string, input: ResolveOutcomeInput) => void;
 }
 
 function ReflectionBlock({
@@ -66,6 +64,7 @@ function ReflectionBlock({
 
 export default function DecisionLogPanel({
   entries,
+  orders = [],
   onResolve,
 }: DecisionLogPanelProps) {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -87,11 +86,13 @@ export default function DecisionLogPanel({
 
       {entries.length === 0 ? (
         <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-8 text-center text-sm text-zinc-500">
-          No entries yet. Run Analyze Now to log a decision.
+          No learning data yet. Run the first desk cycle to start building trade memory.
         </p>
       ) : (
         <div className="space-y-4">
-          {entries.map((entry) => (
+          {entries.map((entry) => {
+            const lifecycle = getTradeLifecycleForEntry(entry.id, orders);
+            return (
             <article
               key={entry.id}
               className="rounded-lg border border-zinc-100 p-4 dark:border-zinc-800"
@@ -100,6 +101,11 @@ export default function DecisionLogPanel({
                 <div>
                   <p className="text-xs text-zinc-500">
                     {formatTimestamp(entry.timestamp)}
+                    {entry.isDemoData && (
+                      <span className="ml-2 rounded bg-amber-900/50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-200">
+                        {DEMO_SEED_LABEL}
+                      </span>
+                    )}
                   </p>
                   <p className="font-mono text-sm font-semibold">
                     BTC {formatUsd(entry.btcPrice)}
@@ -144,6 +150,14 @@ export default function DecisionLogPanel({
                   {entry.riskVeto && (
                     <span className="font-bold text-red-600">VETO</span>
                   )}
+                  <span className="rounded bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
+                    {lifecycle.label}
+                  </span>
+                  {entry.resolution?.outcomeLabel && (
+                    <span className="rounded bg-indigo-100 px-2 py-0.5 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                      {entry.resolution.outcomeLabel}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -180,7 +194,8 @@ export default function DecisionLogPanel({
                 />
               )}
             </article>
-          ))}
+          );
+          })}
         </div>
       )}
     </section>

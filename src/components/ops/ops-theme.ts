@@ -85,7 +85,11 @@ export const OPS_ACCENT: Record<
 };
 
 export const OPS_MODULE_LINKS = [
-  { href: "/", label: "Trading desk", accent: "amber" as OpsAccent },
+  { href: "/", label: "Cockpit", accent: "amber" as OpsAccent },
+  { href: "/autopilot", label: "Autopilot", accent: "cyan" as OpsAccent },
+  { href: "/actions", label: "Actions", accent: "indigo" as OpsAccent },
+  { href: "/notifications", label: "Alerts", accent: "amber" as OpsAccent },
+  { href: "/worker", label: "Worker", accent: "cyan" as OpsAccent },
   { href: "/command-center", label: "Command", accent: "rose" as OpsAccent },
   { href: "/real-time-risk", label: "Risk RT", accent: "rose" as OpsAccent },
   { href: "/warehouse", label: "Warehouse", accent: "indigo" as OpsAccent },

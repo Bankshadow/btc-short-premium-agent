@@ -5,6 +5,9 @@ import type { GovernanceDeskState, DeskIncident } from "@/lib/governance/governa
 import { previewPerpSignal } from "@/lib/exchange/order-preview";
 import { validatePilotPreview } from "@/lib/live-pilot/pilot-execution";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
+import { buildPolicyInput } from "@/lib/policy-engine";
+import { enforcePolicy } from "@/lib/policy-engine/enforce";
+import { parseApiWorkspaceContext } from "@/lib/platform/api-context";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +25,12 @@ type Body = {
   readinessStatus?: "PASS" | "WARNING" | "FAIL";
   emergencyStopActive?: boolean;
   riskBudget?: import("@/lib/risk-budget-optimizer/types").RiskBudgetResult | null;
+  latestAnalysis?: import("@/lib/types/market").AnalyzeApiResponse;
+  commandCenter?: { status: string; blockers?: string[] };
+  liveReadiness?: { overallStatus: string; hardBlockers: string[]; readyForSmallLivePerpPilot?: boolean };
+  environmentMode?: string;
+  backboneHealthy?: boolean;
+  auditAvailable?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -39,6 +48,30 @@ export async function POST(request: Request) {
           btcOptionsLiveSupported: false,
         },
         { status: 422 },
+      );
+    }
+
+    const wsCtx = parseApiWorkspaceContext(request, body as unknown as Record<string, unknown>);
+    const policy = enforcePolicy(
+      buildPolicyInput({
+        workspaceId: wsCtx.workspaceId ?? "server-default",
+        userRole: wsCtx.role ?? "TRADER",
+        environmentMode: body.environmentMode ?? "LIVE_ENABLED",
+        action: "PREVIEW_LIVE_ORDER",
+        latestAnalysis: body.latestAnalysis,
+        governance: body.governance,
+        entries: body.entries,
+        orders: body.orders,
+        commandCenter: body.commandCenter as never,
+        liveReadiness: body.liveReadiness as never,
+        backboneHealthy: body.backboneHealthy ?? true,
+        auditAvailable: body.auditAvailable ?? true,
+      }),
+    );
+    if (!policy.ok) {
+      return NextResponse.json(
+        { ok: false, error: policy.error, policy: policy.result },
+        { status: policy.status },
       );
     }
 

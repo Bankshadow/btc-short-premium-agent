@@ -1,10 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
-import { loadPaperOrders } from "@/lib/paper/paper-orders";
+import { loadLedgerAnalyticsInput } from "@/lib/ledger/analytics";
 import { loadPerpPositions } from "@/lib/multi-asset/perp-paper-store";
-import { loadDeskSettings } from "@/lib/desk/desk-settings";
+import { refreshDeskBackboneFromLegacy } from "@/lib/data-backbone/read-desk-state";
 import { buildUnifiedPortfolioSnapshot } from "@/lib/portfolio/build-unified-portfolio";
 import {
   migratePerpPositionsInStorage,
@@ -22,9 +21,9 @@ export function useUnifiedPortfolio() {
   const [hydrated, setHydrated] = useState(false);
 
   const refresh = useCallback(() => {
-    const settings = loadDeskSettings();
+    const analytics = loadLedgerAnalyticsInput();
     const { positions: perpPositions, changed } = migratePerpPositionsInStorage(
-      settings.riskProfile,
+      analytics.riskProfile,
     );
     if (changed) {
       saveUnifiedPortfolioMeta({
@@ -33,11 +32,12 @@ export function useUnifiedPortfolio() {
       });
     }
 
+    refreshDeskBackboneFromLegacy();
     const built = buildUnifiedPortfolioSnapshot({
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
-      perpPositions: perpPositions.length ? perpPositions : loadPerpPositions(),
-      riskProfile: settings.riskProfile,
+      entries: analytics.entries,
+      orders: analytics.orders,
+      perpPositions: perpPositions.length ? perpPositions : analytics.perpPositions,
+      riskProfile: analytics.riskProfile,
     });
     setSnapshot(built);
     setHydrated(true);
@@ -47,12 +47,12 @@ export function useUnifiedPortfolio() {
   const syncToServer = useCallback(async () => {
     setSyncing(true);
     setError(null);
-    const settings = loadDeskSettings();
+    const analytics = loadLedgerAnalyticsInput();
     const body = {
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
-      perpPositions: loadPerpPositions(),
-      riskProfile: settings.riskProfile,
+      entries: analytics.entries,
+      orders: analytics.orders,
+      perpPositions: analytics.perpPositions,
+      riskProfile: analytics.riskProfile,
     };
 
     try {

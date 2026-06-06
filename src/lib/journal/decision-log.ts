@@ -1,3 +1,5 @@
+import { getActiveWorkspaceId } from "@/lib/platform/workspace-registry";
+import { readScopedJson, writeScopedJson } from "@/lib/platform/scoped-storage";
 import { runReflectionAgent } from "@/lib/agents/reflection-agent";
 import { buildReplaySnapshot } from "@/lib/replay/build-replay-snapshot";
 import type { AgentOutput, AgentRecommendation } from "@/lib/agents/types";
@@ -9,16 +11,21 @@ import { computePaperPnl } from "./paper-pnl";
 import { runPostTradeEvaluation } from "@/lib/self-learning/run-evaluation";
 import type { PostTradeEvaluationSource } from "@/lib/self-learning/types";
 import type {
+  AnalyzePersistStatus,
   DecisionLogEntry,
   OutcomeStatus,
   ResolveOutcomeInput,
+  SaveAnalysisResult,
 } from "./decision-log-types";
 
 export type {
+  AnalyzePersistStatus,
   DecisionLogEntry,
+  OutcomeLabel,
   OutcomeStatus,
   PaperResolution,
   ResolveOutcomeInput,
+  SaveAnalysisResult,
   StructuredReflection,
 } from "./decision-log-types";
 
@@ -42,14 +49,33 @@ function slimAgent(agent: AgentOutput): AgentOutput {
   };
 }
 
+export function deriveAnalyzeRunId(data: AnalyzeApiResponse): string {
+  return (
+    data.tradingDesk?.analyzedAt ??
+    data.step5_verdict.analyzedAt ??
+    new Date().toISOString()
+  );
+}
+
 export function buildDecisionLogEntry(
   data: AnalyzeApiResponse,
+  meta?: {
+    runId?: string;
+    analyzeStatus?: AnalyzePersistStatus;
+    isDemoData?: boolean;
+    deskRiskProfile?: DecisionLogEntry["deskRiskProfile"];
+  },
 ): DecisionLogEntry {
   const desk = data.tradingDesk;
   const market = data.step1_marketSnapshot;
+  const runId = meta?.runId ?? deriveAnalyzeRunId(data);
 
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    workspaceId: getActiveWorkspaceId(),
+    runId,
+    analyzeStatus: meta?.analyzeStatus ?? "SUCCESS",
+    isDemoData: meta?.isDemoData ?? false,
     timestamp: data.step5_verdict.analyzedAt,
     btcPrice: market.spotPrice,
     marketRegime: desk?.marketRegime ?? "Unknown",
@@ -73,6 +99,7 @@ export function buildDecisionLogEntry(
     missedOpportunityR: 0,
     avoidedLossR: 0,
     lessonTags: [],
+    deskRiskProfile: meta?.deskRiskProfile,
   };
 }
 
@@ -94,6 +121,14 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
 
   return {
     id: String(raw.id),
+    runId: raw.runId ? String(raw.runId) : undefined,
+    analyzeStatus:
+      raw.analyzeStatus === "SUCCESS" ||
+      raw.analyzeStatus === "FAILED" ||
+      raw.analyzeStatus === "DEMO"
+        ? raw.analyzeStatus
+        : undefined,
+    isDemoData: Boolean(raw.isDemoData),
     timestamp: String(raw.timestamp),
     btcPrice: Number(raw.btcPrice ?? 0),
     marketRegime: String(raw.marketRegime ?? raw.regime ?? "Unknown"),
@@ -171,36 +206,29 @@ function isDecisionLogEntry(value: unknown): value is DecisionLogEntry {
   );
 }
 
+function normalizeLogArray(parsed: unknown): DecisionLogEntry[] {
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item) =>
+      isDecisionLogEntry(item)
+        ? item
+        : normalizeEntry(item as Record<string, unknown>),
+    )
+    .filter((e): e is DecisionLogEntry => e != null);
+}
+
 export function loadDecisionLog(): DecisionLogEntry[] {
   if (typeof window === "undefined") return [];
 
   try {
-    const raw = localStorage.getItem(DECISION_LOG_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) =>
-            isDecisionLogEntry(item)
-              ? item
-              : normalizeEntry(item as Record<string, unknown>),
-          )
-          .filter((e): e is DecisionLogEntry => e != null);
-      }
-    }
+    const scoped = readScopedJson<unknown[]>("decision-log", []);
+    const normalized = normalizeLogArray(scoped);
+    if (normalized.length > 0) return normalized;
 
     for (const key of LEGACY_KEYS) {
       const legacy = localStorage.getItem(key);
       if (!legacy) continue;
-      const parsed = JSON.parse(legacy) as unknown;
-      if (!Array.isArray(parsed)) continue;
-      const migrated = parsed
-        .map((item) =>
-          isDecisionLogEntry(item)
-            ? normalizeEntry(item as unknown as Record<string, unknown>)
-            : normalizeEntry(item as Record<string, unknown>),
-        )
-        .filter((e): e is DecisionLogEntry => e != null);
+      const migrated = normalizeLogArray(JSON.parse(legacy) as unknown);
       if (migrated.length > 0) {
         persistDecisionLog(migrated);
         return migrated;
@@ -215,8 +243,11 @@ export function loadDecisionLog(): DecisionLogEntry[] {
 
 export function persistDecisionLog(entries: DecisionLogEntry[]): DecisionLogEntry[] {
   if (typeof window === "undefined") return entries;
-  const next = entries.slice(0, DECISION_LOG_MAX_ENTRIES);
-  localStorage.setItem(DECISION_LOG_STORAGE_KEY, JSON.stringify(next));
+  const ws = getActiveWorkspaceId();
+  const next = entries
+    .slice(0, DECISION_LOG_MAX_ENTRIES)
+    .map((e) => ({ ...e, workspaceId: e.workspaceId ?? ws }));
+  writeScopedJson("decision-log", next, ws);
   return next;
 }
 
@@ -228,15 +259,46 @@ export function saveDecisionLogEntry(
 
 export function appendDecisionLogFromAnalysis(
   data: AnalyzeApiResponse,
-  meta?: { deskRiskProfile?: DecisionLogEntry["deskRiskProfile"] },
-): { entries: DecisionLogEntry[]; entry: DecisionLogEntry } {
-  const entry = buildDecisionLogEntry(data);
-  if (meta?.deskRiskProfile) {
-    entry.deskRiskProfile = meta.deskRiskProfile;
+  meta?: {
+    deskRiskProfile?: DecisionLogEntry["deskRiskProfile"];
+    runId?: string;
+    analyzeStatus?: AnalyzePersistStatus;
+    isDemoData?: boolean;
+  },
+): SaveAnalysisResult & { entries: DecisionLogEntry[] } {
+  const runId = meta?.runId ?? deriveAnalyzeRunId(data);
+  const existing = loadDecisionLog().find((e) => e.runId === runId);
+  const fresh = buildDecisionLogEntry(data, { ...meta, runId });
+
+  let entry: DecisionLogEntry;
+  let status: SaveAnalysisResult["status"] = "created";
+
+  if (existing) {
+    status = "updated";
+    entry = {
+      ...fresh,
+      id: existing.id,
+      outcomeStatus: existing.outcomeStatus,
+      paperPnl: existing.paperPnl,
+      reflection: existing.reflection,
+      resolution: existing.resolution,
+      isDemoData: existing.isDemoData ?? meta?.isDemoData ?? false,
+    };
+    updateDecisionLogEntry(existing.id, () => entry);
+    entry = loadDecisionLog().find((e) => e.id === existing.id) ?? entry;
+  } else {
+    entry = fresh;
+    saveDecisionLogEntry(entry);
+    entry = loadDecisionLog().find((e) => e.id === entry.id) ?? entry;
   }
-  const entries = saveDecisionLogEntry(entry);
-  const attached = attachTradeControlToEntry(entry, data, entries);
-  return { entries: loadDecisionLog(), entry: attached ?? entry };
+
+  const attached = attachTradeControlToEntry(entry, data, loadDecisionLog());
+  const finalEntry = attached ?? entry;
+  return {
+    entries: loadDecisionLog(),
+    entry: finalEntry,
+    status,
+  };
 }
 
 export function updateDecisionLogEntry(
@@ -267,11 +329,16 @@ export function resolveDecisionOutcome(
   const resolution = {
     btcPriceAfter: input.btcPriceAfter,
     tradeWouldWin: input.tradeWouldWin,
+    outcomeLabel: input.outcomeLabel,
+    manualPnlPct: input.manualPnlPct ?? null,
     notes: input.notes.trim(),
     resolvedAt: new Date().toISOString(),
   };
 
-  const paperPnl = computePaperPnl(existing, resolution);
+  const paperPnl =
+    input.manualPnlPct != null && Number.isFinite(input.manualPnlPct)
+      ? Number(input.manualPnlPct.toFixed(2))
+      : computePaperPnl(existing, resolution);
   const reflection = runReflectionAgent(
     { ...existing, outcomeStatus: "RESOLVED" },
     resolution,

@@ -9,6 +9,7 @@ import type { OperatorOverrideLogEntry } from "@/lib/governance/governance-types
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { BacktestReadinessBridge } from "@/lib/historical-backtest/types";
 import type { RiskBudgetResult } from "@/lib/risk-budget-optimizer/types";
+import type { LedgerHealthReport } from "@/lib/ledger/types";
 
 export type ReadinessStatus = "PASS" | "WARNING" | "FAIL";
 
@@ -22,7 +23,11 @@ export type ReadinessCategoryId =
   | "alert_readiness"
   | "operator_discipline_readiness"
   | "environment_variable_readiness"
-  | "kill_switch_readiness";
+  | "kill_switch_readiness"
+  | "command_center_readiness"
+  | "real_time_risk_readiness"
+  | "sync_audit_readiness"
+  | "ledger_readiness";
 
 export interface ReadinessCategoryResult {
   id: ReadinessCategoryId;
@@ -36,6 +41,7 @@ export interface ReadinessCategoryResult {
 
 export interface StrictPaperMetrics {
   closedTrades: number;
+  resolvedTrades: number;
   winRate: number;
   avgPnlPct: number;
   maxDrawdownPct: number;
@@ -67,6 +73,7 @@ export interface LiveReadinessInput {
   entries: DecisionLogEntry[];
   orders: PaperOrder[];
   perpPositions?: PerpPaperPosition[];
+  ledgerHealth?: LedgerHealthReport | null;
   riskProfile: DeskRiskProfile;
   governance?: GovernanceDeskState;
   incidents?: DeskIncident[];
@@ -76,6 +83,10 @@ export interface LiveReadinessInput {
   backtestBridge?: BacktestReadinessBridge | null;
   riskBudget?: RiskBudgetResult | null;
   serverContext: ServerReadinessContext;
+  commandCenterStatus?: string | null;
+  realTimeRiskStatus?: string | null;
+  killSwitchTested?: boolean;
+  auditEnabled?: boolean;
 }
 
 export interface LiveReadinessReport {

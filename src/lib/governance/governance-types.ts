@@ -1,8 +1,10 @@
 import type { AgentRecommendation } from "@/lib/agents/types";
 import type { OutcomeStatus } from "@/lib/journal/decision-log-types";
 
-/** Placeholder roles — no auth backend in MVP 14. */
-export type DeskUserRole = "VIEWER" | "OPERATOR" | "RISK_MANAGER" | "ADMIN";
+import type { WorkspaceRole } from "@/lib/platform/types";
+
+/** Legacy alias — maps OPERATOR → TRADER in platform layer. */
+export type DeskUserRole = WorkspaceRole | "OPERATOR";
 
 export type HardRuleId =
   | "stale_market_data"
@@ -24,6 +26,8 @@ export type IncidentSeverity = "low" | "medium" | "high" | "critical";
 export type IncidentStatus = "open" | "investigating" | "resolved" | "closed";
 
 export interface GovernanceDeskState {
+  /** P-MVP 1 — workspace scope */
+  workspaceId?: string;
   pauseAnalysis: boolean;
   pausePaperAutoOpen: boolean;
   disableAggressiveMode: boolean;
@@ -54,6 +58,7 @@ export interface OperatorOverrideLogEntry {
 
 export interface GovernanceAuditEntry {
   id: string;
+  workspaceId?: string;
   timestamp: string;
   action: string;
   actorName: string;
@@ -63,6 +68,7 @@ export interface GovernanceAuditEntry {
 
 export interface DeskIncident {
   id: string;
+  workspaceId?: string;
   createdAt: string;
   updatedAt: string;
   type: IncidentType;

@@ -1,4 +1,8 @@
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
+import {
+  filterProductionEntries,
+  filterProductionOrders,
+} from "@/lib/journal/production-filter";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
@@ -80,26 +84,28 @@ export function buildValidationReport(input: {
   riskProfile: DeskRiskProfile;
   latestAnalysis?: AnalyzeApiResponse | null;
 }): ValidationReport {
+  const entries = filterProductionEntries(input.entries);
+  const orders = filterProductionOrders(input.orders);
   const strategyMatrix = buildStrategyPerformanceMatrix(
-    input.entries,
-    input.orders,
+    entries,
+    orders,
     input.riskProfile,
   );
-  const agentBoard = buildAgentValidationBoard(input.entries, strategyMatrix);
-  const regimePerformance = buildRegimePerformance(input.entries);
-  const scoreboard = buildAgentScoreboard(input.entries);
-  const portfolio = buildDeskPortfolioSnapshot(input.entries, input.orders);
+  const agentBoard = buildAgentValidationBoard(entries, strategyMatrix);
+  const regimePerformance = buildRegimePerformance(entries);
+  const scoreboard = buildAgentScoreboard(entries);
+  const portfolio = buildDeskPortfolioSnapshot(entries, orders);
 
   const latestRegime = input.latestAnalysis?.tradingDesk?.marketRegime;
-  const lastEntryRegime = input.entries[0]?.marketRegime;
+  const lastEntryRegime = entries[0]?.marketRegime;
   const currentRegime = normalizeRegimeLabel(
     latestRegime ?? lastEntryRegime ?? "Mixed / unclear",
   );
   const currentRegimeLabel = getRegimeRule(currentRegime).label;
 
   const killSwitch = evaluateKillSwitch({
-    entries: input.entries,
-    orders: input.orders,
+    entries,
+    orders,
     riskProfile: input.riskProfile,
     latestAnalysis: input.latestAnalysis,
     persisted:

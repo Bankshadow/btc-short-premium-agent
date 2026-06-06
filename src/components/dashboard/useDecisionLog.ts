@@ -7,6 +7,7 @@ import {
   resolveDecisionOutcome,
   type DecisionLogEntry,
   type ResolveOutcomeInput,
+  type SaveAnalysisResult,
 } from "@/lib/journal/decision-log";
 import { buildAgentScoreboard, type DeskScoreboard } from "@/lib/journal/agent-scoreboard";
 import { loadDraftRules, type DraftRule } from "@/lib/journal/draft-rules";
@@ -33,13 +34,20 @@ export function useDecisionLog() {
     [entries],
   );
 
-  const saveFromAnalysis = useCallback((data: AnalyzeApiResponse) => {
-    const { entries, entry } = appendDecisionLogFromAnalysis(data, {
-      deskRiskProfile: loadDeskSettings().riskProfile,
-    });
-    setEntries(entries);
-    return entry;
-  }, []);
+  const saveFromAnalysis = useCallback(
+    (
+      data: AnalyzeApiResponse,
+      meta?: Parameters<typeof appendDecisionLogFromAnalysis>[1],
+    ): SaveAnalysisResult => {
+      const result = appendDecisionLogFromAnalysis(data, {
+        deskRiskProfile: loadDeskSettings().riskProfile,
+        ...meta,
+      });
+      setEntries(result.entries);
+      return { entry: result.entry, status: result.status };
+    },
+    [],
+  );
 
   const resolveOutcome = useCallback(
     (id: string, input: ResolveOutcomeInput) => {

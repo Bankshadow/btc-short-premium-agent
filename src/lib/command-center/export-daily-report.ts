@@ -16,6 +16,17 @@ export function formatCommandCenterDailyReport(report: CommandCenterReport): str
       ? report.cautions.map((c) => `- ${c}`)
       : ["- None"]),
     "",
+    "## Recommended actions",
+    ...(report.recommendedActions.length > 0
+      ? report.recommendedActions.map((a) => `- ${a}`)
+      : ["- None"]),
+    "",
+    "## Production reality (MVP 41C)",
+    `- Live trading: ${report.realityCheck.domainStatuses.liveTrading}`,
+    `- Paper learning: ${report.realityCheck.domainStatuses.paperLearning}`,
+    `- Analysis only: ${report.realityCheck.domainStatuses.analysisOnly}`,
+    `- Expected posture: ${report.realityCheck.expectedProductionPosture ? "yes" : "no"}`,
+    "",
     "## System health",
     `- Last analyzed: ${report.panels.systemHealth.lastAnalyzedAt ?? "n/a"}`,
     `- Source errors: ${report.panels.systemHealth.sourceErrorCount}`,

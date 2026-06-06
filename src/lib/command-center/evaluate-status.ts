@@ -14,6 +14,9 @@ import type {
 } from "./types";
 import { buildOptionsRiskReport } from "@/lib/options-risk-greeks/build-options-risk-report";
 import { evaluateRealTimeRisk } from "@/lib/real-time-risk/evaluate-realtime-risk";
+import { evaluateCommandCenterRealityCheck } from "./reality-check";
+import { policyCommandCenterBlockers } from "@/lib/policy-engine/policy-blockers";
+import { observabilityCommandCenterBlockers } from "@/lib/observability/observability-blockers";
 import { COMMAND_CENTER_SAFETY_NOTICE } from "./types";
 
 function blocker(
@@ -73,6 +76,7 @@ export function buildCommandCenterReport(
     incidents: input.incidents,
     latestAnalysis: input.latestAnalysis,
     riskBudget: input.riskBudget,
+    ledgerHealth: input.ledgerHealth,
     serverContext: input.serverContext,
   });
 
@@ -150,6 +154,17 @@ export function buildCommandCenterReport(
         "exchange_disconnected",
         "Exchange not configured",
         "LIVE_EXECUTION_ENABLED but BYBIT credentials missing.",
+      ),
+    );
+  }
+
+  if (input.ledgerHealth && !input.ledgerHealth.healthy) {
+    blockers.push(
+      blocker(
+        "ledger_unhealthy",
+        "Unified ledger unhealthy",
+        input.ledgerHealth.issues.slice(0, 2).join("; ") ||
+          "Ledger integrity check failed — review /ledger.",
       ),
     );
   }
@@ -235,6 +250,31 @@ export function buildCommandCenterReport(
         "Pilot emergency stop is active — live perp execution blocked.",
       ),
     );
+  }
+
+  for (const ob of observabilityCommandCenterBlockers(
+    input.observabilityReport ?? null,
+  )) {
+    if (!blockers.some((b) => b.id === ob.id)) {
+      blockers.push(ob);
+    }
+  }
+
+  for (const pb of policyCommandCenterBlockers({
+    latestAnalysis: input.latestAnalysis,
+    governance,
+    entries: input.entries,
+    orders: input.orders,
+    riskProfile: input.riskProfile,
+    backboneHealthy: input.ledgerHealth?.healthy ?? true,
+    auditAvailable: input.serverContext.supabaseConfigured,
+    environmentMode: input.serverContext.liveExecution.enabled
+      ? "LIVE_ENABLED"
+      : "PAPER",
+  })) {
+    if (!blockers.some((b) => b.id === pb.id && b.detail === pb.detail)) {
+      blockers.push(pb);
+    }
   }
 
   if (readiness.overallStatus === "WARNING") {
@@ -335,6 +375,31 @@ export function buildCommandCenterReport(
     }
   }
 
+  const realityCheck = evaluateCommandCenterRealityCheck({
+    commandInput: input,
+    readiness,
+    dataTrustCritical,
+    emergencyStopActive: pilotStatus.emergencyStopActive,
+    criticalIncidents: criticalOpen.length,
+    killSwitchPaused: killSwitch.tradingPaused,
+  });
+
+  const existingBlockerIds = new Set(blockers.map((b) => b.id));
+  for (const pb of realityCheck.productionBlockers) {
+    if (!existingBlockerIds.has(pb.id)) {
+      blockers.push(pb);
+      existingBlockerIds.add(pb.id);
+    }
+  }
+
+  for (const check of realityCheck.checks) {
+    if (check.affectsPaperLearning && check.status !== "PASS") {
+      cautions.push(`Reality: ${check.message}`);
+    }
+  }
+
+  const recommendedActions = [...realityCheck.recommendedActions];
+
   const status = resolveOverallStatus({
     blockers,
     cautions,
@@ -348,6 +413,8 @@ export function buildCommandCenterReport(
     statusLabel: statusLabel(status),
     blockers,
     cautions,
+    recommendedActions,
+    realityCheck,
     panels: {
       systemHealth: {
         deskHealth,

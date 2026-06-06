@@ -1,4 +1,8 @@
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
+import {
+  filterProductionEntries,
+  filterProductionOrders,
+} from "@/lib/journal/production-filter";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
@@ -26,10 +30,12 @@ export function buildCapitalReport(input: {
   settings?: CapitalMissionSettings;
 }): CapitalReport {
   const settings = input.settings ?? loadCapitalSettings();
-  const portfolio = buildDeskPortfolioSnapshot(input.entries, input.orders);
+  const entries = filterProductionEntries(input.entries);
+  const orders = filterProductionOrders(input.orders);
+  const portfolio = buildDeskPortfolioSnapshot(entries, orders);
   const validation = buildValidationReport({
-    entries: input.entries,
-    orders: input.orders,
+    entries,
+    orders,
     riskProfile: input.riskProfile,
     latestAnalysis: input.latestAnalysis,
   });
@@ -42,7 +48,7 @@ export function buildCapitalReport(input: {
   const scalePermission = buildDeskScalePermission({
     strategyMatrix: validation.strategyMatrix,
     killSwitch: validation.killSwitch,
-    entries: input.entries,
+    entries,
   });
   const riskOfRuin = buildRiskOfRuinWarning({
     portfolio,

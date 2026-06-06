@@ -1,3 +1,5 @@
+import { getActiveWorkspaceId } from "@/lib/platform/workspace-registry";
+import { readScopedJson, writeScopedJson } from "@/lib/platform/scoped-storage";
 import type { DeskUserRole, GovernanceAuditEntry } from "./governance-types";
 
 export const GOVERNANCE_AUDIT_STORAGE_KEY =
@@ -6,9 +8,7 @@ export const GOVERNANCE_AUDIT_STORAGE_KEY =
 export function loadGovernanceAuditLog(): GovernanceAuditEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(GOVERNANCE_AUDIT_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as GovernanceAuditEntry[];
+    return readScopedJson<GovernanceAuditEntry[]>("governance-audit", []);
   } catch {
     return [];
   }
@@ -22,12 +22,11 @@ export function appendGovernanceAudit(input: {
 }): GovernanceAuditEntry[] {
   const entry: GovernanceAuditEntry = {
     id: `gov-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    workspaceId: getActiveWorkspaceId(),
     timestamp: new Date().toISOString(),
     ...input,
   };
   const next = [entry, ...loadGovernanceAuditLog()].slice(0, 200);
-  if (typeof window !== "undefined") {
-    localStorage.setItem(GOVERNANCE_AUDIT_STORAGE_KEY, JSON.stringify(next));
-  }
+  writeScopedJson("governance-audit", next);
   return next;
 }

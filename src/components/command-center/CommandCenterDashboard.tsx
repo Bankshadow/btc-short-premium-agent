@@ -16,7 +16,8 @@ import type {
 import { loadDeskSettings } from "@/lib/desk/desk-settings";
 import { loadIncidents } from "@/lib/governance/incidents-store";
 import { loadGovernanceState } from "@/lib/governance/governance-state";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
+import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
 import {
   loadLivePilotJournal,
   loadPilotEmergencyStop,
@@ -60,23 +61,30 @@ export default function CommandCenterDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [operatorNote, setOperatorNote] = useState("");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [backboneHealth, setBackboneHealth] = useState(
+    () => loadDeskBackboneInputs().record.health,
+  );
 
   const refresh = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
+      const backboneInput = loadDeskBackboneInputs();
+      setBackboneHealth(backboneInput.record.health);
+
       const res = await fetch("/api/command-center/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          entries: loadDecisionLog(),
-          orders: loadPaperOrders(),
+          entries: backboneInput.entries,
+          orders: backboneInput.orders,
           perpPositions: getOpenPerpPositions(),
           riskProfile: loadDeskSettings().riskProfile,
           governance: loadGovernanceState(),
           incidents: loadIncidents(),
           riskBudget: loadClientRiskBudget(),
-          livePilotJournal: loadLivePilotJournal(),
+          livePilotJournal: backboneInput.livePilotJournal,
+          ledgerHealth: backboneInput.ledger.health,
           emergencyStopActive: loadPilotEmergencyStop(),
           deskManagerActions: loadActionQueue(),
           adaptationProposals: loadAdaptationProposals(),
@@ -161,6 +169,8 @@ export default function CommandCenterDashboard() {
         {COMMAND_CENTER_SAFETY_NOTICE}
       </p>
 
+      <DataHealthPanel health={backboneHealth} />
+
       {report && (
         <div
           className={`rounded-xl border px-4 py-3 text-sm font-semibold ${statusClass(report.status)}`}
@@ -189,6 +199,39 @@ export default function CommandCenterDashboard() {
             <p className="mt-1 text-xs text-rose-300/70">
               Limits: {report.realTimeRisk.triggeredLimits.join(", ")}
             </p>
+          )}
+        </section>
+      )}
+
+      {report?.realityCheck && (
+        <section className="rounded-xl border border-cyan-900/40 bg-cyan-950/15 p-4">
+          <h2 className="text-sm font-semibold text-cyan-200">Production reality check (MVP 41C)</h2>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3 text-xs">
+            <div className="rounded border border-zinc-800 px-3 py-2">
+              <p className="text-zinc-500">Live trading</p>
+              <p className="font-semibold text-zinc-100">
+                {report.realityCheck.domainStatuses.liveTrading}
+              </p>
+            </div>
+            <div className="rounded border border-zinc-800 px-3 py-2">
+              <p className="text-zinc-500">Paper learning</p>
+              <p className="font-semibold text-zinc-100">
+                {report.realityCheck.domainStatuses.paperLearning}
+              </p>
+            </div>
+            <div className="rounded border border-zinc-800 px-3 py-2">
+              <p className="text-zinc-500">Analysis only</p>
+              <p className="font-semibold text-zinc-100">
+                {report.realityCheck.domainStatuses.analysisOnly}
+              </p>
+            </div>
+          </div>
+          {report.realityCheck.recommendedActions.length > 0 && (
+            <ul className="mt-3 list-disc space-y-1 pl-4 text-xs text-cyan-200/80">
+              {report.realityCheck.recommendedActions.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
           )}
         </section>
       )}
@@ -370,6 +413,30 @@ export default function CommandCenterDashboard() {
               Open readiness →
             </Link>
           </Panel>
+
+          {report.realityCheck && (
+            <Panel title="Reality checks">
+              <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
+                {report.realityCheck.checks.map((c) => (
+                  <li key={c.id} className="flex flex-wrap gap-2 text-zinc-400">
+                    <span
+                      className={
+                        c.status === "PASS"
+                          ? "text-emerald-400"
+                          : c.status === "WARNING"
+                            ? "text-amber-400"
+                            : "text-rose-400"
+                      }
+                    >
+                      {c.status}
+                    </span>
+                    <span className="text-zinc-300">{c.label}</span>
+                    <span className="text-zinc-500">{c.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
 
           <Panel title="Risk Budget">
             {p.riskBudget ? (

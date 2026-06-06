@@ -2,6 +2,9 @@ import { assertLiveWriteHealthy } from "@/lib/db/write-health";
 import { writeThroughLiveTrades } from "@/lib/db/write-through";
 import { executePilotPerpOrder } from "@/lib/live-pilot/pilot-execution";
 import type { PilotExecuteInput } from "@/lib/live-pilot/pilot-execution";
+import { enforcePolicy } from "@/lib/policy-engine/enforce";
+import { buildPolicyInputWithObservability } from "@/lib/observability/policy-context";
+import { enforceApiPermission, parseApiWorkspaceContext } from "@/lib/platform/api-context";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +32,43 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "operatorApproval must be true." },
         { status: 422 },
+      );
+    }
+
+    const wsCtx = parseApiWorkspaceContext(request, body as unknown as Record<string, unknown>);
+    if (wsCtx.workspaceId) {
+      const perm = enforceApiPermission(wsCtx, "canApproveLiveTrade");
+      if (!perm.ok) {
+        return NextResponse.json({ error: perm.error }, { status: perm.status });
+      }
+    }
+
+    const policyBody = body as PilotExecuteInput & Record<string, unknown>;
+    const policy = enforcePolicy(
+      await buildPolicyInputWithObservability({
+        workspaceId: wsCtx.workspaceId ?? "server-default",
+        userRole: wsCtx.role ?? "TRADER",
+        environmentMode: (policyBody.environmentMode as string) ?? "LIVE_ENABLED",
+        action: "EXECUTE_LIVE_PERP",
+        governance: body.governance,
+        entries: body.entries,
+        orders: body.orders,
+        riskProfile:
+          (policyBody.riskProfile as import("@/lib/desk/desk-risk-policy").DeskRiskProfile) ??
+          "balanced",
+        operatorApproval: body.operatorApproval,
+        doubleConfirm: Boolean(body.confirmToken && body.confirmExpiresAt),
+        auditAvailable: true,
+        backboneHealthy: true,
+        commandCenter: policyBody.commandCenter as never,
+        liveReadiness: policyBody.liveReadiness as never,
+        latestAnalysis: policyBody.latestAnalysis as never,
+      }),
+    );
+    if (!policy.ok) {
+      return NextResponse.json(
+        { ok: false, error: policy.error, policy: policy.result },
+        { status: policy.status },
       );
     }
 

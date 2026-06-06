@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { DESK_REFRESH_OPTIONS } from "@/hooks/useAutoDeskRefresh";
+import WorkspaceSwitcher from "@/components/platform/WorkspaceSwitcher";
+import DeskNav from "./DeskNav";
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -53,15 +54,14 @@ export default function DeskTopBar({
             {profileLabel ?? "BTC Premium Trading Desk"}
           </h1>
           <p className="text-xs text-zinc-500">
-            {environmentModeLabel
-              ? `${environmentModeLabel} · `
-              : ""}
-            Multi-agent committee · analysis only
+            {environmentModeLabel ? `${environmentModeLabel} · ` : ""}
+            AI trading desk · autopilot operating loop
           </p>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
+        <WorkspaceSwitcher compact />
         <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-1.5">
           <span
             className={`relative flex h-2.5 w-2.5 ${deskLive || loading ? "" : "opacity-40"}`}
@@ -81,10 +81,10 @@ export default function DeskTopBar({
           </span>
           <span className="text-xs font-medium text-zinc-300">
             {loading
-              ? "Desk in session…"
+              ? "AI desk reviewing conditions…"
               : deskLive
-                ? "Desk live"
-                : "Connecting…"}
+                ? "Desk active"
+                : "Standing by…"}
           </span>
         </div>
 
@@ -96,112 +96,12 @@ export default function DeskTopBar({
 
         <div className="hidden text-right sm:block">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-            Last committee run
+            Last desk cycle
           </p>
           <p className="font-mono text-xs text-zinc-300">{lastLabel}</p>
         </div>
 
-        <nav
-          className="hidden items-center gap-0.5 rounded-lg border border-zinc-800/90 bg-zinc-950/60 p-0.5 lg:flex"
-          aria-label="Ops modules"
-        >
-          <Link
-            href="/automation"
-            className="rounded-md border border-cyan-900/40 bg-cyan-950/50 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-300/95 hover:bg-cyan-900/45"
-          >
-            AI
-          </Link>
-          <Link
-            href="/portfolio"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-teal-300/95 hover:bg-teal-900/45"
-          >
-            Portfolio
-          </Link>
-          <Link
-            href="/assets"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300/95 hover:bg-emerald-900/45"
-          >
-            Assets
-          </Link>
-          <Link
-            href="/council"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300/95 hover:bg-amber-900/45"
-          >
-            Council
-          </Link>
-          <Link
-            href="/mortem"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90 hover:bg-emerald-950/50"
-          >
-            Mortem
-          </Link>
-          <Link
-            href="/simulation"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-400/90 hover:bg-violet-950/50"
-          >
-            Sim
-          </Link>
-          <Link
-            href="/war-room"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-rose-400/90 hover:bg-rose-950/50"
-          >
-            War
-          </Link>
-          <Link
-            href="/capital"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-400/90 hover:bg-violet-950/50"
-          >
-            Capital
-          </Link>
-          <Link
-            href="/adaptation"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400/90 hover:bg-indigo-950/50"
-          >
-            Adapt
-          </Link>
-          <Link
-            href="/live-readiness"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90 hover:bg-emerald-950/50"
-          >
-            Ready
-          </Link>
-          <Link
-            href="/live-pilot"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/90 hover:bg-emerald-950/50"
-          >
-            Pilot
-          </Link>
-          <Link
-            href="/strategies"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-400/90 hover:bg-indigo-950/50"
-          >
-            Strategies
-          </Link>
-          <Link
-            href="/validation"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-teal-400/90 hover:bg-teal-950/50"
-          >
-            Validation
-          </Link>
-          <Link
-            href="/governance"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-rose-400/90 hover:bg-rose-950/50"
-          >
-            Gov
-          </Link>
-          <Link
-            href="/workspace"
-            className="rounded-md px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-400/90 hover:bg-cyan-950/50"
-          >
-            OS
-          </Link>
-        </nav>
-        <Link
-          href="/summary"
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800"
-        >
-          Public
-        </Link>
+        <DeskNav />
 
         <div className="flex items-center gap-2">
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-400">
@@ -237,7 +137,7 @@ export default function DeskTopBar({
           disabled={loading}
           className="rounded-lg bg-amber-600/90 px-3 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-amber-500 disabled:opacity-50"
         >
-          {loading ? "Running…" : "Refresh now"}
+          {loading ? "Running…" : "Run desk cycle"}
         </button>
       </div>
     </header>

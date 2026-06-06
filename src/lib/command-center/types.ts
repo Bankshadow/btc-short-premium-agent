@@ -35,7 +35,63 @@ export type CommandCenterBlockerId =
   | "missing_alert_channel"
   | "governance_pause_active"
   | "data_trust_critical"
-  | "pilot_emergency_stop";
+  | "pilot_emergency_stop"
+  | "no_resolved_decision_logs"
+  | "no_paper_trade_history"
+  | "strategy_sample_below_threshold"
+  | "validation_sample_below_threshold"
+  | "capital_scaling_blocked"
+  | "supabase_sync_off"
+  | "alert_channels_off"
+  | "exchange_status_unknown"
+  | "governance_local_placeholder"
+  | "audit_not_database_backed"
+  | "live_readiness_unavailable"
+  | "ledger_unhealthy"
+  | "policy_engine_block"
+  | "observability_critical"
+  | "warehouse_write_blocked"
+  | "alert_delivery_degraded";
+
+export type RealityCheckItemStatus = "PASS" | "WARNING" | "FAIL";
+
+export interface RealityCheckItem {
+  id: CommandCenterBlockerId;
+  label: string;
+  status: RealityCheckItemStatus;
+  message: string;
+  blocksLive: boolean;
+  affectsPaperLearning: boolean;
+  recommendedAction?: string;
+}
+
+export interface RealityCheckDomainStatus {
+  liveTrading: CommandCenterStatus;
+  paperLearning: CommandCenterStatus;
+  analysisOnly: CommandCenterStatus;
+}
+
+export interface RealityCheckReport {
+  generatedAt: string;
+  checks: RealityCheckItem[];
+  domainStatuses: RealityCheckDomainStatus;
+  productionBlockers: CommandCenterBlocker[];
+  recommendedActions: string[];
+  expectedProductionPosture: boolean;
+  totalResolvedLogs: number;
+  totalResolvedSignals: number;
+  strategiesBelowSample: string[];
+  capitalScalingAllowed: boolean;
+  supabaseConfigured: boolean;
+  alertChannelsReady: boolean;
+  exchangeKnown: boolean;
+  governancePlaceholder: boolean;
+  auditDatabaseBacked: boolean;
+  liveReadinessStatus: string;
+  safetyNotice: string;
+  cannotEnableLive: true;
+  cannotIncreaseRisk: true;
+}
 
 export interface CommandCenterBlocker {
   id: CommandCenterBlockerId;
@@ -161,6 +217,8 @@ export interface CommandCenterReport {
   statusLabel: string;
   blockers: CommandCenterBlocker[];
   cautions: string[];
+  recommendedActions: string[];
+  realityCheck: RealityCheckReport;
   panels: CommandCenterPanels;
   realTimeRisk: RealTimeRiskReport;
   optionsRisk: OptionsRiskReport;
@@ -188,6 +246,8 @@ export interface CommandCenterInput {
   registry?: PersistedStrategyRegistry | null;
   automationEnabled?: boolean;
   dryRunHistory?: OptionsDryRunResult[];
+  ledgerHealth?: import("@/lib/ledger/types").LedgerHealthReport | null;
+  observabilityReport?: import("@/lib/observability/types").PlatformHealthReport | null;
   serverContext: ServerReadinessContext;
 }
 

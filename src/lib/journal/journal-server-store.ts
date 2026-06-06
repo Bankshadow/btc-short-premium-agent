@@ -1,5 +1,6 @@
 import {
   buildDecisionLogEntry,
+  deriveAnalyzeRunId,
   DECISION_LOG_MAX_ENTRIES,
   type DecisionLogEntry,
 } from "@/lib/journal/decision-log";
@@ -40,8 +41,28 @@ export async function appendServerAnalysisJournalEntry(
 
 export async function appendServerAnalysisFromResponse(
   data: AnalyzeApiResponse,
-): Promise<DecisionLogEntry> {
-  const entry = buildDecisionLogEntry(data);
+): Promise<{ entry: DecisionLogEntry; status: "created" | "updated" }> {
+  const runId = deriveAnalyzeRunId(data);
+  const journal = await loadServerAnalysisJournal();
+  const existing = journal.find((e) => e.runId === runId);
+
+  if (existing) {
+    const updated: DecisionLogEntry = {
+      ...buildDecisionLogEntry(data, { runId }),
+      id: existing.id,
+      outcomeStatus: existing.outcomeStatus,
+      resolution: existing.resolution,
+      paperPnl: existing.paperPnl,
+      reflection: existing.reflection,
+    };
+    const next = journal.map((e) => (e.id === existing.id ? updated : e));
+    const filePath = getJournalFilePath();
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, JSON.stringify(next, null, 2), "utf8");
+    return { entry: updated, status: "updated" };
+  }
+
+  const entry = buildDecisionLogEntry(data, { runId });
   await appendServerAnalysisJournalEntry(entry);
-  return entry;
+  return { entry, status: "created" };
 }

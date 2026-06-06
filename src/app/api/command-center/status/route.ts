@@ -1,5 +1,6 @@
 import { buildCommandCenterReport } from "@/lib/command-center/evaluate-status";
 import { buildCommandCenterServerContext } from "@/lib/command-center/server-context";
+import { buildObservabilitySnapshot } from "@/lib/observability";
 import { COMMAND_CENTER_SAFETY_NOTICE } from "@/lib/command-center/types";
 import type { CommandCenterInput } from "@/lib/command-center/types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
@@ -17,11 +18,13 @@ type Body = Partial<
 export async function GET() {
   try {
     const serverContext = await buildCommandCenterServerContext();
+    const observabilityReport = await buildObservabilitySnapshot("server-default");
     const report = buildCommandCenterReport({
       entries: [],
       orders: [],
       riskProfile: "balanced",
       serverContext,
+      observabilityReport,
     });
 
     return NextResponse.json({
@@ -51,6 +54,7 @@ export async function POST(request: Request) {
       /* empty body */
     }
 
+    const observabilityReport = await buildObservabilitySnapshot("server-default");
     const report = buildCommandCenterReport({
       entries: body.entries ?? [],
       orders: body.orders ?? [],
@@ -70,6 +74,7 @@ export async function POST(request: Request) {
       automationEnabled: body.automationEnabled,
       dryRunHistory: body.dryRunHistory,
       serverContext,
+      observabilityReport,
     });
 
     return NextResponse.json({

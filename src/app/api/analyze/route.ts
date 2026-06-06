@@ -5,6 +5,9 @@ import type {
   AnalysisInput,
   DecisionEngineInput,
 } from "@/lib/types/market";
+import { enforcePolicy } from "@/lib/policy-engine/enforce";
+import { buildPolicyInputWithObservability } from "@/lib/observability/policy-context";
+import { enforceApiPermission, parseApiWorkspaceContext } from "@/lib/platform/api-context";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +24,30 @@ export async function POST(request: Request) {
         Record<string, unknown>;
     } catch {
       // Empty body — use fetched defaults
+    }
+
+    const wsCtx = parseApiWorkspaceContext(request, body as Record<string, unknown>);
+    if (wsCtx.workspaceId) {
+      const perm = enforceApiPermission(wsCtx, "canRunAnalysis");
+      if (!perm.ok) {
+        return NextResponse.json({ error: perm.error }, { status: perm.status });
+      }
+
+      const policy = enforcePolicy(
+        await buildPolicyInputWithObservability({
+          workspaceId: wsCtx.workspaceId,
+          userRole: wsCtx.role ?? "TRADER",
+          environmentMode: (body as Record<string, unknown>).environmentMode as string ?? "PAPER",
+          action: "RUN_ANALYSIS",
+          governance: (body as Record<string, unknown>).governance as never,
+        }),
+      );
+      if (!policy.ok) {
+        return NextResponse.json(
+          { error: policy.error, policy: policy.result },
+          { status: policy.status },
+        );
+      }
     }
 
     const result = await enrichAnalyzeWithMvp9(await runAnalyzeRequest(body));

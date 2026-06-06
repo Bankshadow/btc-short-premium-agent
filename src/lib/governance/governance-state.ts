@@ -1,3 +1,6 @@
+import { getActiveWorkspaceId, getCurrentMemberRole, getCurrentUser } from "@/lib/platform/workspace-registry";
+import { mapLegacyDeskRole } from "@/lib/platform/permissions";
+import { readScopedJson, writeScopedJson } from "@/lib/platform/scoped-storage";
 import {
   DEFAULT_KILL_SWITCH_STATE,
   KILL_SWITCH_STORAGE_KEY,
@@ -20,7 +23,7 @@ export const DEFAULT_GOVERNANCE_STATE: GovernanceDeskState = {
   operatorPauseReason: "",
   operatorPausedAt: null,
   cooldownUntil: null,
-  operatorRole: "OPERATOR",
+  operatorRole: "TRADER",
   operatorName: "Desk Operator",
 };
 
@@ -38,25 +41,39 @@ function mergeKillSwitch(
   };
 }
 
+function platformOperatorDefaults(): Pick<GovernanceDeskState, "operatorName" | "operatorRole" | "workspaceId"> {
+  const role = getCurrentMemberRole();
+  const user = getCurrentUser();
+  return {
+    workspaceId: getActiveWorkspaceId(),
+    operatorName: user.displayName,
+    operatorRole: role,
+  };
+}
+
 export function loadGovernanceState(): GovernanceDeskState {
   if (typeof window === "undefined") {
     return { ...DEFAULT_GOVERNANCE_STATE, ...mergeKillSwitch(DEFAULT_KILL_SWITCH_STATE) };
   }
   try {
-    const raw = localStorage.getItem(GOVERNANCE_STORAGE_KEY);
     const kill = loadKillSwitchState();
-    if (!raw) {
-      return { ...DEFAULT_GOVERNANCE_STATE, ...mergeKillSwitch(kill) };
-    }
+    const stored = readScopedJson<Partial<GovernanceDeskState>>("governance", {});
+    const platform = platformOperatorDefaults();
     return {
       ...DEFAULT_GOVERNANCE_STATE,
       ...mergeKillSwitch(kill),
-      ...(JSON.parse(raw) as Partial<GovernanceDeskState>),
+      ...stored,
+      workspaceId: platform.workspaceId,
+      operatorName: stored.operatorName ?? platform.operatorName,
+      operatorRole: mapLegacyDeskRole(
+        String(stored.operatorRole ?? platform.operatorRole),
+      ) as DeskUserRole,
     };
   } catch {
     return {
       ...DEFAULT_GOVERNANCE_STATE,
       ...mergeKillSwitch(loadKillSwitchState()),
+      ...platformOperatorDefaults(),
     };
   }
 }
@@ -66,7 +83,11 @@ export function saveGovernanceState(
   audit?: { action: string; detail: string },
 ): GovernanceDeskState {
   const prev = loadGovernanceState();
-  const next = { ...prev, ...patch };
+  const next = {
+    ...prev,
+    ...patch,
+    workspaceId: getActiveWorkspaceId(),
+  };
 
   if (typeof window !== "undefined") {
     const killPatch: Partial<KillSwitchPersistedState> = {};
@@ -84,7 +105,7 @@ export function saveGovernanceState(
     }
     if (Object.keys(killPatch).length > 0) {
       const merged = { ...loadKillSwitchState(), ...killPatch };
-      localStorage.setItem(KILL_SWITCH_STORAGE_KEY, JSON.stringify(merged));
+      writeScopedJson("kill-switch", merged);
     }
 
     const { operatorPaused, operatorPauseReason, operatorPausedAt, cooldownUntil, ...rest } =
@@ -93,7 +114,7 @@ export function saveGovernanceState(
     void operatorPauseReason;
     void operatorPausedAt;
     void cooldownUntil;
-    localStorage.setItem(GOVERNANCE_STORAGE_KEY, JSON.stringify(rest));
+    writeScopedJson("governance", rest);
   }
 
   if (audit) {

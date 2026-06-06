@@ -1,3 +1,5 @@
+import { getActiveWorkspaceId } from "@/lib/platform/workspace-registry";
+import { readScopedJson, writeScopedJson } from "@/lib/platform/scoped-storage";
 import type {
   DeskIncident,
   IncidentSeverity,
@@ -13,19 +15,17 @@ export const INCIDENTS_STORAGE_KEY =
 export function loadIncidents(): DeskIncident[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(INCIDENTS_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw) as DeskIncident[];
+    return readScopedJson<DeskIncident[]>("incidents", []);
   } catch {
     return [];
   }
 }
 
 function persist(incidents: DeskIncident[]): DeskIncident[] {
-  if (typeof window !== "undefined") {
-    localStorage.setItem(INCIDENTS_STORAGE_KEY, JSON.stringify(incidents));
-  }
-  return incidents;
+  const ws = getActiveWorkspaceId();
+  const next = incidents.map((i) => ({ ...i, workspaceId: i.workspaceId ?? ws }));
+  writeScopedJson("incidents", next, ws);
+  return next;
 }
 
 export function createIncident(input: {
@@ -40,6 +40,7 @@ export function createIncident(input: {
   const now = new Date().toISOString();
   const incident: DeskIncident = {
     id: `inc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    workspaceId: getActiveWorkspaceId(),
     createdAt: now,
     updatedAt: now,
     type: input.type,

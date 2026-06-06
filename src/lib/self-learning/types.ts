@@ -7,7 +7,8 @@ export const SELF_LEARNING_SAFETY_NOTICE =
 export type PostTradeEvaluationSource =
   | "paper_close"
   | "manual_resolve"
-  | "live_pilot_close";
+  | "live_pilot_close"
+  | "paper_autopilot_resolve";
 
 export interface AgentPredictionScore {
   hitRate: number;

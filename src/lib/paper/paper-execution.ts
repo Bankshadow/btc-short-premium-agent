@@ -151,17 +151,30 @@ export function tryAutoClosePaperOnSkip(
   return closed;
 }
 
+function paperAutoOpenEnabled(settings: PaperTradingSettings): boolean {
+  return settings.autoCreatePaperOnTrade ?? settings.autoOpenOnTrade;
+}
+
 export function tryAutoOpenPaperOrder(
   data: AnalyzeApiResponse,
   decisionLogId: string,
   governance?: Pick<GovernanceDeskState, "operatorPaused" | "safeMode"> | null,
 ): PaperOrder | null {
   const settings = loadPaperSettings();
-  if (!settings.autoOpenOnTrade) return null;
+  if (!paperAutoOpenEnabled(settings)) return null;
   if (hasOpenPaperOrder()) return null;
   if (findOrderByLogId(decisionLogId)) return null;
 
-  const eligibility = evaluatePaperOpenEligibility(data, settings, governance);
+  const strictSettings = { ...settings, paperMode: "STRICT_PAPER" as const };
+  const eligibility = evaluatePaperOpenEligibility(
+    data,
+    strictSettings,
+    governance,
+  );
+  if (!eligibility.eligible || eligibility.strictVerdict !== "TRADE") {
+    return null;
+  }
+
   const order = buildPaperOrderFromEligibility(
     data,
     decisionLogId,
@@ -173,10 +186,52 @@ export function tryAutoOpenPaperOrder(
   return order;
 }
 
+/** Auto-create relaxed shadow trade on WAIT/SKIP when enabled. */
+export function tryAutoOpenShadowOrder(
+  data: AnalyzeApiResponse,
+  decisionLogId: string,
+  governance?: Pick<GovernanceDeskState, "operatorPaused" | "safeMode"> | null,
+): PaperOrder | null {
+  const settings = loadPaperSettings();
+  if (!settings.autoCreateShadowOnWaitSkip) return null;
+  if (findOrderByLogId(decisionLogId)) return null;
+
+  const raw =
+    data.tradingDesk?.committee.finalVerdict ??
+    data.step5_verdict.recommendation;
+  const verdict = String(raw).toUpperCase() as AgentRecommendation;
+  if (verdict !== "WAIT" && verdict !== "SKIP") return null;
+
+  const shadowSettings = {
+    ...settings,
+    paperMode: "RELAXED_PAPER" as const,
+    autoOpenOnTrade: true,
+    relaxedAllowWaitToPaperTrade: true,
+  };
+  const eligibility = evaluatePaperOpenEligibility(
+    data,
+    shadowSettings,
+    governance,
+  );
+  if (!eligibility.eligible) return null;
+
+  const order = buildPaperOrderFromEligibility(
+    data,
+    decisionLogId,
+    eligibility,
+  );
+  if (!order) return null;
+
+  savePaperOrder({ ...order, notes: `${order.notes} · Shadow trace`.trim() });
+  return order;
+}
+
 export interface ClosePaperOrderInput {
   exitBtcPrice: number;
   notes?: string;
   tradeWouldWin?: boolean | null;
+  /** When true, close only — resolution deferred to paper autopilot queue. */
+  skipResolve?: boolean;
 }
 
 export interface ClosePaperOrderResult {
@@ -226,11 +281,20 @@ export function closePaperOrderAndSyncLog(
     .filter(Boolean)
     .join(" · ");
 
+  if (input.skipResolve) {
+    return { order: closed, logSynced: false };
+  }
+
+  const outcomeLabel =
+    tradeWouldWin === true ? "WIN" : tradeWouldWin === false ? "LOSS" : "BREAKEVEN";
+
   const resolved = resolveDecisionOutcome(
     order.decisionLogId,
     {
       btcPriceAfter: input.exitBtcPrice,
       tradeWouldWin,
+      outcomeLabel,
+      manualPnlPct: realized,
       notes: syncNotes || "Closed via paper trading desk.",
     },
     { evaluationSource: "paper_close" },

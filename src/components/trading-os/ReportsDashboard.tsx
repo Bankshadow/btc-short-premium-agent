@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
-import { loadPaperOrders } from "@/lib/paper/paper-orders";
+import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
 import { buildReport } from "@/lib/trading-os/build-reports";
 import { loadWorkspaceConfig } from "@/lib/trading-os/workspace-store";
 import { getDeskProfile } from "@/lib/trading-os/desk-profiles";
@@ -23,10 +23,12 @@ export default function ReportsDashboard() {
   const ws = useMemo(() => loadWorkspaceConfig(), []);
   const profile = getDeskProfile(ws.activeProfileId);
 
+  const backboneInput = useMemo(() => loadDeskBackboneInputs(), []);
+
   const generate = (kind: ReportKind) => {
     const report = buildReport(kind, {
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
+      entries: backboneInput.entries,
+      orders: backboneInput.orders,
       profile,
       mode: ws.environmentMode,
     });
@@ -62,6 +64,8 @@ export default function ReportsDashboard() {
           ← Workspace
         </Link>
       </header>
+
+      <DataHealthPanel health={backboneInput.record.health} compact />
 
       <section className="desk-panel flex flex-wrap gap-2 px-4 py-4">
         {REPORTS.map((r) => (

@@ -2,9 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
-import { loadPaperOrders } from "@/lib/paper/paper-orders";
-import { loadDeskSettings } from "@/lib/desk/desk-settings";
+import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
 import { loadDraftRules } from "@/lib/journal/draft-rules";
 import {
   buildStrategyRegistry,
@@ -42,14 +41,26 @@ export default function StrategiesDashboard() {
   const [selectedId, setSelectedId] = useState<StrategyId | null>(null);
   const [linkRuleId, setLinkRuleId] = useState("");
 
-  const registry = useMemo(() => {
+  const { record, productionEntries, productionOrders, riskProfile } = useMemo(() => {
     void refreshKey;
-    return buildStrategyRegistry({
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
-      riskProfile: loadDeskSettings().riskProfile,
-    });
+    const input = loadDeskBackboneInputs();
+    return {
+      record: input.record,
+      productionEntries: input.productionEntries,
+      productionOrders: input.productionOrders,
+      riskProfile: input.riskProfile,
+    };
   }, [refreshKey]);
+
+  const registry = useMemo(
+    () =>
+      buildStrategyRegistry({
+        entries: productionEntries,
+        orders: productionOrders,
+        riskProfile,
+      }),
+    [productionEntries, productionOrders, riskProfile],
+  );
 
   const draftRules = useMemo(() => {
     void refreshKey;
@@ -71,6 +82,11 @@ export default function StrategiesDashboard() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 px-3 py-4 sm:px-5">
+      <DataHealthPanel health={record.health} compact />
+      <p className="text-xs text-zinc-500">
+        Strategy registry sample size (backbone): {record.learning.strategySampleSize} ·
+        resolved {record.learning.resolvedOutcomesCount}
+      </p>
       <header className="desk-panel flex flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div>
           <p className="desk-section-title text-indigo-400/90">MVP 13</p>

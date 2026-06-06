@@ -3,16 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
-import { loadPaperOrders } from "@/lib/paper/paper-orders";
-import { loadPerpPositions } from "@/lib/multi-asset/perp-paper-store";
+import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
 import { loadDeskSettings } from "@/lib/desk/desk-settings";
 import { loadGovernanceState } from "@/lib/governance/governance-state";
 import { loadIncidents } from "@/lib/governance/incidents-store";
 import { loadOperatorOverrideLog } from "@/lib/governance/operator-override-log";
+import { buildCommandCenterReport } from "@/lib/command-center/evaluate-status";
 import { buildLiveReadinessReport } from "@/lib/live-readiness/build-readiness-report";
 import { loadBacktestReadinessBridge } from "@/lib/historical-backtest/client-bridge";
+import { loadLatestAnalyzeCache } from "@/lib/live-trading-readiness/latest-analyze-cache";
+import { isKillSwitchTested } from "@/lib/live-trading-readiness/operational-gates";
+import { loadPilotEmergencyStop } from "@/lib/live-pilot/journal-store";
 import { loadClientRiskBudget } from "@/lib/risk-budget-optimizer/client-store";
+import { enrichRealTimeRiskInput } from "@/lib/real-time-risk/build-server-context";
+import { evaluateRealTimeRisk } from "@/lib/real-time-risk/evaluate-realtime-risk";
+import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
 import type {
   LiveReadinessReport,
   ReadinessCategoryResult,
@@ -83,32 +88,69 @@ export default function LiveReadinessDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [exportMarkdown, setExportMarkdown] = useState<string | null>(null);
 
-  const buildPayload = useCallback(() => {
+  const buildPayload = useCallback(async (serverContext: ServerReadinessContext) => {
+    const backbone = loadDeskBackboneInputs();
+    const { entries, orders, perpPositions, livePilotJournal, ledger } = backbone;
+    const deskSettings = loadDeskSettings();
+    const latestAnalysis = loadLatestAnalyzeCache();
+    const governance = loadGovernanceState();
+    const commandCenter = buildCommandCenterReport({
+      entries,
+      orders,
+      perpPositions,
+      riskProfile: backbone.riskProfile,
+      governance,
+      incidents: loadIncidents(),
+      latestAnalysis,
+      riskBudget: loadClientRiskBudget(),
+      livePilotJournal,
+      emergencyStopActive: loadPilotEmergencyStop(),
+      serverContext,
+    });
+    const riskInput = await enrichRealTimeRiskInput({
+      entries,
+      orders,
+      perpPositions,
+      liveTrades: livePilotJournal,
+      governance,
+      incidents: loadIncidents(),
+      riskBudget: loadClientRiskBudget(),
+      emergencyStopActive: loadPilotEmergencyStop(),
+      market: latestAnalysis,
+      commandCenter,
+    });
+    const realTimeRisk = evaluateRealTimeRisk(riskInput);
+
     return {
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
-      perpPositions: loadPerpPositions(),
-      riskProfile: loadDeskSettings().riskProfile,
-      governance: loadGovernanceState(),
+      entries,
+      orders,
+      perpPositions,
+      riskProfile: backbone.riskProfile,
+      governance,
       incidents: loadIncidents(),
       overrideLog: loadOperatorOverrideLog(),
-      deskSettings: loadDeskSettings(),
-      latestAnalysis: null,
+      deskSettings,
+      latestAnalysis,
       backtestBridge: loadBacktestReadinessBridge(),
       riskBudget: loadClientRiskBudget(),
+      commandCenterStatus: commandCenter.status,
+      realTimeRiskStatus: realTimeRisk.riskStatus,
+      killSwitchTested: isKillSwitchTested(),
+      auditEnabled: deskSettings.auditLiveActions,
+      ledgerHealth: ledger.health,
     };
   }, []);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     setError(null);
-    const payload = buildPayload();
     try {
       const res = await fetch("/api/live-readiness");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? res.statusText);
 
       const ctx = data.serverContext as ServerReadinessContext;
+      const payload = await buildPayload(ctx);
       const merged = buildLiveReadinessReport({
         ...payload,
         serverContext: ctx,
@@ -123,13 +165,20 @@ export default function LiveReadinessDashboard() {
   }, [buildPayload]);
 
   const exportReport = async () => {
+    if (!serverContext) {
+      setError("Refresh checklist before exporting.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch("/api/live-readiness/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildPayload(), format: "all" }),
+        body: JSON.stringify({
+          ...(await buildPayload(serverContext)),
+          format: "all",
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? res.statusText);
@@ -165,9 +214,9 @@ export default function LiveReadinessDashboard() {
       activePath="/live-readiness"
       nav={[
         { href: "/", label: "← Desk" },
+        { href: "/live-trading", label: "Live plan", primary: true },
+        { href: "/live-pilot", label: "Pilot" },
         { href: "/governance", label: "Governance" },
-        { href: "/validation", label: "Validation", primary: true },
-        { href: "/automation", label: "Automation" },
       ]}
       actions={
         <>
@@ -215,8 +264,8 @@ export default function LiveReadinessDashboard() {
               hint={report.hardBlockers.length ? "Must clear first" : "None"}
             />
             <OpsKpi
-              label="Strict closed trades"
-              value={String(metrics?.closedTrades ?? 0)}
+              label="Strict closed / resolved"
+              value={`${metrics?.closedTrades ?? 0} / ${metrics?.resolvedTrades ?? 0}`}
               hint={`${metrics?.relaxedExcludedCount ?? 0} relaxed excluded`}
             />
           </div>
@@ -322,11 +371,16 @@ export default function LiveReadinessDashboard() {
                 Strict paper performance (relaxed excluded)
               </h2>
               <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-400">
+                <span>Resolved: {metrics.resolvedTrades}</span>
                 <span>Win rate: {metrics.winRate}%</span>
-                <span>Avg PnL: {metrics.avgPnlPct}%</span>
+                <span>Avg R (PnL%): {metrics.avgPnlPct}%</span>
                 <span>Max DD: {metrics.maxDrawdownPct}%</span>
                 <span>Loss streak: {metrics.recentLossStreak}</span>
                 <span>Expectancy: {metrics.expectancy}%</span>
+                <span>
+                  Loss limits: daily {VALIDATION_THRESHOLDS.dailyLossLimitPct}% · weekly{" "}
+                  {VALIDATION_THRESHOLDS.weeklyLossLimitPct}%
+                </span>
               </div>
             </section>
           )}

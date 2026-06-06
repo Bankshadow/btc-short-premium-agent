@@ -16,6 +16,7 @@ import type {
 import type { OptionsPreviewJournalEntry } from "./types";
 import type { RealTimeRiskReport } from "@/lib/real-time-risk/types";
 import { applyRealTimeRiskToOptionsChecks } from "@/lib/real-time-risk/bridge-options";
+import { buildPolicyInput, evaluatePolicy } from "@/lib/policy-engine";
 
 function check(
   id: string,
@@ -335,6 +336,50 @@ export function runOptionsRiskChecks(input: {
 
   if (input.realTimeRiskReport) {
     checks.push(...applyRealTimeRiskToOptionsChecks(input.realTimeRiskReport));
+  }
+
+  const policy = evaluatePolicy(
+    buildPolicyInput({
+      workspaceId: "default-ws",
+      userRole: "TRADER",
+      environmentMode: "PAPER",
+      action: "EXECUTE_OPTIONS_TESTNET",
+      latestAnalysis: data,
+      governance: gov,
+      entries: input.entries,
+      orders: input.orders,
+    }),
+  );
+  if (policy.decision === "BLOCK") {
+    checks.push(
+      check(
+        "policy_engine",
+        "Policy engine",
+        "FAIL",
+        policy.blockers[0] ?? "Policy blocked options testnet.",
+        true,
+      ),
+    );
+  } else if (policy.decision === "REQUIRE_APPROVAL") {
+    checks.push(
+      check(
+        "policy_engine",
+        "Policy engine",
+        "WARNING",
+        `Requires: ${policy.requiredApprovals.join(", ")}`,
+        false,
+      ),
+    );
+  } else {
+    checks.push(
+      check(
+        "policy_engine",
+        "Policy engine",
+        "PASS",
+        "Options testnet allowed by policy.",
+        false,
+      ),
+    );
   }
 
   return checks;

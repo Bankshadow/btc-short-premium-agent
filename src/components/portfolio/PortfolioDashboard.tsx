@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import OpsShell from "@/components/ops/OpsShell";
+import DeskEmptyState from "@/components/desk/DeskEmptyState";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
+import { useDeskBackbone } from "@/hooks/useDeskBackbone";
 import { useUnifiedPortfolio } from "@/hooks/useUnifiedPortfolio";
 import type { PaperMode } from "@/lib/paper/paper-relaxed-types";
 import type {
@@ -280,6 +283,7 @@ type PaperModeFilter = "ALL" | PaperMode;
 export default function PortfolioDashboard() {
   const { snapshot, hydrated, syncing, error, refresh, syncToServer } =
     useUnifiedPortfolio();
+  const backbone = useDeskBackbone();
   const [modeFilter, setModeFilter] = useState<PaperModeFilter>("ALL");
 
   const m = snapshot?.metrics;
@@ -332,6 +336,15 @@ export default function PortfolioDashboard() {
         </div>
       }
     >
+      <DataHealthPanel health={backbone.health} compact />
+      {backbone.learning && (
+        <p className="text-xs text-zinc-500">
+          Backbone sample size {backbone.learning.strategySampleSize} · paper PnL{" "}
+          {backbone.portfolio?.paperPnlPct ?? 0}% — shared across cockpit, validation, and
+          capital.
+        </p>
+      )}
+
       {!hydrated && (
         <p className="text-sm text-zinc-500">Loading unified portfolio…</p>
       )}
@@ -341,6 +354,18 @@ export default function PortfolioDashboard() {
           Perp metadata migration applied — trace fields added without removing existing positions.
         </p>
       )}
+
+      {hydrated &&
+        (snapshot?.openPositions?.length ?? 0) + (snapshot?.closedTrades?.length ?? 0) ===
+          0 && (
+          <DeskEmptyState
+            title="Portfolio empty"
+            missing="No paper or shadow trades in the book yet."
+            why="Portfolio reads from linked paper/shadow orders — run a desk cycle and enable auto-create settings."
+            actionLabel="Run desk cycle"
+            actionHref="/"
+          />
+        )}
 
       {m && (
         <>

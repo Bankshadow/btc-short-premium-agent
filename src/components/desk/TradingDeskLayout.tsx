@@ -13,6 +13,8 @@ import type { DeskAgentId } from "@/lib/desk/agent-roster";
 interface TradingDeskLayoutProps {
   children: ReactNode;
   sidebar?: ReactNode;
+  /** MVP 41 — hide agent roster & side columns for command cockpit */
+  cockpitMode?: boolean;
   data: AnalyzeApiResponse | null;
   desk: TradingDeskOutput | null;
   loading: boolean;
@@ -34,6 +36,7 @@ interface TradingDeskLayoutProps {
 export default function TradingDeskLayout({
   children,
   sidebar,
+  cockpitMode = false,
   data,
   desk,
   loading,
@@ -72,25 +75,39 @@ export default function TradingDeskLayout({
 
       <MarketTapeBar data={data} />
 
-      <div className="grid flex-1 gap-0 lg:grid-cols-[240px_1fr_280px] xl:grid-cols-[260px_1fr_300px]">
-        <AgentRoster
-          desk={desk}
-          statusById={statusById}
-          pipelineRunning={pipelineRunning}
-        />
-
-        <main className="flex min-w-0 flex-col gap-3 border-x border-zinc-800/60 bg-zinc-950/40 p-3 sm:p-4">
-          <AgentActivityFeed
+      <div
+        className={
+          cockpitMode
+            ? "grid flex-1 gap-0"
+            : "grid flex-1 gap-0 lg:grid-cols-[240px_1fr_280px] xl:grid-cols-[260px_1fr_300px]"
+        }
+      >
+        {!cockpitMode && (
+          <AgentRoster
+            desk={desk}
             statusById={statusById}
-            activeIndex={activeIndex}
-            visible={loading}
+            pipelineRunning={pipelineRunning}
           />
+        )}
+
+        <main
+          className={`flex min-w-0 flex-col gap-3 bg-zinc-950/40 p-3 sm:p-4 ${cockpitMode ? "" : "border-x border-zinc-800/60"}`}
+        >
+          {!cockpitMode && (
+            <AgentActivityFeed
+              statusById={statusById}
+              activeIndex={activeIndex}
+              visible={loading}
+            />
+          )}
           {children}
         </main>
 
-        <div className="flex flex-col gap-3 border-l border-zinc-800/60 bg-zinc-950/20 p-3">
-          {sidebar}
-        </div>
+        {!cockpitMode && (
+          <div className="flex flex-col gap-3 border-l border-zinc-800/60 bg-zinc-950/20 p-3">
+            {sidebar}
+          </div>
+        )}
       </div>
     </div>
   );

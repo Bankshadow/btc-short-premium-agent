@@ -9,6 +9,8 @@ export type PaperInstrument = HypotheticalAction;
 
 export interface PaperOrder {
   id: string;
+  /** P-MVP 1 — workspace scope */
+  workspaceId?: string;
   /** Links to decision log entry from same analyze run */
   decisionLogId: string;
   committeeVerdict: AgentRecommendation;
@@ -37,10 +39,16 @@ export interface PaperOrder {
   relaxedReason?: string | null;
   strictVerdict?: AgentRecommendation;
   relaxedVerdict?: AgentRecommendation;
+  /** Demo seed — excluded from live readiness metrics */
+  isDemoData?: boolean;
 }
 
 export interface PaperTradingSettings {
   autoOpenOnTrade: boolean;
+  /** MVP 42 — auto-create strict paper trade on TRADE verdict */
+  autoCreatePaperOnTrade: boolean;
+  /** MVP 42 — auto-create relaxed shadow trade on WAIT/SKIP */
+  autoCreateShadowOnWaitSkip: boolean;
   autoMarkToMarket: boolean;
   syncSupabase: boolean;
   /** MVP 23 */
@@ -71,6 +79,8 @@ export const PAPER_ACCOUNT_NOTIONAL_USD = 10_000;
 
 export const DEFAULT_PAPER_SETTINGS: PaperTradingSettings = {
   autoOpenOnTrade: true,
+  autoCreatePaperOnTrade: true,
+  autoCreateShadowOnWaitSkip: false,
   autoMarkToMarket: true,
   syncSupabase: true,
   ...DEFAULT_RELAXED_PAPER_SETTINGS,

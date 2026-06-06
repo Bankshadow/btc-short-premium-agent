@@ -155,6 +155,73 @@ describe("command center MVP 40", () => {
     assert.equal(report.optionsRisk.greeksEstimable, false);
   });
 
+  it("MVP 41C reality check on empty journal: BLOCKED live, CAUTION paper, SAFE analysis", () => {
+    const report = buildCommandCenterReport(baseInput());
+    assert.ok(report.realityCheck);
+    assert.equal(report.realityCheck.domainStatuses.liveTrading, "BLOCKED");
+    assert.equal(report.realityCheck.domainStatuses.paperLearning, "CAUTION");
+    assert.equal(report.realityCheck.domainStatuses.analysisOnly, "SAFE");
+    assert.equal(report.realityCheck.expectedProductionPosture, true);
+    assert.ok(
+      report.realityCheck.checks.some(
+        (c) => c.id === "no_resolved_decision_logs" && c.status === "FAIL",
+      ),
+    );
+    assert.ok(
+      report.realityCheck.checks.some(
+        (c) => c.id === "supabase_sync_off" && c.status === "FAIL",
+      ),
+    );
+    assert.ok(report.recommendedActions.includes("Keep live disabled"));
+    assert.ok(report.recommendedActions.includes("Run analysis"));
+  });
+
+  it("MVP 41C flags exchange status unknown when not configured", () => {
+    const ctx = baseServerContext();
+    ctx.exchangeStatus.configured = false;
+    ctx.exchangeStatus.connected = false;
+    const report = buildCommandCenterReport(
+      baseInput({ serverContext: ctx }),
+    );
+    assert.ok(
+      report.realityCheck.checks.some(
+        (c) => c.id === "exchange_status_unknown" && c.status === "FAIL",
+      ),
+    );
+  });
+
+  it("MVP 41C flags governance placeholder and local audit", () => {
+    const report = buildCommandCenterReport(
+      baseInput({
+        governance: {
+          pauseAnalysis: false,
+          pausePaperAutoOpen: false,
+          disableAggressiveMode: false,
+          disableAlerts: false,
+          safeMode: false,
+          operatorPaused: false,
+          operatorPauseReason: "",
+          operatorPausedAt: null,
+          cooldownUntil: null,
+          operatorRole: "OPERATOR",
+          operatorName: "Desk Operator",
+        },
+      }),
+    );
+    assert.ok(report.realityCheck.governancePlaceholder);
+    assert.equal(report.realityCheck.auditDatabaseBacked, false);
+    assert.ok(
+      report.realityCheck.checks.some(
+        (c) => c.id === "governance_local_placeholder" && c.status === "FAIL",
+      ),
+    );
+    assert.ok(
+      report.realityCheck.checks.some(
+        (c) => c.id === "audit_not_database_backed" && c.status === "FAIL",
+      ),
+    );
+  });
+
   it("export daily report requires snapshot", () => {
     const without = runCommandCenterAction({ action: "EXPORT_DAILY_REPORT" });
     assert.equal(without.ok, false);

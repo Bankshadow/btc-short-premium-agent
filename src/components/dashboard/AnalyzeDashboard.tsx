@@ -16,11 +16,8 @@ import {
 } from "@/lib/decision/macro-event";
 import { fetchLiveDecisionInput } from "@/lib/bybit/fetch-live-input";
 import { getMockDashboardFallback } from "@/lib/mock/dashboard-data";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import AgentScoreboardPanel from "./AgentScoreboardPanel";
-import DecisionLogPanel from "./DecisionLogPanel";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DecisionLogPreview from "./DecisionLogPreview";
-import DraftRulesPanel from "./DraftRulesPanel";
 import DashboardLoadingSkeleton from "./DashboardLoadingSkeleton";
 import DashboardView from "./DashboardView";
 import TestAutomationPanel from "./TestAutomationPanel";
@@ -39,8 +36,6 @@ import {
 } from "@/hooks/useAutoDeskRefresh";
 import { usePaperTrading } from "@/hooks/usePaperTrading";
 import { useDeskAutomation } from "@/hooks/useDeskAutomation";
-import PaperTradingPanel from "./PaperTradingPanel";
-import PortfolioMilestonesPanel from "./portfolio/PortfolioMilestonesPanel";
 import ReplayDeskPanel from "./replay/ReplayDeskPanel";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
 import { mergeDecisionLogFromRemote } from "@/lib/journal/journal-merge";
@@ -50,6 +45,10 @@ import {
   syncJournalToServer,
 } from "@/lib/journal/journal-cloud-sync";
 import { loadDeskSettings, saveDeskSettings } from "@/lib/desk/desk-settings";
+import { usePermission, useWorkspace } from "@/contexts/WorkspaceContext";
+import { buildPolicyInput, evaluatePolicy } from "@/lib/policy-engine";
+import { useWorkspaceFetchHeaders } from "@/components/platform/PlatformWorkspaceHeaders";
+import { cacheLatestAnalyze } from "@/lib/live-trading-readiness/latest-analyze-cache";
 import type {
   DecisionLogEntry,
   ResolveOutcomeInput,
@@ -67,7 +66,6 @@ import {
 } from "@/lib/adaptive-agent-weighting";
 import { loadEvaluationResults } from "@/lib/self-learning";
 import TradeControlPanel from "@/components/trade-control/TradeControlPanel";
-import OptionsPreviewPanel from "@/components/options-execution/OptionsPreviewPanel";
 import {
   applyWorkspaceSideEffects,
   loadWorkspaceConfig,
@@ -81,6 +79,29 @@ import { ENVIRONMENT_MODE_LABELS } from "@/lib/trading-os/environment-modes";
 import OperatorDeskPanel from "./operator/OperatorDeskPanel";
 import DeskNarratorPanel from "./operator/DeskNarratorPanel";
 import BacktestDeskPanel from "./operator/BacktestDeskPanel";
+import CommandCockpit from "@/components/cockpit/CommandCockpit";
+import CockpitAdvancedDrawers from "@/components/cockpit/CockpitAdvancedDrawers";
+import { useAutopilot } from "@/hooks/useAutopilot";
+import { useBackgroundWorker } from "@/hooks/useBackgroundWorker";
+import { loadClientWorkerSettings } from "@/lib/background-worker/client-settings";
+import { loadOperatorActionQueue } from "@/lib/operator-action-queue/queue-store";
+import { resolveEffectiveMode } from "@/lib/autopilot/config";
+import { loadAutopilotSettings } from "@/lib/autopilot/settings-store";
+import {
+  emitFromAnalysis,
+  emitOutcomeResolved,
+} from "@/lib/smart-briefing/event-helpers";
+import {
+  applyAutopilotPaperSettings,
+  resolveAutopilotPaperEffects,
+} from "@/lib/autopilot/apply-paper-effects";
+import type { CommandCenterStatus } from "@/lib/command-center/types";
+import type { AutopilotRunResult } from "@/lib/autopilot/types";
+import type { SaveAnalysisResult } from "@/lib/journal/decision-log";
+import DemoSeedPanel from "@/components/demo/DemoSeedPanel";
+import { writeDeskCycle } from "@/lib/data-backbone/write-desk-cycle";
+import { loadDeskBackbone } from "@/lib/data-backbone/read-desk-state";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
 
 const DEFAULT_MACRO_EVENT_STATUS = macroSelectionToStatus(DEFAULT_MACRO_EVENT);
 const DEFAULT_DERIVATIVES_OVERRIDES = resolveDerivativesOverrides(
@@ -131,6 +152,9 @@ export default function AnalyzeDashboard({
   const [tradeControlEntry, setTradeControlEntry] =
     useState<DecisionLogEntry | null>(null);
   const [workspace, setWorkspace] = useState(loadWorkspaceConfig);
+  const workspaceHeaders = useWorkspaceFetchHeaders();
+  const { workspace: wsContext, role, settings: wsSettings } = useWorkspace();
+  const canRunAnalysis = usePermission("canRunAnalysis");
 
   useEffect(() => {
     applyWorkspaceSideEffects(workspace);
@@ -147,6 +171,15 @@ export default function AnalyzeDashboard({
 
   const paper = usePaperTrading();
   const automation = useDeskAutomation(logHydrated);
+  const [actionQueue, setActionQueue] = useState(
+    () => loadOperatorActionQueue().filter((a) => a.status === "OPEN"),
+  );
+  const [persistStatus, setPersistStatus] = useState<{
+    ok: boolean;
+    message: string;
+    result?: SaveAnalysisResult;
+  } | null>(null);
+  const handleAnalyzeRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (!paper.hydrated || !paper.settings.syncSupabase) return;
@@ -175,35 +208,77 @@ export default function AnalyzeDashboard({
     [logEntries, paper.orders],
   );
 
+  const autopilotRunRef = useRef<
+    (opts?: { triggerAnalyze?: boolean }) => Promise<AutopilotRunResult | null>
+  >(async () => null);
+  const initialAutopilotRef = useRef(false);
+
   const persistAnalysis = useCallback(
-    async (result: AnalyzeApiResponse) => {
+    async (result: AnalyzeApiResponse, opts?: { isDemo?: boolean }) => {
       setData(result);
+      cacheLatestAnalyze(result);
       const weighted = result.tradingDesk?.weightedCommittee;
       if (weighted && result.tradingDesk) {
         appendAdaptiveWeightingAudit(weighted, result.tradingDesk.marketRegime);
       }
-      const entry = saveFromAnalysis(result);
-      setLastLogId(entry.id);
-      const fresh =
-        loadDecisionLog().find((e) => e.id === entry.id) ?? entry;
-      setTradeControlEntry(fresh);
-      await paper.afterAnalysis(result, entry.id, {
-        skipAutoOpen: isHumanApprovalRequired(),
-      });
-      refreshLog();
-      setTradeControlEntry(
-        loadDecisionLog().find((e) => e.id === entry.id) ?? fresh,
-      );
-      await syncJournalIfEnabled();
-      const latest =
-        loadDecisionLog().find((e) => e.id === entry.id) ?? entry;
-      await pushWarehouseAfterAnalyze(result, latest);
+      try {
+        const saved = saveFromAnalysis(result, {
+          analyzeStatus: opts?.isDemo ? "DEMO" : "SUCCESS",
+          isDemoData: opts?.isDemo ?? false,
+        });
+        setLastLogId(saved.entry.id);
+        setPersistStatus({
+          ok: true,
+          message:
+            saved.status === "updated"
+              ? `Decision log updated for run ${saved.entry.runId ?? saved.entry.id}.`
+              : `Decision log saved · ${saved.entry.finalVerdict} · linked to desk cycle.`,
+          result: saved,
+        });
+        const fresh =
+          loadDecisionLog().find((e) => e.id === saved.entry.id) ?? saved.entry;
+        setTradeControlEntry(fresh);
+
+        const apSettings = loadAutopilotSettings();
+        applyAutopilotPaperSettings(apSettings);
+        const paperEffects = resolveAutopilotPaperEffects(
+          apSettings,
+          loadPaperOrders(),
+        );
+        await paper.afterAnalysis(result, saved.entry.id, {
+          skipAutoOpen: paperEffects.skipAutoOpen,
+        });
+        void emitFromAnalysis(result, { isDemo: opts?.isDemo });
+        refreshLog();
+        setTradeControlEntry(
+          loadDecisionLog().find((e) => e.id === saved.entry.id) ?? fresh,
+        );
+        await syncJournalIfEnabled();
+        const latest =
+          loadDecisionLog().find((e) => e.id === saved.entry.id) ?? saved.entry;
+        await pushWarehouseAfterAnalyze(result, latest);
+        const runResult = await autopilotRunRef.current();
+        await writeDeskCycle({ autopilotResult: runResult ?? undefined });
+        if (runResult) {
+          setActionQueue(loadOperatorActionQueue().filter((a) => a.status === "OPEN"));
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to persist decision log";
+        setPersistStatus({ ok: false, message });
+      }
     },
     [saveFromAnalysis, paper.afterAnalysis, refreshLog, syncJournalIfEnabled],
   );
 
   const handleAnalyze = useCallback(async () => {
     if (!controlsReady) return;
+    if (!canRunAnalysis) {
+      setFetchError(
+        "Analysis requires TRADER, RISK_MANAGER, ADMIN, or OWNER workspace role.",
+      );
+      return;
+    }
 
     const govState = loadGovernanceState();
     if (govState.pauseAnalysis) {
@@ -266,7 +341,10 @@ export default function AnalyzeDashboard({
     const postAnalyze = async (body: unknown) => {
       const response = await fetch("/api/analyze", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...workspaceHeaders,
+        },
         body: JSON.stringify(body),
       });
 
@@ -332,7 +410,7 @@ export default function AnalyzeDashboard({
       }
 
       if (result && isLiveAnalysis(result)) {
-        await persistAnalysis(result);
+        await persistAnalysis(result, { isDemo: false });
         setFetchError(null);
         setUsingFallback(false);
         return;
@@ -346,7 +424,7 @@ export default function AnalyzeDashboard({
 
       setFetchError(bybitFailed ? BYBIT_API_FAILED_MESSAGE : message);
       if (allowMockFallbackInCurrentMode()) {
-        await persistAnalysis(getMockDashboardFallback());
+        await persistAnalysis(getMockDashboardFallback(), { isDemo: true });
         setUsingFallback(true);
       }
     } finally {
@@ -358,7 +436,43 @@ export default function AnalyzeDashboard({
     draftRules,
     persistAnalysis,
     controlsReady,
+    canRunAnalysis,
+    workspaceHeaders,
   ]);
+
+  handleAnalyzeRef.current = handleAnalyze;
+
+  const workerEnabled = loadClientWorkerSettings().workerEnabled;
+  const backgroundWorker = useBackgroundWorker({
+    enabled: logHydrated && workerEnabled,
+  });
+
+  const autopilot = useAutopilot({
+    enabled: logHydrated && !workerEnabled,
+    latestAnalysis: data,
+    onBeforeAnalyze: async () => {
+      await handleAnalyzeRef.current?.();
+    },
+  });
+
+  autopilotRunRef.current = autopilot.runCycle;
+
+  useEffect(() => {
+    if (autopilot.lastRun || backgroundWorker.lastRun) {
+      setActionQueue(loadOperatorActionQueue().filter((a) => a.status === "OPEN"));
+    }
+  }, [autopilot.lastRun, backgroundWorker.lastRun]);
+
+  useEffect(() => {
+    if (!logHydrated || initialAutopilotRef.current) return;
+    initialAutopilotRef.current = true;
+      void autopilot.runCycle().then(async (result) => {
+      await writeDeskCycle({ autopilotResult: result ?? undefined });
+      if (result) {
+        setActionQueue(loadOperatorActionQueue().filter((a) => a.status === "OPEN"));
+      }
+    });
+  }, [logHydrated, autopilot.runCycle]);
 
   const { secondsUntilRefresh, trigger } = useAutoDeskRefresh(handleAnalyze, {
     enabled: autoRefreshEnabled,
@@ -368,14 +482,37 @@ export default function AnalyzeDashboard({
 
   const handleResolveOutcome = useCallback(
     (id: string, input: ResolveOutcomeInput) => {
-      resolveOutcome(id, input);
+      const result = resolveOutcome(id, input);
       refreshLog();
       paper.refresh();
       void paper.syncToServer();
       void syncJournalIfEnabled();
-      trigger();
+      void writeDeskCycle().then(() =>
+        autopilotRunRef.current().then((run) => {
+          if (run) {
+            setActionQueue(loadOperatorActionQueue().filter((a) => a.status === "OPEN"));
+          }
+        }),
+      );
+      if (result?.draftRuleCreated) {
+        refreshLog();
+      }
+      if (result) {
+        void emitOutcomeResolved({
+          verdict: result.entry.finalVerdict,
+          outcomeLabel: input.outcomeLabel ?? "BREAKEVEN",
+          pnlPct: result.entry.paperPnl ?? input.manualPnlPct ?? 0,
+          notes: input.notes,
+        });
+      }
+      setPersistStatus({
+        ok: true,
+        message: result
+          ? `Outcome resolved · learning updated${result.draftRuleCreated ? " · draft rule created" : ""}.`
+          : "Outcome already resolved or entry missing.",
+      });
     },
-    [resolveOutcome, refreshLog, paper, trigger, syncJournalIfEnabled],
+    [resolveOutcome, refreshLog, paper, syncJournalIfEnabled],
   );
 
   const { statusById, activeIndex, pipelineRunning } = useAgentPipeline(loading);
@@ -406,6 +543,38 @@ export default function AnalyzeDashboard({
   const activeProfile = getDeskProfile(workspace.activeProfileId);
   const modeEffects = getTradingOsModeEffects();
   const isPrivateView = workspace.viewMode === "private";
+  const backbone = logHydrated ? loadDeskBackbone() : null;
+
+  const analyzePolicy = useMemo(() => {
+    if (!logHydrated) return null;
+    return evaluatePolicy(
+      buildPolicyInput({
+        workspaceId: wsContext.id,
+        userRole: role,
+        environmentMode: wsSettings.tradingEnvironment,
+        action: "RUN_ANALYSIS",
+        latestAnalysis: data,
+        governance: loadGovernanceState(),
+        entries: logEntries,
+        orders: paper.orders,
+        riskProfile: loadDeskSettings().riskProfile,
+        backboneHealthy: backbone?.health.healthy ?? true,
+      }),
+    );
+  }, [
+    logHydrated,
+    wsContext.id,
+    role,
+    wsSettings.tradingEnvironment,
+    data,
+    logEntries,
+    paper.orders,
+    backbone?.health.healthy,
+  ]);
+
+  const policyBlocksAnalyze =
+    analyzePolicy != null &&
+    (analyzePolicy.decision === "BLOCK" || analyzePolicy.decision === "REQUIRE_MORE_DATA");
 
   return (
     <TradingDeskLayout
@@ -425,6 +594,7 @@ export default function AnalyzeDashboard({
       pipelineRunning={pipelineRunning}
       profileLabel={activeProfile.name}
       environmentModeLabel={ENVIRONMENT_MODE_LABELS[workspace.environmentMode]}
+      cockpitMode
       sidebar={
         <DeskControlsSidebar
           fetchError={fetchError}
@@ -436,6 +606,64 @@ export default function AnalyzeDashboard({
         <DashboardLoadingSkeleton />
       )}
 
+      {persistStatus && (
+        <p
+          className={`rounded-lg border px-3 py-2 text-xs ${
+            persistStatus.ok
+              ? "border-emerald-800/50 bg-emerald-950/30 text-emerald-200"
+              : "border-rose-800/50 bg-rose-950/30 text-rose-200"
+          }`}
+        >
+          {persistStatus.message}
+        </p>
+      )}
+
+      <CommandCockpit
+        data={data}
+        autopilot={backgroundWorker.lastRun?.autopilotResult ?? autopilot.lastRun}
+        backbone={backbone}
+        actions={actionQueue}
+        deskStatus={
+          ((backgroundWorker.lastRun?.autopilotResult ?? autopilot.lastRun)?.deskStatus ??
+            "CAUTION") as CommandCenterStatus
+        }
+        deskStatusReason={
+          (backgroundWorker.lastRun?.autopilotResult ?? autopilot.lastRun)?.briefing ??
+          "AI desk standing by — run first cycle to assess production readiness."
+        }
+        lastRunAt={
+          backgroundWorker.lastRun?.completedAt ??
+          autopilot.lastRun?.completedAt ??
+          autopilot.settings.lastRunAt
+        }
+        nextRunAt={
+          backgroundWorker.status?.nextRunAt ??
+          autopilot.lastRun?.nextRunAt ??
+          autopilot.settings.nextRunAt
+        }
+        autopilotMode={resolveEffectiveMode(autopilot.settings)}
+        running={loading || autopilot.running || backgroundWorker.running}
+        workerStatus={backgroundWorker.lastRun?.status ?? null}
+        workerFailed={backgroundWorker.failedJobs.length}
+        onRunCycle={() =>
+          void (workerEnabled
+            ? backgroundWorker.runCycle({ force: true })
+            : autopilot.runCycle())
+        }
+        analyzeAllowed={canRunAnalysis && !policyBlocksAnalyze}
+        policyResult={analyzePolicy}
+        liveReadinessStatus={
+          backbone?.risk.liveReadinessBlocked
+            ? "FAIL"
+            : backbone
+              ? "PASS"
+              : null
+        }
+        liveReadinessReady={backbone ? !backbone.risk.liveReadinessBlocked : false}
+        liveReadinessBlockers={backbone?.risk.blockers ?? []}
+        onRunAnalyze={() => void autopilot.runCycle({ triggerAnalyze: true })}
+      />
+
       {data?.tradingDesk && (
         <div
           className={`flex flex-col gap-4 transition-opacity ${loading ? "pointer-events-none opacity-60" : ""}`}
@@ -446,132 +674,153 @@ export default function AnalyzeDashboard({
               Paper Relaxed — learning mode only · live execution blocked
             </p>
           )}
-          {automation.lastRun && (
-            <p className="rounded-lg border border-cyan-800/40 bg-cyan-950/30 px-3 py-2 text-[11px] text-cyan-100/90">
-              <span className="font-semibold text-cyan-300">AI automation</span> —{" "}
-              {automation.lastRun.summary}
-              {automation.applied.length > 0 && (
-                <span className="text-emerald-400">
-                  {" "}
-                  · applied {automation.applied.length}
-                </span>
-              )}
-              {" · "}
-              <a href="/automation" className="underline hover:text-cyan-50">
-                Ops center
-              </a>
-            </p>
-          )}
-          <p className="rounded-lg border border-cyan-900/30 bg-cyan-950/20 px-3 py-2 text-[11px] text-cyan-200/80">
-            Trading OS · {activeProfile.name} · {ENVIRONMENT_MODE_LABELS[workspace.environmentMode]} —{" "}
-            {modeEffects.analysisOnlyLabel}
-            {" · "}
-            <a href="/workspace" className="underline hover:text-cyan-100">
-              Change workspace
-            </a>
-          </p>
-          {modeEffects.allowOrderTickets && (
-            <TradeControlPanel
-              data={data}
-              logEntry={tradeControlEntry}
-              onComplete={() => {
-                refreshLog();
-                paper.refresh();
-                setTradeControlEntry(
-                  loadDecisionLog().find((e) => e.id === lastLogId) ?? null,
-                );
-              }}
-            />
-          )}
-          {modeEffects.allowOrderTickets &&
-            tradeControlEntry?.orderTicket &&
-            (tradeControlEntry.orderTicket.instrument === "sell_call" ||
-              tradeControlEntry.orderTicket.instrument === "sell_put") && (
-              <OptionsPreviewPanel
-                data={data}
-                ticket={tradeControlEntry.orderTicket}
-              />
-            )}
-          <PortfolioMilestonesPanel portfolio={portfolio} />
-          <PaperTradingPanel
-            orders={paper.orders}
-            openOrders={paper.openOrders}
-            summary={paper.summary}
-            settings={paper.settings}
-            syncStatus={paper.syncStatus}
-            syncedOpenOrders={paper.syncedOpenOrders}
-            currentBtcPrice={data.step1_marketSnapshot.spotPrice}
-            onSettingsChange={paper.updateSettings}
-            onCloseOrder={async (id, input) => {
-              await paper.closeOrder(id, input);
-              refreshLog();
-            }}
-            onSync={() => void paper.syncToServer()}
-            onPull={() => void paper.pullFromServer()}
+          <CockpitAdvancedDrawers
+            drawers={[
+              {
+                id: "agent-debate",
+                title: "Agent debate",
+                summary: "How the committee reached its verdict",
+                children: (
+                  <>
+                    {isPrivateView ? (
+                      <DeskNarratorPanel data={data} />
+                    ) : (
+                      <p className="text-xs text-zinc-500">
+                        Enable private view in workspace settings to see full agent debate.
+                      </p>
+                    )}
+                    <ul className="mt-3 space-y-1 text-xs text-zinc-400">
+                      {(data.tradingDesk?.committee.topReasons ?? []).slice(0, 5).map((r) => (
+                        <li key={r}>· {r}</li>
+                      ))}
+                    </ul>
+                  </>
+                ),
+              },
+              {
+                id: "raw-market-data",
+                title: "Raw market data",
+                summary: `BTC $${data.step1_marketSnapshot.spotPrice.toLocaleString()}`,
+                children: (
+                  <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
+                ),
+              },
+              {
+                id: "risk-details",
+                title: "Risk details",
+                summary: data.tradingDesk?.committee.riskVeto
+                  ? "Risk veto active"
+                  : "Gates & committee",
+                children: (
+                  <div className="space-y-3 text-xs text-zinc-400">
+                    <p>
+                      Verdict: {data.tradingDesk?.committee.finalVerdict} · Risk veto:{" "}
+                      {data.tradingDesk?.committee.riskVeto ? "Yes" : "No"}
+                    </p>
+                    <p>
+                      Data trust: {data.dataTrust?.grade ?? "—"} ({data.dataTrust?.score ?? "—"}
+                      /100)
+                    </p>
+                    <ul className="list-disc space-y-1 pl-4">
+                      {(data.tradingDesk?.committee.topReasons ?? []).slice(0, 5).map((r) => (
+                        <li key={r}>{r}</li>
+                      ))}
+                    </ul>
+                    <a href="/command-center" className="text-rose-300 hover:underline">
+                      Command center →
+                    </a>
+                  </div>
+                ),
+              },
+              {
+                id: "decision-timeline",
+                title: "Decision timeline",
+                summary: `${logEntries.length} session(s)`,
+                children: (
+                  <>
+                    <DecisionLogPreview entries={logEntries} />
+                    {modeEffects.allowOrderTickets && tradeControlEntry && (
+                      <div className="mt-4 border-t border-zinc-800 pt-4">
+                        <TradeControlPanel
+                          data={data}
+                          logEntry={tradeControlEntry}
+                          onComplete={() => {
+                            refreshLog();
+                            paper.refresh();
+                            setTradeControlEntry(
+                              loadDecisionLog().find((e) => e.id === lastLogId) ?? null,
+                            );
+                          }}
+                        />
+                      </div>
+                    )}
+                    <p className="mt-3 text-[11px] text-zinc-600">
+                      Full log, scoreboard, and paper tickets live on{" "}
+                      <a href="/portfolio" className="text-teal-400 hover:underline">
+                        Portfolio
+                      </a>{" "}
+                      and{" "}
+                      <a href="/ledger" className="text-indigo-400 hover:underline">
+                        Ledger
+                      </a>
+                      .
+                    </p>
+                  </>
+                ),
+              },
+              {
+                id: "automation-internals",
+                title: "Automation internals",
+                summary: "Sync, tests, operator tools",
+                children: (
+                  <>
+                    {automation.lastRun && (
+                      <p className="mb-3 text-xs text-cyan-200/80">
+                        Last automation: {automation.lastRun.summary}
+                      </p>
+                    )}
+                    <DataHealthPanel health={backbone?.health ?? null} />
+                    {isPrivateView ? (
+                      <div className="mt-4 space-y-4 border-t border-zinc-800 pt-4">
+                        <OperatorDeskPanel
+                          data={data}
+                          lastLogId={lastLogId}
+                          openPaperCount={paper.openOrders.length}
+                          onRiskProfileChange={() => trigger()}
+                        />
+                        <ReplayDeskPanel entries={logEntries} />
+                        <BacktestDeskPanel entries={logEntries} />
+                        <TestAutomationPanel />
+                        <DemoSeedPanel
+                          onChanged={() => {
+                            refreshLog();
+                            paper.refresh();
+                            void autopilot.runCycle();
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-zinc-500">
+                        Private workspace view unlocks operator tools and test panels.
+                      </p>
+                    )}
+                    <label className="mt-3 flex items-center gap-2 text-xs text-zinc-400">
+                      <input
+                        type="checkbox"
+                        defaultChecked={loadDeskSettings().syncJournalSupabase}
+                        onChange={(e) =>
+                          saveDeskSettings({ syncJournalSupabase: e.target.checked })
+                        }
+                      />
+                      Sync decision log to cloud after each session
+                    </label>
+                  </>
+                ),
+              },
+            ]}
           />
-          {isPrivateView && <DeskNarratorPanel data={data} />}
-          <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
-          {isPrivateView && (
-            <>
-              <ReplayDeskPanel entries={logEntries} />
-              <BacktestDeskPanel entries={logEntries} />
-            </>
-          )}
-          <DecisionLogPreview entries={logEntries} />
         </div>
       )}
-
-      <details className="desk-panel group">
-        <summary className="cursor-pointer list-none px-4 py-3 text-xs font-medium text-zinc-400 [&::-webkit-details-marker]:hidden">
-          Operations · operator · journal · scoreboard
-          <span className="ml-2 opacity-50 group-open:hidden">▸</span>
-          <span className="ml-2 hidden opacity-50 group-open:inline">▾</span>
-        </summary>
-        <div className="flex flex-col gap-4 border-t border-zinc-800 px-4 pb-4 pt-3">
-          {isPrivateView ? (
-            <OperatorDeskPanel
-              data={data}
-              lastLogId={lastLogId}
-              openPaperCount={paper.openOrders.length}
-              onRiskProfileChange={() => trigger()}
-            />
-          ) : (
-            <p className="text-xs text-zinc-500">
-              Operator controls are on the{" "}
-              <a href="/" className="text-cyan-400 underline">
-                private desk
-              </a>
-              . Public stats:{" "}
-              <a href="/summary" className="text-cyan-400 underline">
-                /summary
-              </a>
-            </p>
-          )}
-          <label className="flex items-center gap-2 px-1 text-xs text-zinc-400">
-            <input
-              type="checkbox"
-              defaultChecked={loadDeskSettings().syncJournalSupabase}
-              onChange={(e) =>
-                saveDeskSettings({ syncJournalSupabase: e.target.checked })
-              }
-            />
-            Sync decision log to Supabase after each session
-          </label>
-          <AgentScoreboardPanel scoreboard={scoreboard} />
-          <DecisionLogPanel
-            entries={logEntries}
-            onResolve={handleResolveOutcome}
-          />
-          <DraftRulesPanel
-            rules={draftRules}
-            onRefresh={() => {
-              refreshLog();
-              trigger();
-            }}
-          />
-          <TestAutomationPanel />
-        </div>
-      </details>
     </TradingDeskLayout>
   );
 }

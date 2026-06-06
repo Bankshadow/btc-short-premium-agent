@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
-import { loadPaperOrders } from "@/lib/paper/paper-orders";
-import { loadDeskSettings } from "@/lib/desk/desk-settings";
+import DeskEmptyState from "@/components/desk/DeskEmptyState";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
+import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
 import { buildValidationReport } from "@/lib/validation/build-validation-report";
 import {
   loadKillSwitchState,
@@ -28,15 +28,27 @@ export default function ValidationDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [pauseReason, setPauseReason] = useState("");
 
-  const report = useMemo(() => {
+  const { record, productionEntries, productionOrders, riskProfile } = useMemo(() => {
     void refreshKey;
-    return buildValidationReport({
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
-      riskProfile: loadDeskSettings().riskProfile,
-      latestAnalysis: null,
-    });
+    const input = loadDeskBackboneInputs();
+    return {
+      record: input.record,
+      productionEntries: input.productionEntries,
+      productionOrders: input.productionOrders,
+      riskProfile: input.riskProfile,
+    };
   }, [refreshKey]);
+
+  const report = useMemo(
+    () =>
+      buildValidationReport({
+        entries: productionEntries,
+        orders: productionOrders,
+        riskProfile,
+        latestAnalysis: null,
+      }),
+    [productionEntries, productionOrders, riskProfile],
+  );
 
   const toggleOperatorPause = () => {
     const state = loadKillSwitchState();
@@ -59,8 +71,21 @@ export default function ValidationDashboard() {
     setRefreshKey((k) => k + 1);
   };
 
+  const resolvedCount = record.learning.resolvedOutcomesCount;
+
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 px-3 py-4 sm:px-5">
+      <DataHealthPanel health={record.health} compact />
+
+      {resolvedCount === 0 && (
+        <DeskEmptyState
+          title="Validation needs outcomes"
+          missing="No resolved production outcomes yet."
+          why="Strategy promotion and kill-switch logic require resolved paper outcomes — demo seed data does not count."
+          actionLabel="Run desk cycle on cockpit"
+          actionHref="/"
+        />
+      )}
       <header className="desk-panel flex flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div>
           <p className="desk-section-title text-teal-400/90">MVP 10</p>

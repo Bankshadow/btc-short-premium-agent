@@ -1,3 +1,5 @@
+import { getActiveWorkspaceId } from "@/lib/platform/workspace-registry";
+import { readScopedJson, writeScopedJson } from "@/lib/platform/scoped-storage";
 import type { PaperOrder, PaperPortfolioSummary, PaperTradingSettings } from "./paper-order-types";
 import {
   DEFAULT_PAPER_SETTINGS,
@@ -11,17 +13,17 @@ const MAX_ORDERS = 200;
 export function loadPaperSettings(): PaperTradingSettings {
   if (typeof window === "undefined") return DEFAULT_PAPER_SETTINGS;
   try {
-    const raw = localStorage.getItem(PAPER_SETTINGS_STORAGE_KEY);
-    if (!raw) return DEFAULT_PAPER_SETTINGS;
-    return { ...DEFAULT_PAPER_SETTINGS, ...(JSON.parse(raw) as Partial<PaperTradingSettings>) };
+    return {
+      ...DEFAULT_PAPER_SETTINGS,
+      ...readScopedJson<Partial<PaperTradingSettings>>("paper-settings", {}),
+    };
   } catch {
     return DEFAULT_PAPER_SETTINGS;
   }
 }
 
 export function savePaperSettings(settings: PaperTradingSettings): PaperTradingSettings {
-  if (typeof window === "undefined") return settings;
-  localStorage.setItem(PAPER_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  writeScopedJson("paper-settings", settings);
   return settings;
 }
 
@@ -64,9 +66,7 @@ function normalizeOrder(raw: Record<string, unknown>): PaperOrder | null {
 export function loadPaperOrders(): PaperOrder[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(PAPER_ORDERS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = readScopedJson<unknown[]>("paper-orders", []);
     if (!Array.isArray(parsed)) return [];
     return parsed
       .map((item) =>
@@ -82,8 +82,11 @@ export function loadPaperOrders(): PaperOrder[] {
 
 export function persistPaperOrders(orders: PaperOrder[]): PaperOrder[] {
   if (typeof window === "undefined") return orders;
-  const next = orders.slice(0, MAX_ORDERS);
-  localStorage.setItem(PAPER_ORDERS_STORAGE_KEY, JSON.stringify(next));
+  const ws = getActiveWorkspaceId();
+  const next = orders
+    .slice(0, MAX_ORDERS)
+    .map((o) => ({ ...o, workspaceId: o.workspaceId ?? ws }));
+  writeScopedJson("paper-orders", next, ws);
   return next;
 }
 

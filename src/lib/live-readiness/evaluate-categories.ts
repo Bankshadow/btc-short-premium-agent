@@ -10,6 +10,7 @@ import { buildOperatorBehaviorAnalytics } from "@/lib/operator/operator-behavior
 import { buildOperatorDisciplineReport } from "@/lib/operator/operator-discipline-score";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
+import { countProductionResolved } from "@/lib/journal/production-filter";
 import { computeStrictPaperMetrics } from "./strict-paper-metrics";
 import { LIVE_READINESS_THRESHOLDS } from "./thresholds";
 import type {
@@ -107,8 +108,13 @@ function evaluatePaperPerformance(
   const t = LIVE_READINESS_THRESHOLDS;
 
   reasons.push(
-    `Strict paper only: ${metrics.closedTrades} closed trades (${metrics.relaxedExcludedCount} relaxed excluded).`,
+    `Strict paper only: ${metrics.closedTrades} closed · ${metrics.resolvedTrades} resolved (${metrics.relaxedExcludedCount} relaxed excluded).`,
   );
+
+  if (metrics.resolvedTrades === 0) {
+    blocking.push("No resolved paper trades — outcome resolution required.");
+    actions.push("Close paper trades and resolve outcomes on /autopilot.");
+  }
 
   if (metrics.closedTrades === 0) {
     blocking.push("No strict paper trade history — cannot assess live readiness.");
@@ -565,6 +571,156 @@ function evaluateKillSwitchCategory(
   });
 }
 
+function evaluateCommandCenterReadiness(
+  status: string | null | undefined,
+): ReadinessCategoryResult {
+  const reasons: string[] = [];
+  const blocking: string[] = [];
+  const actions: string[] = [];
+  const s = status ?? "UNKNOWN";
+
+  reasons.push(`Command center status: ${s}.`);
+  if (s === "BLOCKED") {
+    blocking.push("Command center BLOCKED — live trading not permitted.");
+    actions.push("Clear command center blockers on /command-center.");
+  } else if (s === "EMERGENCY") {
+    blocking.push("Command center EMERGENCY.");
+    actions.push("Resolve emergency conditions before live pilot.");
+  } else if (s === "CAUTION") {
+    actions.push("Review command center cautions before live execution.");
+  }
+
+  return category({
+    id: "command_center_readiness",
+    label: "Command center readiness",
+    reasons,
+    blockingIssues: blocking,
+    recommendedActions: actions,
+    score: s === "SAFE" ? 92 : s === "CAUTION" ? 65 : 25,
+  });
+}
+
+function evaluateRealTimeRiskReadiness(
+  status: string | null | undefined,
+): ReadinessCategoryResult {
+  const reasons: string[] = [];
+  const blocking: string[] = [];
+  const actions: string[] = [];
+  const s = status ?? "UNKNOWN";
+
+  reasons.push(`Real-time risk status: ${s}.`);
+  if (s === "BLOCKED" || s === "EMERGENCY") {
+    blocking.push(`Real-time risk ${s} — new live trades blocked.`);
+    actions.push("Review /real-time-risk before live pilot.");
+  } else if (s === "CAUTION") {
+    actions.push("Real-time risk CAUTION — reduce size or wait.");
+  }
+
+  return category({
+    id: "real_time_risk_readiness",
+    label: "Real-time risk readiness",
+    reasons,
+    blockingIssues: blocking,
+    recommendedActions: actions,
+    score: s === "SAFE" ? 90 : s === "CAUTION" ? 68 : 22,
+  });
+}
+
+function evaluateLedgerReadiness(input: LiveReadinessInput): ReadinessCategoryResult {
+  const health = input.ledgerHealth;
+  const reasons: string[] = [];
+  const blocking: string[] = [];
+  const actions: string[] = [];
+
+  if (!health) {
+    blocking.push("Unified ledger not synced.");
+    actions.push("Open /ledger and refresh to sync trading ledger.");
+    return category({
+      id: "ledger_readiness",
+      label: "Unified ledger readiness",
+      reasons: ["Ledger health unknown."],
+      blockingIssues: blocking,
+      recommendedActions: actions,
+      score: 20,
+    });
+  }
+
+  reasons.push(`${health.entryCount} ledger entries · ${health.liveEntryCount} live.`);
+  if (health.lastSyncedAt) {
+    reasons.push(`Last synced ${new Date(health.lastSyncedAt).toLocaleString()}.`);
+  }
+
+  if (!health.healthy) {
+    blocking.push("Ledger integrity check failed.");
+    for (const issue of health.issues.slice(0, 3)) {
+      blocking.push(issue);
+    }
+    actions.push("Review /ledger — corrections must be append-only.");
+  } else if (health.entryCount === 0) {
+    reasons.push("Ledger empty — run desk analyze to seed entries.");
+    actions.push("Run first desk cycle to populate unified ledger.");
+  } else {
+    reasons.push("Ledger hashes and links validated.");
+  }
+
+  if (health.orphanTrades > 0) {
+    actions.push(`Link ${health.orphanTrades} orphan trade(s) to decision logs.`);
+  }
+
+  return category({
+    id: "ledger_readiness",
+    label: "Unified ledger readiness",
+    reasons,
+    blockingIssues: blocking,
+    recommendedActions: actions,
+    score: blocking.length ? 25 : health.entryCount === 0 ? 55 : 92,
+  });
+}
+
+function evaluateSyncAuditReadiness(input: LiveReadinessInput): ReadinessCategoryResult {
+  const reasons: string[] = [];
+  const blocking: string[] = [];
+  const actions: string[] = [];
+  const syncOn = input.deskSettings?.syncJournalSupabase ?? true;
+  const auditOn = input.auditEnabled ?? true;
+
+  if (!syncOn) {
+    blocking.push("Journal sync disabled.");
+    actions.push("Enable syncJournalSupabase in desk settings.");
+  } else if (!input.serverContext.supabaseConfigured) {
+    blocking.push("Sync enabled but Supabase not configured.");
+    actions.push("Configure SUPABASE_URL and SERVICE_ROLE_KEY.");
+  } else {
+    reasons.push("Journal sync enabled and Supabase configured.");
+  }
+
+  if (!auditOn) {
+    blocking.push("Live action audit logging disabled.");
+    actions.push("Enable auditLiveActions in desk settings.");
+  } else {
+    reasons.push("Live action audit logging enabled.");
+  }
+
+  if (input.killSwitchTested === false) {
+    blocking.push("Kill switch not tested by operator.");
+    actions.push("Toggle emergency stop once on /live-pilot to verify kill switch.");
+  } else if (input.killSwitchTested) {
+    reasons.push("Kill switch tested by operator.");
+  }
+
+  const resolved = countProductionResolved(input.entries);
+  reasons.push(`${resolved} production resolved trade(s) in journal.`);
+
+  return category({
+    id: "sync_audit_readiness",
+    label: "Sync & audit readiness",
+    reasons,
+    blockingIssues: blocking,
+    recommendedActions: actions,
+    score: blocking.length ? 30 : 88,
+  });
+}
+
 export function evaluateAllCategories(
   input: LiveReadinessInput,
 ): { categories: ReadinessCategoryResult[]; strictPaperMetrics: StrictPaperMetrics } {
@@ -597,6 +753,10 @@ export function evaluateAllCategories(
       input.riskProfile,
       input.latestAnalysis,
     ),
+    evaluateCommandCenterReadiness(input.commandCenterStatus),
+    evaluateRealTimeRiskReadiness(input.realTimeRiskStatus),
+    evaluateSyncAuditReadiness(input),
+    evaluateLedgerReadiness(input),
   ];
 
   return { categories, strictPaperMetrics: paper.metrics };

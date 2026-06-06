@@ -30,7 +30,20 @@
     "test:real-time-risk": "npx --yes tsx --test src/lib/real-time-risk/real-time-risk.test.ts",
     "test:live-scale-up": "npx --yes tsx --test src/lib/live-scale-up/live-scale-up.test.ts",
     "test:options-dry-run": "npx --yes tsx --test src/lib/options-dry-run/options-dry-run.test.ts",
-    "test:options-risk-greeks": "npx --yes tsx --test src/lib/options-risk-greeks/options-risk-greeks.test.ts"
+    "test:options-risk-greeks": "npx --yes tsx --test src/lib/options-risk-greeks/options-risk-greeks.test.ts",
+    "test:autopilot": "npx --yes tsx --test src/lib/autopilot/autopilot.test.ts",
+    "test:desk-workflow": "npx --yes tsx --test src/lib/desk-workflow/desk-workflow.test.ts",
+    "test:data-backbone": "npx --yes tsx --test src/lib/data-backbone/data-backbone.test.ts",
+    "test:paper-autopilot": "npx --yes tsx --test src/lib/paper-autopilot/paper-autopilot.test.ts",
+    "test:smart-briefing": "npx --yes tsx --test src/lib/smart-briefing/smart-briefing.test.ts",
+    "test:background-worker": "npx --yes tsx --test src/lib/background-worker/background-worker.test.ts",
+    "test:ux-system": "npx --yes tsx --test src/lib/ux/ux-system.test.ts",
+    "test:live-trading-readiness": "npx --yes tsx --test src/lib/live-trading-readiness/live-trading-readiness.test.ts",
+    "test:platform": "npx --yes tsx --test src/lib/platform/platform.test.ts",
+    "test:ledger": "npx --yes tsx --test src/lib/ledger/ledger.test.ts",
+    "test:automation-control-plane": "npx --yes tsx --test src/lib/automation-control-plane/automation-control-plane.test.ts",
+    "test:policy-engine": "npx --yes tsx --test src/lib/policy-engine/policy.test.ts",
+    "test:observability": "npx --yes tsx --test src/lib/observability/observability.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

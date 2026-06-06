@@ -258,12 +258,25 @@ export default function PaperTradingPanel({
           <label className="flex items-center gap-1.5 text-zinc-400">
             <input
               type="checkbox"
-              checked={settings.autoOpenOnTrade}
+              checked={settings.autoCreatePaperOnTrade ?? settings.autoOpenOnTrade}
               onChange={(e) =>
-                onSettingsChange({ autoOpenOnTrade: e.target.checked })
+                onSettingsChange({
+                  autoCreatePaperOnTrade: e.target.checked,
+                  autoOpenOnTrade: e.target.checked,
+                })
               }
             />
-            Auto-open on eligible paper signal
+            Auto-create paper trade on TRADE verdict
+          </label>
+          <label className="flex items-center gap-1.5 text-zinc-400">
+            <input
+              type="checkbox"
+              checked={settings.autoCreateShadowOnWaitSkip ?? false}
+              onChange={(e) =>
+                onSettingsChange({ autoCreateShadowOnWaitSkip: e.target.checked })
+              }
+            />
+            Auto-create shadow trade on WAIT/SKIP
           </label>
           <label className="flex items-center gap-1.5 text-zinc-400">
             <input

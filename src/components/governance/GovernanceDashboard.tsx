@@ -19,18 +19,23 @@ import {
   evaluateHardRuleLocks,
   HARD_RULE_LABELS,
 } from "@/lib/governance/hard-rule-lock";
+import { usePermission } from "@/contexts/WorkspaceContext";
 import type { DeskUserRole } from "@/lib/governance/governance-types";
+import type { WorkspaceRole } from "@/lib/platform/types";
 import { evaluateKillSwitch, saveKillSwitchState } from "@/lib/validation/kill-switch";
 import ExchangeStatusPanel from "./ExchangeStatusPanel";
 
-const ROLES: DeskUserRole[] = [
+const ROLES: WorkspaceRole[] = [
   "VIEWER",
-  "OPERATOR",
+  "TRADER",
   "RISK_MANAGER",
   "ADMIN",
+  "OWNER",
 ];
 
 export default function GovernanceDashboard() {
+  const canKillSwitch = usePermission("canTriggerKillSwitch");
+  const canChangeRisk = usePermission("canChangeRiskSettings");
   const [refreshKey, setRefreshKey] = useState(0);
   const [state, setState] = useState(loadGovernanceState);
 
@@ -76,12 +81,14 @@ export default function GovernanceDashboard() {
   }, [refreshKey, state]);
 
   const patch = (patch: Parameters<typeof saveGovernanceState>[0], action: string) => {
+    if (!canChangeRisk && action !== "operator_identity") return;
     const next = saveGovernanceState(patch, { action, detail: JSON.stringify(patch) });
     setState(next);
     setRefreshKey((k) => k + 1);
   };
 
   const togglePauseDesk = () => {
+    if (!canKillSwitch) return;
     const pause = !state.operatorPaused;
     saveKillSwitchState({
       operatorPaused: pause,
@@ -127,9 +134,13 @@ export default function GovernanceDashboard() {
       </header>
 
       <section className="desk-panel px-4 py-4">
-        <h2 className="desk-section-title">User roles (placeholder)</h2>
+        <h2 className="desk-section-title">Workspace operator identity</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          No auth backend — role is stored locally for audit log attribution only.
+          Roles are managed per workspace on{" "}
+          <Link href="/settings/workspace" className="text-indigo-400 hover:underline">
+            /settings/workspace
+          </Link>
+          . Governance actions are scoped to the active workspace.
         </p>
         <div className="mt-3 flex flex-wrap gap-4">
           <label className="text-xs text-zinc-500">
@@ -146,7 +157,7 @@ export default function GovernanceDashboard() {
             <select
               value={state.operatorRole}
               onChange={(e) => {
-                setOperatorIdentity(state.operatorName, e.target.value as DeskUserRole);
+                setOperatorIdentity(state.operatorName, e.target.value as WorkspaceRole);
                 refresh();
               }}
               className="mt-1 block rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-200"
@@ -174,11 +185,17 @@ export default function GovernanceDashboard() {
           Trading paused: {killSwitch.tradingPaused ? "yes" : "no"} · Safe mode:{" "}
           {state.safeMode ? "ON" : "off"}
         </p>
+        {!canChangeRisk && (
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Risk settings require RISK_MANAGER, ADMIN, or OWNER role.
+          </p>
+        )}
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="flex items-center gap-2 text-xs text-zinc-300">
             <input
               type="checkbox"
               checked={state.pauseAnalysis}
+              disabled={!canChangeRisk}
               onChange={(e) =>
                 patch({ pauseAnalysis: e.target.checked }, "pause_analysis")
               }
@@ -189,6 +206,7 @@ export default function GovernanceDashboard() {
             <input
               type="checkbox"
               checked={state.pausePaperAutoOpen}
+              disabled={!canChangeRisk}
               onChange={(e) =>
                 patch({ pausePaperAutoOpen: e.target.checked }, "pause_paper_auto")
               }
@@ -199,6 +217,7 @@ export default function GovernanceDashboard() {
             <input
               type="checkbox"
               checked={state.disableAggressiveMode}
+              disabled={!canChangeRisk}
               onChange={(e) =>
                 patch({ disableAggressiveMode: e.target.checked }, "disable_aggressive")
               }
@@ -209,6 +228,7 @@ export default function GovernanceDashboard() {
             <input
               type="checkbox"
               checked={state.disableAlerts}
+              disabled={!canChangeRisk}
               onChange={(e) =>
                 patch({ disableAlerts: e.target.checked }, "disable_alerts")
               }
@@ -219,6 +239,7 @@ export default function GovernanceDashboard() {
             <input
               type="checkbox"
               checked={state.safeMode}
+              disabled={!canChangeRisk}
               onChange={(e) => patch({ safeMode: e.target.checked }, "safe_mode")}
             />
             Enable safe mode (force WAIT/SKIP)
@@ -227,10 +248,16 @@ export default function GovernanceDashboard() {
         <button
           type="button"
           onClick={togglePauseDesk}
-          className="mt-4 rounded bg-rose-950 px-3 py-1.5 text-xs font-semibold text-rose-200 ring-1 ring-rose-800"
+          disabled={!canKillSwitch}
+          className="mt-4 rounded bg-rose-950 px-3 py-1.5 text-xs font-semibold text-rose-200 ring-1 ring-rose-800 disabled:opacity-40"
         >
           {state.operatorPaused ? "Resume desk (clear operator pause)" : "Pause desk trading"}
         </button>
+        {!canKillSwitch && (
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Kill switch requires RISK_MANAGER or OWNER role.
+          </p>
+        )}
       </section>
 
       <ExchangeStatusPanel />

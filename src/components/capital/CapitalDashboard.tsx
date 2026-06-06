@@ -2,9 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { loadDecisionLog } from "@/lib/journal/decision-log";
-import { loadPaperOrders } from "@/lib/paper/paper-orders";
-import { loadDeskSettings } from "@/lib/desk/desk-settings";
+import DeskEmptyState from "@/components/desk/DeskEmptyState";
+import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
+import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
 import { buildCapitalReport } from "@/lib/capital/build-capital-report";
 import {
   loadCapitalSettings,
@@ -27,16 +27,22 @@ export default function CapitalDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [settings, setSettings] = useState(loadCapitalSettings);
 
-  const report = useMemo(() => {
+  const backboneInput = useMemo(() => {
     void refreshKey;
-    return buildCapitalReport({
-      entries: loadDecisionLog(),
-      orders: loadPaperOrders(),
-      riskProfile: loadDeskSettings().riskProfile,
-      latestAnalysis: null,
-      settings,
-    });
-  }, [refreshKey, settings]);
+    return loadDeskBackboneInputs();
+  }, [refreshKey]);
+
+  const report = useMemo(
+    () =>
+      buildCapitalReport({
+        entries: backboneInput.productionEntries,
+        orders: backboneInput.productionOrders,
+        riskProfile: backboneInput.riskProfile,
+        latestAnalysis: null,
+        settings,
+      }),
+    [backboneInput, settings],
+  );
 
   const { stage, split, scalePermission, riskOfRuin } = report;
   const v = split.validationAllocation;
@@ -47,8 +53,21 @@ export default function CapitalDashboard() {
     setRefreshKey((k) => k + 1);
   };
 
+  const resolvedCount = backboneInput.record.learning.resolvedOutcomesCount;
+
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-6 px-3 py-4 sm:px-5">
+      <DataHealthPanel health={backboneInput.record.health} compact />
+
+      {resolvedCount === 0 && (
+        <DeskEmptyState
+          title="Capital scaling needs samples"
+          missing="No production resolved outcomes to scale from."
+          why="Capital stage and scale permission use real paper outcomes — resolve trades or run paper autopilot first."
+          actionLabel="Open portfolio"
+          actionHref="/portfolio"
+        />
+      )}
       <header className="desk-panel flex flex-wrap items-center justify-between gap-4 px-4 py-4">
         <div>
           <p className="desk-section-title text-violet-400/90">MVP 12</p>

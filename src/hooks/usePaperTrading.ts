@@ -5,7 +5,15 @@ import {
   closePaperOrderAndSyncLog,
   tryAutoClosePaperOnSkip,
   tryAutoOpenPaperOrder,
+  tryAutoOpenShadowOrder,
 } from "@/lib/paper/paper-execution";
+import { loadAutopilotSettings } from "@/lib/autopilot/settings-store";
+import {
+  loadPaperAutopilotSettings,
+  resolvePaperAutopilotModeFromAutopilot,
+  runPaperAutopilot,
+} from "@/lib/paper-autopilot";
+import { emitFromPaperAutopilotResult } from "@/lib/smart-briefing/event-helpers";
 import {
   loadPaperOrders,
   loadPaperSettings,
@@ -109,26 +117,64 @@ export function usePaperTrading() {
       const skipOpen =
         options?.skipAutoOpen ??
         (isHumanApprovalRequired() || gov.pausePaperAutoOpen);
-      const opened = skipOpen
-        ? null
-        : tryAutoOpenPaperOrder(data, decisionLogId, {
-            operatorPaused: gov.operatorPaused,
-            safeMode: gov.safeMode,
-          });
+
+      const paStored = loadPaperAutopilotSettings();
+      const paMode =
+        paStored.mode !== "OFF"
+          ? paStored.mode
+          : resolvePaperAutopilotModeFromAutopilot(loadAutopilotSettings());
+      const autopilot = loadAutopilotSettings();
+
+      let tradeOpened = null as ReturnType<typeof tryAutoOpenPaperOrder>;
+      if (paMode !== "OFF" && !skipOpen) {
+        const paResult = runPaperAutopilot({
+          data,
+          decisionLogId,
+          btcPrice: btc,
+          settings: {
+            mode: paMode,
+            autoResolveEnabled: autopilot.autoResolveEnabled,
+            maxPaperTradesPerDay: autopilot.maxPaperTradesPerDay,
+            maxShadowTradesPerDay: autopilot.maxShadowTradesPerDay,
+          },
+        });
+        void emitFromPaperAutopilotResult(paResult);
+        tradeOpened = paResult.created[0] ?? null;
+      } else if (!skipOpen) {
+        const govCtx = {
+          operatorPaused: gov.operatorPaused,
+          safeMode: gov.safeMode,
+        };
+        const opened = tryAutoOpenPaperOrder(data, decisionLogId, govCtx);
+        const shadowOpened =
+          opened || !currentSettings.autoCreateShadowOnWaitSkip
+            ? null
+            : tryAutoOpenShadowOrder(data, decisionLogId, govCtx);
+        tradeOpened = opened ?? shadowOpened;
+      } else if (paMode !== "OFF" && btc > 0) {
+        const paResult = runPaperAutopilot({
+          data,
+          decisionLogId,
+          btcPrice: btc,
+          settings: { mode: paMode },
+        });
+        void emitFromPaperAutopilotResult(paResult);
+      }
 
       refresh();
 
-      if (opened && currentSettings.syncSupabase) {
-        const syncResult = await syncOpenedPaperOrder(opened, currentSettings);
+      if (tradeOpened && currentSettings.syncSupabase) {
+        const syncResult = await syncOpenedPaperOrder(tradeOpened, currentSettings);
         if (syncResult.openOrders.length > 0) {
           mergePaperOrdersFromRemote(syncResult.openOrders);
           refresh();
           setSyncedOpenOrders(syncResult.openOrders);
         }
+        const kind = tradeOpened.paperMode === "RELAXED_PAPER" ? "Shadow" : "Paper";
         setSyncStatus(
           syncResult.error
-            ? `Opened ${opened.instrument} · sync: ${syncResult.error}`
-            : `Opened & synced ${opened.instrument} · ${syncResult.openOrders.length} open on server`,
+            ? `Opened ${kind} ${tradeOpened.instrument} · sync: ${syncResult.error}`
+            : `Opened & synced ${kind} ${tradeOpened.instrument} · ${syncResult.openOrders.length} open on server`,
         );
       } else if (currentSettings.syncSupabase) {
         await syncPaperOrdersToServer({
