@@ -94,7 +94,11 @@ async function readBody(req) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (PROXY_SECRET) {
+    const path = req.url ?? "/";
+    const pathOnly = path.split("?")[0];
+    const isHealth = pathOnly === "/health" || pathOnly === "/";
+
+    if (PROXY_SECRET && !isHealth) {
       const provided = req.headers["x-binance-proxy-secret"];
       if (provided !== PROXY_SECRET) {
         res.writeHead(401, { "Content-Type": "application/json" });
@@ -103,8 +107,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    const path = req.url ?? "/";
-    if (path === "/health" || path === "/") {
+    if (isHealth) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
