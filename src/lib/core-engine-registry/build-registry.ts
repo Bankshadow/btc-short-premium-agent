@@ -273,7 +273,7 @@ export function buildCoreEngineRegistry(
             : "AI learning is up to date.",
       requiresHumanAction: pendingLearning > 0,
       actionLabel: pendingLearning > 0 ? "Resolve closed trade" : null,
-      actionHref: pendingLearning > 0 ? "/learning" : null,
+      actionHref: pendingLearning > 0 ? "/" : null,
       affectsGoalProgress: learnedCount < minTrust,
       error: err.LearningEngine ?? null,
     }),

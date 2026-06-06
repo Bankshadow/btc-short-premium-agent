@@ -17,6 +17,9 @@ function minimalPayload(): GoalDashboardServerPayload {
   return {
     goal,
     mission,
+    automation: null,
+    learningPending: [],
+    telegramConfigured: true,
     binance: {
       configured: true,
       testnetEnabled: true,
@@ -75,4 +78,32 @@ test("mission flow snapshot detects HTTP 451 blocked status", () => {
   const flow = buildMissionFlowSnapshot(payload, null, 0);
   assert.equal(flow.binanceTestnet.status, "BLOCKED");
   assert.ok(flow.binanceTestnet.reason.includes("451"));
+});
+
+test("mission flow snapshot includes automation defaults", () => {
+  const flow = buildMissionFlowSnapshot(minimalPayload(), null, 0);
+  assert.equal(flow.automation.enabled, true);
+  assert.equal(flow.automation.intervalMinutes, 15);
+  assert.equal(flow.learningPending.length, 0);
+});
+
+test("mission flow snapshot surfaces pending testnet preview", () => {
+  const payload = minimalPayload();
+  const pending = {
+    previewId: "bn-prev-test",
+    symbol: "BTCUSDT",
+    side: "SELL",
+    notionalUsd: 10,
+    estimatedQty: "0.001",
+    markPrice: 70000,
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    blocked: false,
+    blockReasons: [],
+    reason: "AI desk signal",
+    decisionLogId: "dec-1",
+  };
+  const flow = buildMissionFlowSnapshot(payload, "dec-1", 0, pending);
+  assert.equal(flow.pendingTestnetPreview?.previewId, "bn-prev-test");
+  assert.equal(flow.aiStatus.humanActionRequired, true);
+  assert.ok(flow.nextRecommendation.includes("Review testnet order"));
 });

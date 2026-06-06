@@ -8,19 +8,25 @@ export function useMissionSnapshot() {
   const [snapshot, setSnapshot] = useState<MissionFlowSnapshot>(emptyMissionFlowSnapshot);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (fresh = false) => {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/mission/snapshot", { cache: "no-store" });
+      const url = fresh ? "/api/mission/snapshot?fresh=1" : "/api/mission/snapshot";
+      const res = await fetch(url, { cache: "no-store" });
       const json = await res.json();
       if (!res.ok || !json.ok || !json.snapshot) {
         throw new Error(json.error ?? "Failed to load mission snapshot");
       }
       setSnapshot(json.snapshot as MissionFlowSnapshot);
+      setDegraded(Boolean(json.degraded));
+      setWarnings(Array.isArray(json.warnings) ? json.warnings : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load mission snapshot");
+      setDegraded(true);
     } finally {
       setBusy(false);
     }
@@ -30,5 +36,13 @@ export function useMissionSnapshot() {
     void refresh();
   }, [refresh]);
 
-  return { snapshot, busy, error, refresh, setSnapshot };
+  return {
+    snapshot,
+    busy,
+    error,
+    degraded,
+    warnings,
+    refresh,
+    setSnapshot,
+  };
 }

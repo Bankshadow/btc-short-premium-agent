@@ -1,6 +1,8 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -19,7 +21,27 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function ReportsView() {
-  const { snapshot: m, busy, error, refresh } = useMissionSnapshot();
+  const { snapshot: m, busy, error, degraded, warnings, refresh } =
+    useMissionSnapshot();
+  const [digest, setDigest] = useState<string | null>(null);
+  const [digestBusy, setDigestBusy] = useState(false);
+
+  const loadDigest = useCallback(async () => {
+    setDigestBusy(true);
+    try {
+      const res = await fetch("/api/mission/digest", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && json.ok) setDigest(json.digest as string);
+    } catch {
+      /* optional */
+    } finally {
+      setDigestBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDigest();
+  }, [loadDigest, m.lastUpdatedAt]);
 
   const dailySummary =
     m.closedTrades > 0
@@ -40,21 +62,58 @@ export default function ReportsView() {
       title="Reports"
       subtitle="Daily and weekly summaries, goal progress, and what AI recommends next."
       activePath="/reports"
+      missionSnapshot={m}
       actions={
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void refresh()}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
-        >
-          {busy ? "Refreshing..." : "Refresh"}
-        </button>
+        <>
+          <button
+            type="button"
+            disabled={digestBusy}
+            onClick={() => void loadDigest()}
+            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
+          >
+            {digestBusy ? "..." : "Load digest"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void refresh(true)}
+            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
+          >
+            {busy ? "Refreshing..." : "Refresh"}
+          </button>
+        </>
       }
     >
-      {error && (
-        <p className="rounded-lg border border-rose-900/50 bg-rose-950/30 px-4 py-2 text-xs text-rose-200">
-          {error}
-        </p>
+      <GoalErrorBanner
+        error={error}
+        degraded={degraded}
+        warnings={warnings}
+        snapshot={m}
+      />
+
+      {digest && (
+        <Section title="Mission digest">
+          <pre className="whitespace-pre-wrap font-mono text-[11px] text-zinc-400">
+            {digest}
+          </pre>
+          {m.notifications.telegramConfigured && (
+            <button
+              type="button"
+              disabled={digestBusy}
+              onClick={async () => {
+                setDigestBusy(true);
+                try {
+                  await fetch("/api/mission/digest?send=1", { cache: "no-store" });
+                } finally {
+                  setDigestBusy(false);
+                }
+              }}
+              className="mt-3 rounded-lg border border-cyan-800/60 px-3 py-1.5 text-xs text-cyan-200 hover:bg-cyan-950/40 disabled:opacity-50"
+            >
+              Send digest to Telegram
+            </button>
+          )}
+        </Section>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -106,8 +165,8 @@ export default function ReportsView() {
         <Section title="AI learning summary">
           <p>{learningSummary}</p>
           {m.pendingLearningReview > 0 && (
-            <Link href="/learning" className="mt-2 inline-block text-xs text-amber-300 hover:underline">
-              Review {m.pendingLearningReview} pending trade(s) →
+            <Link href="/" className="mt-2 inline-block text-xs text-amber-300 hover:underline">
+              Review {m.pendingLearningReview} pending trade(s) on Dashboard →
             </Link>
           )}
         </Section>

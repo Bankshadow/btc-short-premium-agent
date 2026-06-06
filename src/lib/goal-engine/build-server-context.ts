@@ -25,6 +25,8 @@ import {
   resolveProxyProviderLabel,
 } from "./build-mission-snapshot";
 import { buildGoalTradeList, type GoalTradeRow } from "./build-trade-list";
+import type { AutomationStatusSnapshot } from "@/lib/automation-control-plane/types";
+import type { TestnetLearningRecord } from "@/lib/testnet-monitor/types";
 import type {
   GoalBinanceConnectionSnapshot,
   GoalProgressSnapshot,
@@ -36,6 +38,9 @@ export interface GoalDashboardServerPayload {
   mission: MissionSnapshot;
   binance: GoalBinanceConnectionSnapshot;
   engines: CoreEngineRegistrySnapshot;
+  automation: AutomationStatusSnapshot | null;
+  learningPending: TestnetLearningRecord[];
+  telegramConfigured: boolean;
 }
 
 export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardServerPayload> {
@@ -264,7 +269,21 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     },
   });
 
-  return { goal, mission, binance, engines };
+  const learningPending =
+    testnetSnapshot?.learningRecords.filter(
+      (r) => r.status === "PENDING_REVIEW" || r.status === "REFLECTION_READY",
+    ) ?? [];
+
+  return {
+    goal,
+    mission,
+    binance,
+    engines,
+    automation,
+    learningPending,
+    telegramConfigured:
+      observability?.signals.alerts.telegramConfigured ?? false,
+  };
 }
 
 export async function buildGoalTradeListServer(): Promise<GoalTradeRow[]> {

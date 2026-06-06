@@ -2,6 +2,7 @@ import { executeBinanceTestnetClose } from "@/lib/exchange/binance";
 import { evaluateRiskyActionGate } from "@/lib/anomaly-detection";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
 import type { BinanceCloseInput } from "@/lib/exchange/binance/binance-types";
+import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
       orders: body.orders,
     });
 
+    if (result.ok) invalidateMissionSnapshotCache();
     return NextResponse.json(
       { ...result, clientMustPersistJournal: true },
       { status: result.ok ? 200 : 422 },

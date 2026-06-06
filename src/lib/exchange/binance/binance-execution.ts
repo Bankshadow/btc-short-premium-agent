@@ -24,6 +24,7 @@ import type { CommandCenterStatus } from "@/lib/command-center/types";
 import type { GovernanceDeskState } from "@/lib/governance/governance-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 
 export async function executeBinanceTestnetOrder(input: {
   execute: BinanceExecuteInput;
@@ -171,6 +172,12 @@ export async function executeBinanceTestnetOrder(input: {
     });
     await recordTestnetTradeJournal(journalEntry);
 
+    void emitMissionAlert({
+      kind: "trade_opened",
+      title: "Testnet position opened",
+      body: `${preview.symbol} ${preview.side} · qty ~${preview.estimatedQty} · order ${order.orderId}`,
+    }).catch(() => undefined);
+
     return {
       ok: true,
       blocked: false,
@@ -285,6 +292,12 @@ export async function executeBinanceTestnetClose(input: {
         binanceTestnetTradeId: `${openTrade!.binanceTestnetTradeId}-close`,
       });
     }
+
+    void emitMissionAlert({
+      kind: "trade_closed",
+      title: "Testnet position closing",
+      body: `${input.close.symbol} reduce-only close submitted · order ${order.orderId}`,
+    }).catch(() => undefined);
 
     return {
       ok: true,

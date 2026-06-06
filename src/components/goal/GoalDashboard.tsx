@@ -2,7 +2,11 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
+import AutopilotControls from "./AutopilotControls";
+import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import LearningReviewPanel from "./LearningReviewPanel";
+import TestnetTradeModal from "./TestnetTradeModal";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
 function usd(n: number): string {
@@ -55,9 +59,14 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 }
 
 export default function GoalDashboard() {
-  const { snapshot: m, busy, error, refresh, setSnapshot } = useMissionSnapshot();
+  const { snapshot: m, busy, error, degraded, warnings, refresh, setSnapshot } =
+    useMissionSnapshot();
   const [starting, setStarting] = useState(false);
   const [startMessage, setStartMessage] = useState<string | null>(null);
+  const [tradeModal, setTradeModal] = useState<{
+    open: boolean;
+    mode: "execute" | "close";
+  }>({ open: false, mode: "execute" });
 
   const startAi = useCallback(async () => {
     setStarting(true);
@@ -67,8 +76,10 @@ export default function GoalDashboard() {
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Start AI failed");
       if (json.snapshot) setSnapshot(json.snapshot);
+      else await refresh();
       const verdict = json.cycle?.verdict ?? m.lastVerdict ?? "—";
       const preview = json.cycle?.testnetPreviewId;
+      if (preview) setTradeModal({ open: true, mode: "execute" });
       setStartMessage(
         preview
           ? `AI cycle complete · verdict ${verdict} · testnet preview ready (double confirm required).`
@@ -81,7 +92,7 @@ export default function GoalDashboard() {
     } finally {
       setStarting(false);
     }
-  }, [m.lastVerdict, setSnapshot]);
+  }, [m.lastVerdict, refresh, setSnapshot]);
 
   const hasData = m.totalTrades > 0 || Boolean(m.lastCycleAt);
 
@@ -90,6 +101,7 @@ export default function GoalDashboard() {
       title="AI Profit Mission"
       subtitle="Track progress from $1,000 to $10,000. Everything else runs in the background."
       activePath="/"
+      missionSnapshot={m}
       actions={
         <>
           <button
@@ -111,16 +123,52 @@ export default function GoalDashboard() {
         </>
       }
     >
-      {error && (
-        <p className="rounded-lg border border-rose-900/50 bg-rose-950/30 px-4 py-2 text-xs text-rose-200">
-          {error}
-        </p>
-      )}
+      <GoalErrorBanner
+        error={error}
+        degraded={degraded}
+        warnings={warnings}
+        snapshot={m}
+      />
+
+      <LearningReviewPanel
+        items={m.learningPending}
+        pendingCount={m.pendingLearningReview}
+        onReviewed={() => void refresh(true)}
+      />
 
       {startMessage && (
         <p className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-2 text-xs text-emerald-200">
           {startMessage}
         </p>
+      )}
+
+      {m.pendingTestnetPreview && (
+        <section className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+          <p className="text-xs uppercase tracking-wide text-cyan-400/80">
+            Testnet preview ready
+          </p>
+          <p className="mt-1 font-mono text-sm text-zinc-100">
+            {m.pendingTestnetPreview.symbol} {m.pendingTestnetPreview.side} · $
+            {m.pendingTestnetPreview.notionalUsd}
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Expires {new Date(m.pendingTestnetPreview.expiresAt).toLocaleString()} · double
+            confirm required before execute.
+          </p>
+          {m.pendingTestnetPreview.blocked ? (
+            <p className="mt-2 text-xs text-rose-300">
+              Blocked: {m.pendingTestnetPreview.blockReasons.join("; ")}
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTradeModal({ open: true, mode: "execute" })}
+              className="mt-3 rounded-lg bg-cyan-800/70 px-4 py-2 text-xs font-semibold text-zinc-50 hover:bg-cyan-700/70"
+            >
+              Review testnet order
+            </button>
+          )}
+        </section>
       )}
 
       {!hasData && (
@@ -181,6 +229,18 @@ export default function GoalDashboard() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <Card title="Autopilot schedule" tone="default">
+          <p className="text-xs text-zinc-400">
+            {m.automation.paused
+              ? "Paused — cron cycles will not run until resumed."
+              : m.automation.enabled
+                ? m.automation.nextRunAt
+                  ? `Next scheduled cycle: ${new Date(m.automation.nextRunAt).toLocaleString()}`
+                  : "Scheduled cycles active (every 15 min)."
+                : "Scheduled cycles disabled."}
+          </p>
+        </Card>
+
         <Card title="AI status" tone={m.aiStatus.humanActionRequired ? "alert" : "default"}>
           <p className="font-mono text-xl text-zinc-100">
             {STATUS_COPY[m.aiStatus.state] ?? m.aiStatus.state}
@@ -214,9 +274,20 @@ export default function GoalDashboard() {
               <p className="font-mono text-base text-zinc-100">{m.currentPosition.summary}</p>
               <p>Entry: {m.currentPosition.entryPrice}</p>
               <p>Mark: {m.currentPosition.markPrice ?? "—"}</p>
-              <Link href="/trades" className="mt-2 inline-block text-emerald-300 hover:underline">
-                View trade →
-              </Link>
+              <div className="mt-2 flex flex-wrap gap-3">
+                <Link href="/trades" className="text-emerald-300 hover:underline">
+                  View trade →
+                </Link>
+                {m.currentPosition.canCloseOnTestnet && (
+                  <button
+                    type="button"
+                    onClick={() => setTradeModal({ open: true, mode: "close" })}
+                    className="text-amber-300 hover:underline"
+                  >
+                    Close on testnet →
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </Card>
@@ -255,6 +326,12 @@ export default function GoalDashboard() {
         </div>
       </Card>
 
+      <AutopilotControls
+        automation={m.automation}
+        onChanged={() => void refresh(true)}
+        compact
+      />
+
       <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4 text-center">
         <p className="text-xs text-zinc-500">Recommended next step</p>
         <p className="mt-1 text-base font-semibold text-emerald-300">{m.nextRecommendation}</p>
@@ -263,6 +340,18 @@ export default function GoalDashboard() {
       <p className="text-center text-[10px] text-zinc-600">
         Practice money only. Live trading stays locked. Testnet orders require double confirmation.
       </p>
+
+      <TestnetTradeModal
+        open={tradeModal.open}
+        mode={tradeModal.mode}
+        preview={m.pendingTestnetPreview}
+        position={m.currentPosition}
+        onClose={() => setTradeModal((s) => ({ ...s, open: false }))}
+        onSuccess={() => {
+          setTradeModal((s) => ({ ...s, open: false }));
+          void refresh();
+        }}
+      />
     </GoalShell>
   );
 }

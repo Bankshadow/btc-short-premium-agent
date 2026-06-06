@@ -25,6 +25,7 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
     winRate: null,
     maxDrawdown: 0,
     currentPosition: null,
+    pendingTestnetPreview: null,
     aiStatus: {
       state: "IDLE",
       lastAction: "No AI cycle has run yet.",
@@ -56,5 +57,21 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
     enginesNeedingAttention: 0,
     learnedTrades: 0,
     pendingLearningReview: 0,
+    learningPending: [],
+    automation: {
+      enabled: true,
+      paused: false,
+      intervalMinutes: 15,
+      lastRunAt: null,
+      nextRunAt: null,
+      lastRunStatus: null,
+      lastTrigger: null,
+    },
+    notifications: {
+      telegramConfigured: false,
+      notifyOnTrade: true,
+      notifyOnBlocker: true,
+      lastAlertAt: null,
+    },
   };
 }

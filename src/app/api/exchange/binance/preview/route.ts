@@ -1,10 +1,38 @@
-import { buildOrderPreview } from "@/lib/exchange/binance";
+import {
+  buildOrderPreview,
+  findPendingTestnetPreview,
+  getStoredPreview,
+} from "@/lib/exchange/binance";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
 import type { BinanceOrderPreviewInput } from "@/lib/exchange/binance/binance-types";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const previewId = searchParams.get("previewId");
+    const latestDecisionLogId = searchParams.get("decisionLogId");
+
+    const preview = previewId
+      ? await getStoredPreview(previewId)
+      : await findPendingTestnetPreview(latestDecisionLogId);
+
+    if (!preview) {
+      return NextResponse.json(
+        { ok: false, error: "No active preview found" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ ok: true, preview });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Preview lookup failed";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {

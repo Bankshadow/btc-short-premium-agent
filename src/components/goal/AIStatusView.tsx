@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import AutopilotControls from "./AutopilotControls";
+import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
 import { useMissionSnapshot } from "./use-mission-snapshot";
@@ -16,7 +18,8 @@ const STATUS_COPY: Record<string, string> = {
 };
 
 export default function AIStatusView() {
-  const { snapshot: m, busy, error, refresh } = useMissionSnapshot();
+  const { snapshot: m, busy, error, degraded, warnings, refresh } =
+    useMissionSnapshot();
   const [engines, setEngines] = useState<CoreEngineRegistrySnapshot | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
@@ -45,6 +48,7 @@ export default function AIStatusView() {
       title="AI Status"
       subtitle="What the AI is doing now, last cycle results, and which background engines need you."
       activePath="/ai-status"
+      missionSnapshot={m}
       actions={
         <button
           type="button"
@@ -56,10 +60,37 @@ export default function AIStatusView() {
         </button>
       }
     >
-      {error && (
-        <p className="rounded-lg border border-rose-900/50 bg-rose-950/30 px-4 py-2 text-xs text-rose-200">
-          {error}
-        </p>
+      <GoalErrorBanner
+        error={error}
+        degraded={degraded}
+        warnings={warnings}
+        snapshot={m}
+      />
+
+      <AutopilotControls
+        automation={m.automation}
+        onChanged={() => void refreshAll()}
+      />
+
+      {m.pendingTestnetPreview && (
+        <section className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+          <p className="text-xs uppercase tracking-wide text-cyan-400/80">
+            Awaiting your confirmation
+          </p>
+          <p className="mt-1 font-mono text-sm text-zinc-100">
+            {m.pendingTestnetPreview.symbol} {m.pendingTestnetPreview.side} · $
+            {m.pendingTestnetPreview.notionalUsd}
+          </p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Testnet preview expires{" "}
+            {new Date(m.pendingTestnetPreview.expiresAt).toLocaleString()}.
+          </p>
+          {!m.pendingTestnetPreview.blocked && (
+            <Link href="/" className="mt-2 inline-block text-xs text-cyan-300 hover:underline">
+              Review and execute on Dashboard →
+            </Link>
+          )}
+        </section>
       )}
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">

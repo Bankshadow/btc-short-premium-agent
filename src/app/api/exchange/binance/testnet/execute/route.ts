@@ -4,6 +4,7 @@ import { evaluateRiskyActionGate } from "@/lib/anomaly-detection";
 import type { BinanceExecuteInput } from "@/lib/exchange/binance/binance-types";
 import { buildPolicyInput } from "@/lib/policy-engine";
 import { enforcePolicy } from "@/lib/policy-engine/enforce";
+import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { parseApiWorkspaceContext } from "@/lib/platform/api-context";
 import { NextResponse } from "next/server";
 
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
       operatorNote: body.operatorNote,
     });
 
+    if (result.ok) invalidateMissionSnapshotCache();
     return NextResponse.json(
       {
         ...result,

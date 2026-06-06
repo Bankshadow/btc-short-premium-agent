@@ -1,6 +1,7 @@
 import { runAutomationCycle } from "@/lib/automation-control-plane/scheduler";
 import { AUTOMATION_SAFETY_NOTICE } from "@/lib/automation-control-plane/config";
 import type { AutomationRunInput } from "@/lib/automation-control-plane/types";
+import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
       trigger: body.trigger ?? "manual",
     });
 
+    invalidateMissionSnapshotCache();
     return NextResponse.json({
       ok: result.status === "SUCCESS" || result.status === "SKIPPED",
       result,

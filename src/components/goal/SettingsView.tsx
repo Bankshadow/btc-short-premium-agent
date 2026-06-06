@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import AutopilotControls from "./AutopilotControls";
+import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -46,11 +48,25 @@ function loadSettings(): GoalSettings {
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<GoalSettings>(DEFAULT_SETTINGS);
-  const { snapshot: m, busy, error, refresh } = useMissionSnapshot();
+  const { snapshot: m, busy, error, degraded, warnings, refresh } =
+    useMissionSnapshot();
   const [saved, setSaved] = useState(false);
+  const [serverNotifySaved, setServerNotifySaved] = useState(false);
 
   useEffect(() => {
     setSettings(loadSettings());
+    void fetch("/api/goal/notification-settings")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok && json.prefs) {
+          setSettings((prev) => ({
+            ...prev,
+            notifyOnTrade: json.prefs.notifyOnTrade,
+            notifyOnBlocker: json.prefs.notifyOnBlocker,
+          }));
+        }
+      })
+      .catch(() => undefined);
   }, []);
 
   const update = useCallback(<K extends keyof GoalSettings>(key: K, value: GoalSettings[K]) => {
@@ -58,9 +74,23 @@ export default function SettingsView() {
     setSaved(false);
   }, []);
 
-  const save = useCallback(() => {
+  const save = useCallback(async () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     setSaved(true);
+    try {
+      const res = await fetch("/api/goal/notification-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notifyOnTrade: settings.notifyOnTrade,
+          notifyOnBlocker: settings.notifyOnBlocker,
+        }),
+      });
+      const json = await res.json();
+      setServerNotifySaved(res.ok && json.ok);
+    } catch {
+      setServerNotifySaved(false);
+    }
   }, [settings]);
 
   return (
@@ -68,6 +98,7 @@ export default function SettingsView() {
       title="Settings"
       subtitle="Configure your mission, visible environments, and risk limits. Live trading stays locked here."
       activePath="/settings"
+      missionSnapshot={m}
       actions={
         <>
           <button
@@ -79,7 +110,7 @@ export default function SettingsView() {
           </button>
           <button
             type="button"
-            onClick={save}
+            onClick={() => void save()}
             className="rounded-lg bg-emerald-700/90 px-3 py-2 text-xs font-semibold text-zinc-50 hover:bg-emerald-600"
           >
             {saved ? "Saved" : "Save"}
@@ -87,11 +118,18 @@ export default function SettingsView() {
         </>
       }
     >
-      {error && (
-        <p className="rounded-lg border border-rose-900/50 bg-rose-950/30 px-4 py-2 text-xs text-rose-200">
-          {error}
-        </p>
-      )}
+      <GoalErrorBanner
+        error={error}
+        degraded={degraded}
+        warnings={warnings}
+        snapshot={m}
+      />
+
+      <AutopilotControls
+        automation={m.automation}
+        onChanged={() => void refresh(true)}
+        compact
+      />
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Mission</h2>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -222,6 +260,19 @@ export default function SettingsView() {
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Notifications</h2>
+        <p className="mt-2 text-[11px] text-zinc-500">
+          Telegram:{" "}
+          <span
+            className={
+              m.notifications.telegramConfigured ? "text-emerald-300" : "text-amber-300"
+            }
+          >
+            {m.notifications.telegramConfigured ? "Configured on server" : "Not configured"}
+          </span>
+          {m.notifications.lastAlertAt && (
+            <> · Last alert {new Date(m.notifications.lastAlertAt).toLocaleString()}</>
+          )}
+        </p>
         <div className="mt-3 flex flex-col gap-1.5 text-xs text-zinc-400">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={settings.notifyOnTrade} onChange={(e) => update("notifyOnTrade", e.target.checked)} />
@@ -232,6 +283,9 @@ export default function SettingsView() {
             Notify me when AI is blocked or needs action
           </label>
         </div>
+        {serverNotifySaved && (
+          <p className="mt-2 text-[11px] text-emerald-400">Server notification prefs synced.</p>
+        )}
       </section>
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">

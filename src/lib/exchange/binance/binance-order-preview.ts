@@ -4,6 +4,7 @@ import { getCronDataDir } from "@/lib/cron/cron-config";
 import { loadBinanceConfig } from "./binance-config";
 import { getExchangeInfo, getMarkPrice } from "./binance-futures-testnet";
 import { validateOrderAgainstRiskGate } from "./binance-risk-gate";
+import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import type {
   BinanceOrderPreview,
   BinanceOrderPreviewInput,
@@ -57,6 +58,45 @@ export async function getStoredPreview(
   if (!preview) return null;
   if (Date.now() > Date.parse(preview.expiresAt)) return null;
   return preview;
+}
+
+const EXECUTED_PREVIEW_STATUSES = new Set([
+  "SUBMITTED",
+  "FILLED",
+  "CLOSING",
+  "CLOSED",
+]);
+
+/** Active preview awaiting human double-confirm (not yet executed). */
+export async function findPendingTestnetPreview(
+  latestDecisionLogId?: string | null,
+): Promise<BinanceOrderPreview | null> {
+  const cache = await loadPreviewCache();
+  const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+  const executedPreviewIds = new Set(
+    journal
+      .filter((j) => EXECUTED_PREVIEW_STATUSES.has(j.status))
+      .map((j) => j.previewId),
+  );
+
+  const candidates = Object.values(cache)
+    .filter((p) => Date.now() <= Date.parse(p.expiresAt))
+    .filter((p) => !executedPreviewIds.has(p.previewId));
+
+  if (candidates.length === 0) return null;
+
+  if (latestDecisionLogId) {
+    const linked = candidates.find(
+      (p) => p.decisionLogId === latestDecisionLogId,
+    );
+    if (linked) return linked;
+  }
+
+  return (
+    candidates.sort(
+      (a, b) => Date.parse(b.generatedAt) - Date.parse(a.generatedAt),
+    )[0] ?? null
+  );
 }
 
 export async function buildOrderPreview(

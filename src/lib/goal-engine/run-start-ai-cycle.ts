@@ -20,6 +20,7 @@ import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { AutopilotRunResult } from "@/lib/autopilot/types";
 import type { BinanceOrderPreview } from "@/lib/exchange/binance/binance-types";
+import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 
 export interface GoalStartAiCycleResult {
   ok: boolean;
@@ -86,6 +87,28 @@ export async function runGoalStartAiCycle(): Promise<GoalStartAiCycleResult> {
     } catch {
       testnetPreview = null;
     }
+  }
+
+  const verdictLabel =
+    analysis.tradingDesk?.weightedCommittee?.weightedVerdict ??
+    analysis.step5_verdict?.recommendation ??
+    saved.entry.finalVerdict ??
+    "—";
+
+  void emitMissionAlert({
+    kind: "cycle_complete",
+    title: "AI cycle complete",
+    body: `Verdict: ${String(verdictLabel).toUpperCase()} · desk run ${deskRun.runId.slice(0, 12)}…`,
+  }).catch(() => undefined);
+
+  if (String(verdictLabel).toUpperCase() === "TRADE") {
+    void emitMissionAlert({
+      kind: "trade_verdict",
+      title: "TRADE verdict — review required",
+      body: testnetPreview
+        ? `${testnetPreview.symbol} ${testnetPreview.side} preview ready · double confirm on Dashboard.`
+        : "No testnet preview created — check Binance connection.",
+    }).catch(() => undefined);
   }
 
   return {

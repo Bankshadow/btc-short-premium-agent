@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import TestnetTradeModal from "./TestnetTradeModal";
 import type { GoalTradeRow } from "@/lib/goal-engine/build-trade-list";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -22,12 +24,20 @@ function resultClass(result: GoalTradeRow["result"]): string {
 }
 
 export default function TradesView() {
-  const { snapshot: m, busy: missionBusy, refresh: refreshMission } = useMissionSnapshot();
+  const {
+    snapshot: m,
+    busy: missionBusy,
+    error: missionError,
+    degraded,
+    warnings,
+    refresh: refreshMission,
+  } = useMissionSnapshot();
   const [trades, setTrades] = useState<GoalTradeRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [env, setEnv] = useState<EnvFilter>("PRACTICE");
   const [state, setState] = useState<StateFilter>("ALL");
+  const [closeModalOpen, setCloseModalOpen] = useState(false);
 
   const refreshTrades = useCallback(async () => {
     setBusy(true);
@@ -73,6 +83,7 @@ export default function TradesView() {
       title="Trades"
       subtitle="Every trade the AI has taken, across practice and testnet. Live trades are labeled separately."
       activePath="/trades"
+      missionSnapshot={m}
       actions={
         <button
           type="button"
@@ -84,11 +95,12 @@ export default function TradesView() {
         </button>
       }
     >
-      {error && (
-        <p className="rounded-lg border border-rose-900/50 bg-rose-950/30 px-4 py-2 text-xs text-rose-200">
-          {error}
-        </p>
-      )}
+      <GoalErrorBanner
+        error={error ?? missionError}
+        degraded={degraded}
+        warnings={warnings}
+        snapshot={m}
+      />
 
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
@@ -117,6 +129,33 @@ export default function TradesView() {
           </p>
         </div>
       </div>
+
+      {m.currentPosition?.canCloseOnTestnet && (
+        <section className="rounded-xl border border-amber-900/40 bg-amber-950/20 p-4">
+          <p className="text-xs text-zinc-400">Open testnet position</p>
+          <p className="mt-1 font-mono text-sm text-zinc-100">{m.currentPosition.summary}</p>
+          <button
+            type="button"
+            onClick={() => setCloseModalOpen(true)}
+            className="mt-3 rounded-lg border border-amber-700/60 px-4 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-950/40"
+          >
+            Close position (double confirm)
+          </button>
+        </section>
+      )}
+
+      {m.pendingTestnetPreview && !m.pendingTestnetPreview.blocked && (
+        <section className="rounded-xl border border-cyan-900/40 bg-cyan-950/20 p-4">
+          <p className="text-xs text-zinc-400">Pending testnet preview</p>
+          <p className="mt-1 font-mono text-sm text-zinc-100">
+            {m.pendingTestnetPreview.symbol} {m.pendingTestnetPreview.side} · $
+            {m.pendingTestnetPreview.notionalUsd}
+          </p>
+          <Link href="/" className="mt-2 inline-block text-xs text-cyan-300 hover:underline">
+            Review on Dashboard →
+          </Link>
+        </section>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -196,6 +235,17 @@ export default function TradesView() {
           </div>
         )}
       </section>
+
+      <TestnetTradeModal
+        open={closeModalOpen}
+        mode="close"
+        position={m.currentPosition}
+        onClose={() => setCloseModalOpen(false)}
+        onSuccess={() => {
+          setCloseModalOpen(false);
+          void refresh();
+        }}
+      />
     </GoalShell>
   );
 }

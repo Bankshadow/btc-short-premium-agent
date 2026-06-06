@@ -2,19 +2,66 @@ import {
   buildGoalDashboardServerPayload,
   buildGoalTradeListServer,
 } from "@/lib/goal-engine/build-server-context";
+import { findPendingTestnetPreview } from "@/lib/exchange/binance";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { filterProductionEntries } from "@/lib/journal/production-filter";
+import { loadGoalNotificationPrefs } from "@/lib/mission-notifications/goal-notification-store";
 import { buildMissionFlowSnapshot } from "./build-mission-flow-snapshot";
 import { emptyMissionFlowSnapshot } from "./empty-snapshot";
-import type { MissionFlowSnapshot } from "./types";
+import {
+  clearMissionSnapshotCache,
+  readMissionSnapshotCache,
+  writeMissionSnapshotCache,
+} from "./snapshot-cache";
+import { toMissionFlowPendingPreview } from "./to-pending-preview";
+import type { MissionFlowBuildResult } from "./types";
 
-export async function buildMissionFlowServerSnapshot(): Promise<MissionFlowSnapshot> {
+export interface BuildMissionSnapshotOptions {
+  fresh?: boolean;
+}
+
+export async function buildMissionFlowServerSnapshot(
+  options: BuildMissionSnapshotOptions = {},
+): Promise<MissionFlowBuildResult> {
+  if (!options.fresh) {
+    const cached = readMissionSnapshotCache();
+    if (cached) {
+      return {
+        snapshot: cached.snapshot,
+        degraded: false,
+        warnings: [],
+        cached: true,
+      };
+    }
+  }
+
+  const warnings: string[] = [];
+
   try {
-    const [payload, trades, entriesRaw] = await Promise.all([
-      buildGoalDashboardServerPayload(),
+    const [payload, trades, entriesRaw, notificationPrefs] = await Promise.all([
+      buildGoalDashboardServerPayload().catch((err) => {
+        warnings.push(
+          err instanceof Error ? err.message : "Goal payload failed",
+        );
+        return null;
+      }),
       buildGoalTradeListServer().catch(() => []),
       loadServerAnalysisJournal().catch(() => []),
+      loadGoalNotificationPrefs().catch(() => ({
+        notifyOnTrade: true,
+        notifyOnBlocker: true,
+        lastAlertAt: null,
+      })),
     ]);
+
+    if (!payload) {
+      return {
+        snapshot: emptyMissionFlowSnapshot(),
+        degraded: true,
+        warnings,
+        cached: false,
+      };
+    }
 
     const entries = filterProductionEntries(entriesRaw);
     const latestDecisionLogId = entries[0]?.id ?? null;
@@ -22,8 +69,41 @@ export async function buildMissionFlowServerSnapshot(): Promise<MissionFlowSnaps
       (t) => t.result === "OPEN" && t.environment !== "LIVE",
     ).length;
 
-    return buildMissionFlowSnapshot(payload, latestDecisionLogId, openTrades);
-  } catch {
-    return emptyMissionFlowSnapshot();
+    const pendingRaw = await findPendingTestnetPreview(latestDecisionLogId).catch(
+      () => null,
+    );
+    const pendingTestnetPreview = pendingRaw
+      ? toMissionFlowPendingPreview(pendingRaw)
+      : null;
+
+    const snapshot = buildMissionFlowSnapshot(
+      payload,
+      latestDecisionLogId,
+      openTrades,
+      pendingTestnetPreview,
+      notificationPrefs,
+    );
+
+    writeMissionSnapshotCache(snapshot);
+    return {
+      snapshot,
+      degraded: warnings.length > 0,
+      warnings,
+      cached: false,
+    };
+  } catch (error) {
+    warnings.push(
+      error instanceof Error ? error.message : "Mission snapshot build failed",
+    );
+    return {
+      snapshot: emptyMissionFlowSnapshot(),
+      degraded: true,
+      warnings,
+      cached: false,
+    };
   }
+}
+
+export function invalidateMissionSnapshotCache(): void {
+  clearMissionSnapshotCache();
 }

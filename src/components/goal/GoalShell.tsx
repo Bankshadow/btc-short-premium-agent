@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
+import TrustMeter from "./TrustMeter";
+import type { MissionFlowSnapshot } from "@/lib/mission-flow/types";
 
 export interface GoalNavLink {
   href: string;
@@ -53,12 +55,14 @@ export default function GoalShell({
   subtitle,
   activePath,
   actions,
+  missionSnapshot,
   children,
 }: {
   title: string;
   subtitle: string;
   activePath: string;
   actions?: ReactNode;
+  missionSnapshot?: MissionFlowSnapshot | null;
   children: ReactNode;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -119,6 +123,10 @@ export default function GoalShell({
           </div>
         )}
       </header>
+
+      {missionSnapshot && (
+        <TrustMeter trust={missionSnapshot.trust} compact={false} />
+      )}
 
       {children}
     </div>

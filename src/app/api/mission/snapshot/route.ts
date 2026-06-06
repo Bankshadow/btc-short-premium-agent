@@ -4,12 +4,17 @@ import { buildMissionFlowServerSnapshot } from "@/lib/mission-flow/build-server-
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const snapshot = await buildMissionFlowServerSnapshot();
+    const { searchParams } = new URL(request.url);
+    const fresh = searchParams.get("fresh") === "1";
+    const result = await buildMissionFlowServerSnapshot({ fresh });
     return NextResponse.json({
       ok: true,
-      snapshot,
+      snapshot: result.snapshot,
+      degraded: result.degraded,
+      warnings: result.warnings,
+      cached: result.cached,
       safety: {
         cannotEnableLive: true,
         cannotAutoExecuteLive: true,

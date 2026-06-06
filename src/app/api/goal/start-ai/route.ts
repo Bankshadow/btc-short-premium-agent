@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { runGoalStartAiCycle } from "@/lib/goal-engine/run-start-ai-cycle";
-import { buildMissionFlowServerSnapshot } from "@/lib/mission-flow/build-server-snapshot";
+import {
+  buildMissionFlowServerSnapshot,
+  invalidateMissionSnapshotCache,
+} from "@/lib/mission-flow/build-server-snapshot";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -9,7 +12,8 @@ export const maxDuration = 60;
 export async function POST() {
   try {
     const cycle = await runGoalStartAiCycle();
-    const snapshot = await buildMissionFlowServerSnapshot();
+    invalidateMissionSnapshotCache();
+    const { snapshot } = await buildMissionFlowServerSnapshot({ fresh: true });
 
     return NextResponse.json({
       ok: true,
@@ -21,6 +25,16 @@ export async function POST() {
         decisionLogId: cycle.journalEntry.id,
         aiStatus: cycle.autopilot.status,
         testnetPreviewId: cycle.testnetPreview?.previewId ?? null,
+        testnetPreview: cycle.testnetPreview
+          ? {
+              previewId: cycle.testnetPreview.previewId,
+              symbol: cycle.testnetPreview.symbol,
+              side: cycle.testnetPreview.side,
+              notionalUsd: cycle.testnetPreview.notionalUsd,
+              blocked: cycle.testnetPreview.blocked,
+              expiresAt: cycle.testnetPreview.expiresAt,
+            }
+          : null,
         testnetConnected: cycle.testnetConnected,
       },
       safety: {

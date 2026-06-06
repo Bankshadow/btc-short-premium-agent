@@ -1,5 +1,6 @@
 import { pauseAutomation } from "@/lib/automation-control-plane/scheduler";
 import { patchAutomationSettings } from "@/lib/automation-control-plane/state-store";
+import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
       workspaceId,
     );
 
+    invalidateMissionSnapshotCache();
     return NextResponse.json({ ok: true, settings });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Pause failed";
