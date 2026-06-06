@@ -1,2 +1,3 @@
 .tools/
 .proxy-secret.txt
+.cloudflare-proxy.env

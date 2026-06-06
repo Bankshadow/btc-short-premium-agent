@@ -36,7 +36,11 @@ Write-Host "=== Fly.io Binance Testnet Proxy ===" -ForegroundColor Cyan
 Write-Host "Region: sin (Singapore)"
 Write-Host ""
 
-& $flyCmd auth whoami 2>&1 | Out-Host
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$whoami = & $flyCmd auth whoami 2>&1
+$ErrorActionPreference = $prevEap
+$whoami | Out-Host
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Not logged in. Run: fly auth login" -ForegroundColor Yellow
     & $flyCmd auth login
@@ -66,7 +70,17 @@ Write-Host "Setting Fly secret …" -ForegroundColor Green
 & $flyCmd secrets set "BINANCE_PROXY_SECRET=$($env:BINANCE_PROXY_SECRET)" --app $appName 2>&1 | Out-Host
 
 Write-Host "Deploying …" -ForegroundColor Green
+$ErrorActionPreference = "Continue"
 & $flyCmd deploy --app $appName --ha=false 2>&1 | Out-Host
+$deployExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+if ($deployExit -ne 0) {
+    Write-Host ""
+    Write-Host "Deploy failed (exit $deployExit)." -ForegroundColor Red
+    Write-Host "If you see 'trial has ended', add a card at https://fly.io/dashboard/billing then re-run this script." -ForegroundColor Yellow
+    Pop-Location
+    exit $deployExit
+}
 
 $status = & $flyCmd status --app $appName 2>&1
 $hostname = ($status | Select-String -Pattern "Hostname\s*=\s*(\S+)" | ForEach-Object { $_.Matches[0].Groups[1].Value })

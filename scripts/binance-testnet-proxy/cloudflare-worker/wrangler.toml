@@ -1,0 +1,13 @@
+name = "btc-binance-testnet-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Free workers.dev URL: https://btc-binance-testnet-proxy.<account>.workers.dev
+workers_dev = true
+
+# Run worker compute closer to Binance testnet API (helps avoid HTTP 451).
+[placement]
+mode = "smart"
+
+[observability]
+enabled = false
