@@ -25,6 +25,8 @@ import { assertAutomationJobSafety } from "./safety";
 import { buildPolicyInput, evaluatePolicy } from "@/lib/policy-engine";
 import { getProjectStrategistStatus, runProjectStrategist } from "@/lib/project-strategist";
 import { runBinanceTestnetAutoExecute } from "@/lib/exchange/binance/binance-auto-executor";
+import { runBinanceTestnetAutoMonitor } from "@/lib/exchange/binance/binance-auto-monitor";
+import { isBinanceTestnetAutoExecuteEnabled } from "@/lib/exchange/binance/binance-config";
 import type { AutomationJob, AutomationJobType, AutomationRunInput } from "./types";
 import type { AutomationServerContext } from "./server-context";
 
@@ -218,7 +220,19 @@ export async function runAutomationJob(
           riskProfile,
           latestAnalysis: ctx.analyze,
         });
-        return { summary: `${ls.label} · samples ${ls.strategySampleSize}` };
+        let autoLearned = 0;
+        if (isBinanceTestnetAutoExecuteEnabled()) {
+          const { autoMarkPendingLearningRecordsServer } = await import(
+            "@/lib/testnet-monitor/learning-records-server"
+          );
+          const result = await autoMarkPendingLearningRecordsServer();
+          autoLearned = result.marked;
+        }
+        const learnSuffix =
+          autoLearned > 0 ? ` · auto-learned ${autoLearned}` : "";
+        return {
+          summary: `${ls.label} · samples ${ls.strategySampleSize}${learnSuffix}`,
+        };
       });
 
     case "PAPER_MONITOR":
@@ -335,6 +349,14 @@ export async function runAutomationJob(
               ? `Digest via ${delivered.join(", ")}`
               : "Digest logged (no external channel)",
         };
+      });
+
+    case "BINANCE_TESTNET_MONITOR":
+      return runTimed(jobType, ctx, async () => {
+        const monitor = await runBinanceTestnetAutoMonitor({
+          analysis: ctx.analyze,
+        });
+        return { summary: `${monitor.outcome} · ${monitor.summary}` };
       });
 
     case "BINANCE_TESTNET_AUTOEXECUTE":

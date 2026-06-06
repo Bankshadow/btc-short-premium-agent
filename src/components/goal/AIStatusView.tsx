@@ -5,6 +5,7 @@ import Link from "next/link";
 import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import MissionAutopilotHero from "./MissionAutopilotHero";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -22,6 +23,7 @@ export default function AIStatusView() {
     useMissionSnapshot();
   const [engines, setEngines] = useState<CoreEngineRegistrySnapshot | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [runningCycle, setRunningCycle] = useState(false);
 
   const loadEngines = useCallback(async () => {
     try {
@@ -43,10 +45,26 @@ export default function AIStatusView() {
     await Promise.all([refresh(), loadEngines()]);
   }, [refresh, loadEngines]);
 
+  const runAutopilotCycle = useCallback(async () => {
+    setRunningCycle(true);
+    try {
+      const res = await fetch("/api/automation/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "manual", force: true }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Run failed");
+      await refreshAll();
+    } finally {
+      setRunningCycle(false);
+    }
+  }, [refreshAll]);
+
   return (
     <GoalShell
       title="AI Status"
-      subtitle="What the AI is doing now, last cycle results, and which background engines need you."
+      subtitle="Autopilot status, engine health, and what runs every 15 minutes in the background."
       activePath="/ai-status"
       missionSnapshot={m}
       actions={
@@ -65,6 +83,12 @@ export default function AIStatusView() {
         degraded={degraded}
         warnings={warnings}
         snapshot={m}
+      />
+
+      <MissionAutopilotHero
+        snapshot={m}
+        running={runningCycle}
+        onRunNow={() => void runAutopilotCycle()}
       />
 
       <AutopilotControls
@@ -207,7 +231,7 @@ export default function AIStatusView() {
         <p className="text-xs text-zinc-500">Next recommendation</p>
         <p className="mt-1 text-sm text-emerald-300">{m.nextRecommendation}</p>
         <Link href="/" className="mt-2 inline-block text-xs text-zinc-400 hover:underline">
-          Start AI from Dashboard →
+          Mission autopilot on Dashboard →
         </Link>
       </section>
 

@@ -11,10 +11,12 @@ function usd(n: number): string {
 export default function LearningReviewPanel({
   items,
   pendingCount,
+  autoLearnEnabled = false,
   onReviewed,
 }: {
   items: MissionFlowLearningItem[];
   pendingCount: number;
+  autoLearnEnabled?: boolean;
   onReviewed: () => void | Promise<void>;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -50,7 +52,9 @@ export default function LearningReviewPanel({
         Learning queue
       </p>
       <p className="mt-1 text-sm text-zinc-200">
-        {pendingCount} closed trade(s) need review so AI can learn.
+        {autoLearnEnabled
+          ? `${pendingCount} closed trade(s) queued — autopilot ingests lessons on the next cycle.`
+          : `${pendingCount} closed trade(s) need review so AI can learn.`}
       </p>
 
       {items.length > 0 && (

@@ -66,6 +66,15 @@ describe("Binance Futures Testnet", () => {
     assert.equal(config.leverage, 1);
   });
 
+  it("ceil-rounds qty to satisfy Binance min notional", async () => {
+    const { resolveEstimatedQty } = await import("./binance-order-preview");
+    const markPrice = 60_804.7;
+    const qty = resolveEstimatedQty(50, markPrice, 4, 55);
+    const effective = Number(qty) * markPrice;
+    assert.ok(effective >= 50, `effective notional ${effective} should be >= 50`);
+    assert.ok(effective <= 55, `effective notional ${effective} should be <= 55`);
+  });
+
   it("picks reduce-only close side from position sign", () => {
     assert.equal(closeSideForPosition(0.5), "SELL");
     assert.equal(closeSideForPosition(-0.5), "BUY");

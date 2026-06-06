@@ -64,7 +64,7 @@ export function loadBinanceConfig(): BinanceConfig {
       process.env.BINANCE_ALLOWED_SYMBOLS,
       ["BTCUSDT", "SOLUSDT"],
     ),
-    maxNotionalUsd: envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 10),
+    maxNotionalUsd: envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 55),
     maxTradesPerDay: envNumber("BINANCE_TESTNET_MAX_TRADES_PER_DAY", 5),
     maxOpenPositions: envNumber("BINANCE_TESTNET_MAX_OPEN_POSITIONS", 1),
     requireDoubleConfirm: envBool("BINANCE_REQUIRE_DOUBLE_CONFIRM", true),

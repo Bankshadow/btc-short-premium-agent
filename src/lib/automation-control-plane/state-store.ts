@@ -60,6 +60,11 @@ export async function loadAutomationState(
   if (!state.settings) state.settings = { ...DEFAULT_AUTOMATION_SETTINGS };
   if (!state.settings.moduleToggles) {
     state.settings.moduleToggles = { ...DEFAULT_AUTOMATION_SETTINGS.moduleToggles };
+  } else {
+    state.settings.moduleToggles = {
+      ...DEFAULT_AUTOMATION_SETTINGS.moduleToggles,
+      ...state.settings.moduleToggles,
+    };
   }
   state.workspaceId = workspaceId;
   return state;

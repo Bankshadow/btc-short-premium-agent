@@ -353,11 +353,11 @@ function buildAiActivity(
   };
 
   const nextActionMap: Record<AIActivityStatus, string> = {
-    IDLE: "Press Start AI to begin market reviews.",
-    ANALYZING: "Decide whether to trade once the review finishes.",
-    MONITORING: "Open a testnet/paper trade when a good setup appears.",
-    IN_TRADE: "Watch the position and close when the target or stop is hit.",
-    WAITING: "Resume AI when you are ready.",
+    IDLE: "Autopilot will analyze on the next scheduled cycle.",
+    ANALYZING: "Market review in progress — trade decision follows verdict.",
+    MONITORING: "Watching for the next TRADE setup on testnet.",
+    IN_TRADE: "Managing open position — close on target, stop, or autopilot rule.",
+    WAITING: "Resume autopilot when you are ready.",
     BLOCKED: "Clear the safety blocker before AI can continue.",
   };
 

@@ -21,10 +21,36 @@ function newPreviewId(): string {
   return `bn-prev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function roundQty(qty: number, precision: number): string {
+/** Binance USD-M testnet minimum notional (observed on demo-fapi). */
+const BINANCE_MIN_NOTIONAL_USD = 50;
+
+function roundQtyCeil(qty: number, precision: number): string {
   const factor = 10 ** precision;
-  const rounded = Math.floor(qty * factor) / factor;
+  const rounded = Math.ceil(qty * factor) / factor;
   return rounded.toFixed(precision);
+}
+
+export function resolveEstimatedQty(
+  notionalUsd: number,
+  markPrice: number,
+  qtyPrecision: number,
+  maxNotionalUsd: number,
+): string {
+  const step = 1 / 10 ** qtyPrecision;
+  let qty = notionalUsd / markPrice;
+  let estimated = roundQtyCeil(qty, qtyPrecision);
+  let effective = Number(estimated) * markPrice;
+
+  while (
+    effective < BINANCE_MIN_NOTIONAL_USD &&
+    effective <= maxNotionalUsd &&
+    Number(estimated) > 0
+  ) {
+    estimated = (Number(estimated) + step).toFixed(qtyPrecision);
+    effective = Number(estimated) * markPrice;
+  }
+
+  return estimated;
 }
 
 async function loadPreviewCache(): Promise<Record<string, BinanceOrderPreview>> {
@@ -120,7 +146,12 @@ export async function buildOrderPreview(
   }
 
   if (markPrice && markPrice > 0) {
-    estimatedQty = roundQty(input.notionalUsd / markPrice, qtyPrecision);
+    estimatedQty = resolveEstimatedQty(
+      input.notionalUsd,
+      markPrice,
+      qtyPrecision,
+      config.maxNotionalUsd,
+    );
   }
 
   const previewId = newPreviewId();

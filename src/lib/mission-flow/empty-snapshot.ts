@@ -29,8 +29,8 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
     aiStatus: {
       state: "IDLE",
       lastAction: "No AI cycle has run yet.",
-      nextAction: "Run first AI cycle or connect Binance Testnet.",
-      humanActionRequired: true,
+      nextAction: "Autopilot starts when testnet connects — no manual Start AI required.",
+      humanActionRequired: false,
     },
     binanceTestnet: {
       status: "DISCONNECTED",
@@ -52,7 +52,7 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
       minRequired: GOAL_MIN_TRADES_FOR_TRUST,
       ready: false,
     },
-    nextRecommendation: "Run first AI cycle or connect Binance Testnet.",
+    nextRecommendation: "Connect Binance Testnet — autopilot will analyze, trade, and learn on schedule.",
     scopeLabel: "Paper + Testnet (practice money)",
     enginesNeedingAttention: 0,
     learnedTrades: 0,
@@ -66,6 +66,8 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
       nextRunAt: null,
       lastRunStatus: null,
       lastTrigger: null,
+      autoExecuteEnabled: false,
+      autoLearnEnabled: false,
     },
     notifications: {
       telegramConfigured: false,

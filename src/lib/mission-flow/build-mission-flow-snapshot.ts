@@ -50,17 +50,24 @@ function buildNextRecommendation(
   if (pendingTestnetPreview && !pendingTestnetPreview.blocked) {
     return `Review testnet order: ${pendingTestnetPreview.symbol} ${pendingTestnetPreview.side} · double confirm required.`;
   }
+  const autoExec = Boolean(binance.autoExecuteEnabled);
   if (mission.totalTrades === 0 && !goal.lastCycleAt) {
-    return "Run first AI cycle to start market reviews.";
+    return autoExec
+      ? "Autopilot will run the first cycle on schedule — or tap Run cycle now."
+      : "Autopilot analyzes every 15 min — enable auto-execute for hands-off testnet trades.";
   }
   if (mission.totalTrades === 0 && goal.lastCycleAt) {
-    return "AI cycle ran but no trades yet. Wait for a TRADE verdict or create a testnet preview.";
+    return autoExec
+      ? "Autopilot is running — waiting for a TRADE setup on testnet."
+      : "Cycle complete — waiting for TRADE verdict (manual confirm) or enable auto-execute.";
   }
   if (!mission.trustReady) {
     return `${mission.totalTrades} / ${mission.minTradesForTrust} completed trades — keep AI running on testnet.`;
   }
   if (mission.pendingLearningReview > 0) {
-    return `Review ${mission.pendingLearningReview} closed trade(s) so AI can learn.`;
+    return autoExec
+      ? `${mission.pendingLearningReview} trade(s) queued for learning — autopilot will ingest on next cycle.`
+      : `Review ${mission.pendingLearningReview} closed trade(s) so AI can learn.`;
   }
   if (goal.risk.blocker) {
     return `Clear blocker: ${goal.risk.blocker}`;
@@ -104,7 +111,12 @@ export function buildMissionFlowSnapshot(
       }
     : null;
 
-  const hasCycle = Boolean(goal.lastCycleAt || mission.lastDeskRunId);
+  const hasCycle = Boolean(
+    goal.lastCycleAt ||
+      mission.lastDeskRunId ||
+      automation?.state.lastSuccessfulRunAt ||
+      automation?.state.lastRun?.completedAt,
+  );
 
   return {
     startCapital: mission.startCapital,
@@ -126,10 +138,10 @@ export function buildMissionFlowSnapshot(
     currentPosition,
     pendingTestnetPreview,
     aiStatus: {
-      state: hasCycle ? mission.aiStatus : "IDLE",
+      state: hasCycle ? mission.aiStatus : "MONITORING",
       lastAction: hasCycle
         ? goal.aiActivity.lastAction
-        : "No AI cycle has run yet.",
+        : "Autopilot scheduled — first cycle starting soon.",
       nextAction:
         pendingTestnetPreview && !pendingTestnetPreview.blocked
           ? `Double-confirm testnet ${pendingTestnetPreview.symbol} ${pendingTestnetPreview.side} order.`
@@ -182,6 +194,8 @@ export function buildMissionFlowSnapshot(
       nextRunAt: automation?.state.nextRunAt ?? settings?.nextRunAt ?? null,
       lastRunStatus: lastRun?.status ?? null,
       lastTrigger: lastRun?.trigger ?? null,
+      autoExecuteEnabled: Boolean(binance.autoExecuteEnabled),
+      autoLearnEnabled: Boolean(binance.autoExecuteEnabled),
     },
     notifications: {
       telegramConfigured: payload.telegramConfigured,

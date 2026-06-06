@@ -26,6 +26,7 @@ export const DEFAULT_MODULE_TOGGLES: AutomationModuleToggles = {
   ACTION_QUEUE_REFRESH: true,
   COMMAND_CENTER_REFRESH: true,
   PROJECT_STRATEGIST_REVIEW: true,
+  BINANCE_TESTNET_MONITOR: true,
   BINANCE_TESTNET_AUTOEXECUTE: true,
 };
 
@@ -41,6 +42,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
 export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
   "MARKET_SNAPSHOT",
   "DESK_ANALYZE",
+  "BINANCE_TESTNET_MONITOR",
   "BINANCE_TESTNET_AUTOEXECUTE",
   "PAPER_MONITOR",
   "PORTFOLIO_SNAPSHOT",
@@ -63,6 +65,7 @@ export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
   ACTION_QUEUE_REFRESH: "Action queue refresh",
   COMMAND_CENTER_REFRESH: "Command center refresh",
   PROJECT_STRATEGIST_REVIEW: "Project strategist review",
+  BINANCE_TESTNET_MONITOR: "Binance testnet monitor & auto-close",
   BINANCE_TESTNET_AUTOEXECUTE: "Binance testnet auto-execute",
 };
 

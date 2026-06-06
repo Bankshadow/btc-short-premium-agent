@@ -91,6 +91,18 @@ export default function AutopilotControls({
 
       <dl className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
         <div>
+          <dt className="text-zinc-500">Auto-execute</dt>
+          <dd className={automation.autoExecuteEnabled ? "text-emerald-300" : "text-amber-300"}>
+            {automation.autoExecuteEnabled ? "Testnet trades automatic" : "Manual confirm required"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Auto-learn</dt>
+          <dd className={automation.autoLearnEnabled ? "text-emerald-300" : "text-zinc-300"}>
+            {automation.autoLearnEnabled ? "On" : "Manual review"}
+          </dd>
+        </div>
+        <div>
           <dt className="text-zinc-500">Last run</dt>
           <dd>
             {automation.lastRunAt

@@ -198,6 +198,30 @@ export async function markLearningRecordLearnedServer(
   });
 }
 
+/** Autopilot path — ingest closed trades without operator clicking Mark learned. */
+export async function autoMarkPendingLearningRecordsServer(): Promise<{
+  marked: number;
+  ids: string[];
+}> {
+  const records = await loadLearningRecordsServer();
+  const pending = records.filter((r) => r.status === "PENDING_REVIEW");
+  if (pending.length === 0) return { marked: 0, ids: [] };
+
+  const ids: string[] = [];
+  const next = records.map((record) => {
+    if (record.status !== "PENDING_REVIEW") return record;
+    ids.push(record.learningRecordId);
+    return {
+      ...record,
+      status: "LEARNED" as const,
+      includeInLearning: true,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  await writeRecords(next);
+  return { marked: ids.length, ids };
+}
+
 export async function excludeLearningRecordServer(
   learningRecordId: string,
 ): Promise<TestnetLearningRecord | null> {

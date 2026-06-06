@@ -5,6 +5,7 @@ import Link from "next/link";
 import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import MissionModePanel from "./MissionModePanel";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
 const SETTINGS_KEY = "btc-desk:goal-settings";
@@ -96,7 +97,7 @@ export default function SettingsView() {
   return (
     <GoalShell
       title="Settings"
-      subtitle="Configure your mission, visible environments, and risk limits. Live trading stays locked here."
+      subtitle="Mission autopilot, environments, and risk limits. Live trading stays locked."
       activePath="/settings"
       missionSnapshot={m}
       actions={
@@ -124,6 +125,8 @@ export default function SettingsView() {
         warnings={warnings}
         snapshot={m}
       />
+
+      <MissionModePanel snapshot={m} />
 
       <AutopilotControls
         automation={m.automation}

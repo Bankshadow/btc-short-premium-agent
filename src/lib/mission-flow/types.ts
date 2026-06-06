@@ -39,6 +39,10 @@ export interface MissionFlowAutomation {
   nextRunAt: string | null;
   lastRunStatus: string | null;
   lastTrigger: string | null;
+  /** Server env BINANCE_TESTNET_AUTOEXECUTE_ENABLED — trades without UI confirm. */
+  autoExecuteEnabled: boolean;
+  /** Closed trades auto-marked learned during automation cycles. */
+  autoLearnEnabled: boolean;
 }
 
 export interface MissionFlowNotifications {

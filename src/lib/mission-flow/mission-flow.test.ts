@@ -84,7 +84,18 @@ test("mission flow snapshot includes automation defaults", () => {
   const flow = buildMissionFlowSnapshot(minimalPayload(), null, 0);
   assert.equal(flow.automation.enabled, true);
   assert.equal(flow.automation.intervalMinutes, 15);
+  assert.equal(flow.automation.autoExecuteEnabled, false);
+  assert.equal(flow.automation.autoLearnEnabled, false);
   assert.equal(flow.learningPending.length, 0);
+});
+
+test("mission flow snapshot reflects auto-execute and autopilot-first copy", () => {
+  const payload = minimalPayload();
+  payload.binance.autoExecuteEnabled = true;
+  const flow = buildMissionFlowSnapshot(payload, null, 0);
+  assert.equal(flow.automation.autoExecuteEnabled, true);
+  assert.equal(flow.automation.autoLearnEnabled, true);
+  assert.ok(flow.nextRecommendation.includes("Autopilot"));
 });
 
 test("mission flow snapshot surfaces pending testnet preview", () => {

@@ -17,6 +17,7 @@ export type AutomationJobType =
   | "ACTION_QUEUE_REFRESH"
   | "COMMAND_CENTER_REFRESH"
   | "PROJECT_STRATEGIST_REVIEW"
+  | "BINANCE_TESTNET_MONITOR"
   | "BINANCE_TESTNET_AUTOEXECUTE";
 
 export type AutomationJobStatus =
@@ -53,7 +54,7 @@ export interface AutomationRun {
   runId: string;
   workspaceId: string;
   status: AutomationRunStatus;
-  trigger: "manual" | "interval" | "cron" | "retry" | "client";
+  trigger: "manual" | "interval" | "cron" | "retry" | "client" | "bootstrap";
   idempotencyKey: string;
   startedAt: string;
   completedAt: string | null;
@@ -80,6 +81,7 @@ export interface AutomationModuleToggles {
   ACTION_QUEUE_REFRESH: boolean;
   COMMAND_CENTER_REFRESH: boolean;
   PROJECT_STRATEGIST_REVIEW: boolean;
+  BINANCE_TESTNET_MONITOR: boolean;
   BINANCE_TESTNET_AUTOEXECUTE: boolean;
 }
 

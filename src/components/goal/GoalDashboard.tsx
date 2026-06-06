@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
 import LearningReviewPanel from "./LearningReviewPanel";
+import MissionAutopilotHero from "./MissionAutopilotHero";
 import TestnetTradeModal from "./TestnetTradeModal";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -61,66 +62,73 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 export default function GoalDashboard() {
   const { snapshot: m, busy, error, degraded, warnings, refresh, setSnapshot } =
     useMissionSnapshot();
-  const [starting, setStarting] = useState(false);
-  const [startMessage, setStartMessage] = useState<string | null>(null);
+  const [runningCycle, setRunningCycle] = useState(false);
+  const [cycleMessage, setCycleMessage] = useState<string | null>(null);
+  const bootstrapAttempted = useRef(false);
   const [tradeModal, setTradeModal] = useState<{
     open: boolean;
     mode: "execute" | "close";
   }>({ open: false, mode: "execute" });
 
-  const startAi = useCallback(async () => {
-    setStarting(true);
-    setStartMessage(null);
-    try {
-      const res = await fetch("/api/goal/start-ai", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Start AI failed");
-      if (json.snapshot) setSnapshot(json.snapshot);
-      else await refresh();
-      const verdict = json.cycle?.verdict ?? m.lastVerdict ?? "—";
-      const preview = json.cycle?.testnetPreviewId;
-      if (preview) setTradeModal({ open: true, mode: "execute" });
-      setStartMessage(
-        preview
-          ? `AI cycle complete · verdict ${verdict} · testnet preview ready (double confirm required).`
-          : json.cycle?.testnetConnected
-            ? `AI cycle complete · verdict ${verdict}. Next: create testnet preview if TRADE.`
-            : `AI cycle complete · verdict ${verdict}. Next: connect Binance Testnet.`,
-      );
-    } catch (e) {
-      setStartMessage(e instanceof Error ? e.message : "Start AI failed");
-    } finally {
-      setStarting(false);
-    }
-  }, [m.lastVerdict, refresh, setSnapshot]);
+  const runAutopilotCycle = useCallback(
+    async (trigger: "manual" | "bootstrap" = "manual") => {
+      setRunningCycle(true);
+      setCycleMessage(null);
+      try {
+        const res = await fetch("/api/automation/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trigger, force: true }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.ok) throw new Error(json.error ?? "Autopilot cycle failed");
+        await refresh(true);
+        setCycleMessage(
+          trigger === "bootstrap"
+            ? "First autopilot cycle started — AI will analyze, trade, and learn on schedule."
+            : `Cycle ${json.result?.status ?? "complete"}.`,
+        );
+      } catch (e) {
+        setCycleMessage(e instanceof Error ? e.message : "Autopilot cycle failed");
+      } finally {
+        setRunningCycle(false);
+      }
+    },
+    [refresh],
+  );
+
+  useEffect(() => {
+    if (bootstrapAttempted.current) return;
+    if (m.lastCycleAt) return;
+    if (m.binanceTestnet.status !== "CONNECTED") return;
+    if (!m.automation.enabled || m.automation.paused) return;
+    bootstrapAttempted.current = true;
+    void runAutopilotCycle("bootstrap");
+  }, [
+    m.automation.enabled,
+    m.automation.paused,
+    m.binanceTestnet.status,
+    m.lastCycleAt,
+    runAutopilotCycle,
+  ]);
 
   const hasData = m.totalTrades > 0 || Boolean(m.lastCycleAt);
 
   return (
     <GoalShell
       title="AI Profit Mission"
-      subtitle="Track progress from $1,000 to $10,000. Everything else runs in the background."
+      subtitle="Autopilot analyzes, trades testnet, and learns — $1,000 → $10,000 mission."
       activePath="/"
       missionSnapshot={m}
       actions={
-        <>
-          <button
-            type="button"
-            disabled={starting || busy}
-            onClick={() => void startAi()}
-            className="rounded-lg bg-emerald-700/90 px-4 py-2 text-xs font-semibold text-zinc-50 hover:bg-emerald-600 disabled:opacity-50"
-          >
-            {starting ? "Running AI…" : "Start AI"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void refresh()}
-            className="rounded-lg border border-zinc-800 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
-          >
-            {busy ? "..." : "Refresh"}
-          </button>
-        </>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void refresh()}
+          className="rounded-lg border border-zinc-800 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 disabled:opacity-50"
+        >
+          {busy ? "..." : "Refresh"}
+        </button>
       }
     >
       <GoalErrorBanner
@@ -130,15 +138,22 @@ export default function GoalDashboard() {
         snapshot={m}
       />
 
+      <MissionAutopilotHero
+        snapshot={m}
+        running={runningCycle}
+        onRunNow={() => void runAutopilotCycle("manual")}
+      />
+
       <LearningReviewPanel
         items={m.learningPending}
         pendingCount={m.pendingLearningReview}
+        autoLearnEnabled={m.automation.autoLearnEnabled}
         onReviewed={() => void refresh(true)}
       />
 
-      {startMessage && (
+      {cycleMessage && (
         <p className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-2 text-xs text-emerald-200">
-          {startMessage}
+          {cycleMessage}
         </p>
       )}
 
@@ -338,7 +353,10 @@ export default function GoalDashboard() {
       </section>
 
       <p className="text-center text-[10px] text-zinc-600">
-        Practice money only. Live trading stays locked. Testnet orders require double confirmation.
+        Practice money only. Live trading stays locked.
+        {m.automation.autoExecuteEnabled
+          ? " Testnet trades run automatically when autopilot sees TRADE."
+          : " Manual testnet orders still need double confirmation."}
       </p>
 
       <TestnetTradeModal
