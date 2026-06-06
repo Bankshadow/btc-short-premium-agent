@@ -68,6 +68,12 @@ export interface TradingDeskOutput {
   riskBudget?: import("@/lib/risk-budget-optimizer/types").RiskBudgetResult;
   debate: AgentDebateRow[];
   disclaimer: string;
+  /** MVP 69 — approved quant strategy advisory signals (non-executing). */
+  strategySignals?: import("@/lib/strategy-signals/types").AdvisoryStrategySignal[];
+  strategySignalsNotice?: string;
+  /** MVP 74 — structured second brain cycle snapshot (advisory only). */
+  secondBrain?: import("@/lib/second-brain/types").SecondBrainCycleSnapshot;
+  secondBrainNotice?: string;
 }
 
 export function tradeRecToAgent(

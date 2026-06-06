@@ -19,6 +19,8 @@ import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types
 import { applyDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { DeskMemoryClientPayload } from "@/lib/memory/types";
 import type { SpotQuote } from "@/lib/types/market";
+import type { AdvisoryStrategySignal } from "@/lib/strategy-signals/types";
+import type { SecondBrainCycleSnapshot } from "@/lib/second-brain/types";
 import { buildAnalyzeApiResponse } from "./analyze-response";
 import { runDecisionEngine } from "./engine";
 import { hasAnyOverride, hasOverrideForField } from "./derivatives-overrides";
@@ -283,6 +285,8 @@ export function runDecisionEngineFromInput(
   strategyRegistry?: StrategyRegistryAnalyzePayload | null,
   governance?: GovernanceAnalyzePayload | null,
   adaptiveWeighting?: import("@/lib/adaptive-agent-weighting/types").AdaptiveWeightingAnalyzePayload | null,
+  advisoryStrategySignals: AdvisoryStrategySignal[] = [],
+  secondBrain?: SecondBrainCycleSnapshot | null,
 ): AnalyzeApiResponse {
   applyDeskRiskProfile(input.deskRiskProfile);
   const engineInput = withAppliedOverrides(input, derivativesOverrides);
@@ -318,6 +322,8 @@ export function runDecisionEngineFromInput(
     strategyRegistry,
     governance,
     adaptiveWeighting,
+    advisoryStrategySignals,
+    secondBrain,
   );
 }
 
@@ -353,6 +359,9 @@ export async function runAnalysisEngine(
   const strategyRegistry = overrides.strategyRegistry ?? null;
   const governance = overrides.governance ?? null;
   const adaptiveWeighting = overrides.adaptiveWeighting ?? null;
+  const advisoryStrategySignals = overrides.advisoryStrategySignals ?? [];
+  const secondBrain =
+    (overrides as { secondBrain?: SecondBrainCycleSnapshot }).secondBrain ?? null;
   const { input, sourceErrors } = await buildEngineInput(overrides);
   const output = runDecisionEngine(input);
   const base = buildAnalyzeApiResponse(output, sourceErrors);
@@ -364,6 +373,8 @@ export async function runAnalysisEngine(
     strategyRegistry,
     governance,
     adaptiveWeighting,
+    advisoryStrategySignals,
+    secondBrain,
   );
 
   if (isBybitCriticalFailure(response.marketSnapshot, response.dataSourceIssues)) {
@@ -383,6 +394,8 @@ export async function runAnalysisEngine(
       strategyRegistry,
       governance,
       adaptiveWeighting,
+      advisoryStrategySignals,
+      secondBrain,
     );
   }
 

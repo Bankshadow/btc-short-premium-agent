@@ -7,6 +7,8 @@ import type {
   WeightedCommitteeVerdict,
 } from "./types";
 import { ADAPTIVE_WEIGHTING_SAFETY_NOTICE } from "./types";
+import { getCachedCalibrationProfile } from "@/lib/confidence-calibration/calibration-cache";
+import { applyCommitteeCalibration } from "@/lib/confidence-calibration/apply-calibration";
 
 const VOTING_AGENT_NAMES = new Set([
   "Bull Thesis Agent",
@@ -72,7 +74,13 @@ export function computeWeightedCommitteeVerdict(
 
   const weightMap = new Map(profile.entries.map((e) => [e.agentName, e]));
 
-  const tradeScore = recScore(votingAgents, weightMap, "TRADE");
+  const rawTradeScore = recScore(votingAgents, weightMap, "TRADE");
+  const calibrationProfile = getCachedCalibrationProfile();
+  const tradeScore = applyCommitteeCalibration(
+    rawTradeScore,
+    calibrationProfile,
+    input.step5Confidence ?? null,
+  );
   const skipScore = recScore(votingAgents, weightMap, "SKIP");
   const waitScore = recScore(votingAgents, weightMap, "WAIT");
 

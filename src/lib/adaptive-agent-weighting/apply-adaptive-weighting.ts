@@ -52,6 +52,7 @@ export function applyAdaptiveWeightingToAnalyzeResponse(
     targetAsset: "BTCUSDT",
     targetStrategy: resolveTargetStrategy(strategyRegistry),
     totalResolvedTrades: payload.totalResolvedTrades,
+    step5Confidence: response.step5_verdict.confidence,
     isLiveContext: options?.isLiveContext ?? false,
   });
 

@@ -29,6 +29,14 @@ import { runBinanceTestnetAutoMonitor } from "@/lib/exchange/binance/binance-aut
 import { isBinanceTestnetAutoExecuteEnabled } from "@/lib/exchange/binance/binance-config";
 import type { AutomationJob, AutomationJobType, AutomationRunInput } from "./types";
 import type { AutomationServerContext } from "./server-context";
+import { emitAnalyzePipelineEvents } from "@/lib/ai-status/emit-pipeline";
+import { emitAiStatusEvent } from "@/lib/ai-status/event-store";
+import {
+  buildActionKey,
+  buildApiErrorKey,
+  buildMarketContextHash,
+} from "@/lib/autopilot-loop-guard/fingerprints";
+import { recordLoopGuardAction } from "@/lib/autopilot-loop-guard/record-action";
 
 export type AutomationJobContext = {
   runId: string;
@@ -134,6 +142,28 @@ export async function runAutomationJob(
         return { summary: `BTC ${btc || "n/a"} · data trust ${trust}` };
       });
 
+    case "PARALLEL_AGENT_REVIEW":
+      return runTimed(jobType, ctx, async () => {
+        const { runParallelAgentReview } = await import(
+          "@/lib/parallel-task-runner/run-parallel-review"
+        );
+        const result = await runParallelAgentReview({
+          workspaceId: ctx.workspaceId,
+          entries,
+          orders,
+          riskProfile,
+        });
+        await emitAiStatusEvent({
+          type: "AGENTS_REVIEWED",
+          runId: ctx.runId,
+          detail: result.committee.summary,
+          technical: `parallel-committee:${result.committee.recommendation}`,
+        });
+        return {
+          summary: `${result.committee.recommendation} · ${result.reviews.length} agents · ${result.durationMs}ms`,
+        };
+      });
+
     case "DESK_ANALYZE":
       return runTimed(jobType, ctx, async () => {
         const eval_ = await evaluateServerBackboneHealth();
@@ -168,8 +198,68 @@ export async function runAutomationJob(
           );
         }
 
+        const { prepareSecondBrainForCycle } = await import(
+          "@/lib/second-brain/prepare-cycle"
+        );
+        const { getLoopGuardDashboardSnapshot } = await import(
+          "@/lib/autopilot-loop-guard/run-guard"
+        );
+        const { evaluateRealTimeRisk } = await import(
+          "@/lib/real-time-risk/evaluate-realtime-risk"
+        );
+        const { buildStrategyHealthSummary } = await import("@/lib/strategy-health");
+        const { resolvePrimaryStrategyHealth } = await import(
+          "@/lib/mission-flow/resolve-primary-strategy-health"
+        );
+        const { getPositions } = await import(
+          "@/lib/exchange/binance/binance-futures-testnet"
+        );
+
+        const [loopGuard, riskReport, positions] = await Promise.all([
+          getLoopGuardDashboardSnapshot(ctx.workspaceId).catch(() => null),
+          Promise.resolve(
+            evaluateRealTimeRisk({
+              entries,
+              orders,
+            }),
+          ).catch(() => null),
+          getPositions().catch(() => []),
+        ]);
+
+        const strategySummary = buildStrategyHealthSummary({ entries, orders });
+        const primaryStrategy = resolvePrimaryStrategyHealth(strategySummary);
+        const openLabels = positions
+          .filter((p) => Math.abs(Number(p.positionAmt)) > 0)
+          .map((p) => `${p.symbol} ${Number(p.positionAmt) > 0 ? "LONG" : "SHORT"}`);
+
+        const blockers: string[] = [];
+        if (loopGuard?.blocker.active && loopGuard.blocker.reason) {
+          blockers.push(loopGuard.blocker.reason);
+        }
+        if (riskReport?.blockNewTrades && riskReport.triggeredLimits[0]) {
+          blockers.push(riskReport.triggeredLimits[0]);
+        }
+
+        const secondBrainPrep = await prepareSecondBrainForCycle({
+          entries,
+          openPositionLabels: openLabels,
+          currentStrategy: primaryStrategy?.strategyId ?? null,
+          riskState: riskReport?.blockNewTrades
+            ? riskReport.triggeredLimits[0] ?? "Risk paused"
+            : "Within limits",
+          blockers,
+          workspaceId: ctx.workspaceId,
+        });
+
         const cronInput = await loadCronAnalysisInput();
-        const analysis = await runAnalyzeRequest(cronInput);
+        const analysis = await runAnalyzeRequest({
+          ...cronInput,
+          secondBrain: secondBrainPrep.snapshot,
+          secondBrainBullets: secondBrainPrep.bullets,
+        } as Parameters<typeof runAnalyzeRequest>[0] & {
+          secondBrain: typeof secondBrainPrep.snapshot;
+          secondBrainBullets: string[];
+        });
         const saved = await appendServerAnalysisFromResponse(analysis);
         ctx.analyze = analysis;
 
@@ -198,6 +288,23 @@ export async function runAutomationJob(
         });
         await writeServerBackboneRecord(record);
         ctx.backboneHealth = record.health;
+
+        await emitAnalyzePipelineEvents({
+          runId: ctx.runId,
+          analysis,
+          autopilot,
+          previewCreated: Boolean(autopilot.blockers.length === 0 && saved.entry.finalVerdict === "TRADE"),
+        });
+
+        await recordLoopGuardAction({
+          actionType: "DESK_ANALYZE",
+          actionKey: buildActionKey("DESK_ANALYZE", saved.entry.finalVerdict),
+          success: true,
+          failed: false,
+          marketContextHash: buildMarketContextHash(analysis),
+          runId: ctx.runId,
+          summary: `Analyze ${saved.entry.finalVerdict}`,
+        });
 
         return {
           summary: `Analyze ${saved.status} · ${saved.entry.finalVerdict} · autopilot ${autopilot.status}`,
@@ -240,6 +347,12 @@ export async function runAutomationJob(
             body: `${autoLearned} trade(s) marked learned for strategy feedback.`,
           });
         }
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: `${ls.label} · samples ${ls.strategySampleSize}${learnSuffix}`,
+        });
+
         return {
           summary: `${ls.label} · samples ${ls.strategySampleSize}${learnSuffix}`,
         };
@@ -366,6 +479,19 @@ export async function runAutomationJob(
         const monitor = await runBinanceTestnetAutoMonitor({
           analysis: ctx.analyze,
         });
+        if (monitor.outcome === "CLOSED") {
+          await emitAiStatusEvent({
+            type: "TRADE_CLOSED",
+            runId: ctx.runId,
+            detail: monitor.summary,
+          });
+        } else {
+          await emitAiStatusEvent({
+            type: "POSITION_MONITORED",
+            runId: ctx.runId,
+            detail: monitor.summary,
+          });
+        }
         return { summary: `${monitor.outcome} · ${monitor.summary}` };
       });
 
@@ -376,7 +502,46 @@ export async function runAutomationJob(
           entries,
           orders,
           commandCenterStatus: null,
+          runId: ctx.runId,
         });
+        const executed = auto.outcome === "EXECUTED";
+        await recordLoopGuardAction({
+          actionType: "BINANCE_EXECUTE",
+          actionKey: buildActionKey("BINANCE_EXECUTE", auto.outcome),
+          success: executed,
+          failed: !executed && auto.outcome !== "NO_TRADE_SIGNAL" && auto.outcome !== "DISABLED",
+          apiErrorKey: buildApiErrorKey(auto.blockReasons[0] ?? auto.summary),
+          tradeCandidateKey:
+            auto.symbol && auto.side
+              ? `${auto.symbol}:${auto.side}`
+              : null,
+          previewId: auto.previewId,
+          runId: ctx.runId,
+          summary: auto.summary,
+        });
+        if (executed) {
+          await emitAiStatusEvent({
+            type: "ORDER_EXECUTED",
+            runId: ctx.runId,
+            detail: auto.summary,
+          });
+        } else if (
+          auto.outcome === "PREVIEW_BLOCKED" ||
+          auto.outcome === "EXECUTE_BLOCKED" ||
+          auto.outcome === "LOOP_GUARD_BLOCKED"
+        ) {
+          await emitAiStatusEvent({
+            type: "PERMISSION_REQUESTED",
+            runId: ctx.runId,
+            detail: auto.summary,
+          });
+        } else if (auto.outcome === "NO_TRADE_SIGNAL") {
+          await emitAiStatusEvent({
+            type: "TRADE_CANDIDATE_CREATED",
+            runId: ctx.runId,
+            detail: "No trade signal this cycle",
+          });
+        }
         return { summary: `${auto.outcome} · ${auto.summary}` };
       });
 
@@ -394,11 +559,138 @@ export async function runAutomationJob(
           entries,
           limit: 10,
         });
+        const calSummary =
+          result.evaluated > 0
+            ? await import("@/lib/confidence-calibration/run-calibration-update").then((m) =>
+                m.runConfidenceCalibrationUpdate(ctx.workspaceId),
+              )
+            : null;
         return {
           summary:
             result.evaluated > 0
-              ? `Evaluated ${result.evaluated} testnet trade(s) · top agent ${result.topAgent ?? "—"}`
+              ? `Evaluated ${result.evaluated} testnet trade(s) · top agent ${result.topAgent ?? "—"}${calSummary ? ` · cal ×${calSummary.profile.recommendedSizeMultiplier}` : ""}`
               : `No new evaluations (${result.skipped} skipped)`,
+        };
+      });
+
+    case "SECOND_BRAIN_CONSOLIDATE":
+      return runTimed(jobType, ctx, async () => {
+        const { consolidateSecondBrain } = await import(
+          "@/lib/second-brain/consolidate"
+        );
+        const { getLoopGuardDashboardSnapshot } = await import(
+          "@/lib/autopilot-loop-guard/run-guard"
+        );
+        const { loadLearningRecordsServer } = await import(
+          "@/lib/testnet-monitor/learning-records-server"
+        );
+        const [loopGuard, learningRecords] = await Promise.all([
+          getLoopGuardDashboardSnapshot(ctx.workspaceId).catch(() => null),
+          loadLearningRecordsServer().catch(() => []),
+        ]);
+        const result = await consolidateSecondBrain({
+          entries,
+          learningRecords,
+          loopBlockerReason:
+            loopGuard?.blocker.active ? loopGuard.blocker.reason : null,
+        });
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: `Second brain: ${result.totalMemories} memories · ${result.conflictsResolved} conflicts resolved`,
+          technical: "second-brain:consolidate",
+        });
+        return {
+          summary: `Second brain +${result.added} · ${result.totalMemories} total · ${result.conflictsResolved} conflicts resolved`,
+        };
+      });
+
+    case "TRADE_QUALITY_SCORE_UPDATE":
+      return runTimed(jobType, ctx, async () => {
+        const { runTradeQualityUpdate } = await import(
+          "@/lib/trade-quality-score/run-quality-update"
+        );
+        const result = await runTradeQualityUpdate(ctx.workspaceId);
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: result.summary.headline,
+          technical: "trade-quality-score",
+        });
+        return { summary: `${result.scored} scored · avg ${result.summary.avgCompositeScore}/100` };
+      });
+
+    case "CONFIDENCE_CALIBRATION_UPDATE":
+      return runTimed(jobType, ctx, async () => {
+        const { runConfidenceCalibrationUpdate } = await import(
+          "@/lib/confidence-calibration/run-calibration-update"
+        );
+        const result = await runConfidenceCalibrationUpdate(ctx.workspaceId);
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: result.profile.headline,
+          technical: "confidence-calibration",
+        });
+        return {
+          summary: `${result.profile.totalSamples} samples · size ×${result.profile.recommendedSizeMultiplier}`,
+        };
+      });
+
+    case "TRADE_BLACK_BOX_CAPTURE":
+      return runTimed(jobType, ctx, async () => {
+        const { runTradeBlackBoxCapture } = await import(
+          "@/lib/trade-black-box/run-capture"
+        );
+        const result = await runTradeBlackBoxCapture(ctx.workspaceId);
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: `${result.captured} trade black box records captured`,
+          technical: "trade-black-box",
+        });
+        return {
+          summary: `${result.captured} captured · ${result.failed} skipped`,
+        };
+      });
+
+    case "CONTINUOUS_IMPROVEMENT_DETECT":
+      return runTimed(jobType, ctx, async () => {
+        const { runContinuousImprovementDetect } = await import(
+          "@/lib/continuous-improvement-loop/run-detect-cycle"
+        );
+        const result = await runContinuousImprovementDetect(ctx.workspaceId);
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: `${result.detected} issues · ${result.proposals.length} proposals`,
+          technical: "continuous-improvement-loop",
+        });
+        return {
+          summary: `${result.detected} detected · ${result.proposals.length} proposals`,
+        };
+      });
+
+    case "DAILY_SELF_REVIEW":
+      return runTimed(jobType, ctx, async () => {
+        const { runDailySelfReview } = await import("@/lib/daily-self-review/run-daily-self-review");
+        const result = await runDailySelfReview({
+          workspaceId: ctx.workspaceId,
+          trigger: "automation",
+          force: false,
+        });
+        if (result.skipped) {
+          return { summary: result.reason ?? "Daily self-review not due yet." };
+        }
+        const score = result.record?.dailyScore ?? "—";
+        await emitAiStatusEvent({
+          type: "LEARNING_UPDATED",
+          runId: ctx.runId,
+          detail: `Daily AI score ${score}/100 · ${result.record?.lessonLearned?.slice(0, 80) ?? "review complete"}`,
+          technical: "daily-self-review",
+        });
+        return {
+          summary: `Daily AI score ${score}/100 · ${result.record?.date ?? "today"}`,
         };
       });
 

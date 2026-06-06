@@ -124,10 +124,13 @@ export default function QuantStrategyImporterDashboard() {
       iconLetters="QI"
       activePath="/strategy-lab/imports"
       nav={[
-        { href: "/strategies", label: "Registry", primary: true },
+        { href: "/strategy-garage", label: "Garage", primary: true },
+        { href: "/strategies", label: "Registry" },
         { href: "/strategy-lab/imports", label: "Imports" },
+        { href: "/strategy-lab/backtest", label: "Backtest" },
+        { href: "/strategy-lab/tournament", label: "Tournament" },
+        { href: "/strategy-lab/shadow", label: "Shadow" },
         { href: "/experiments", label: "Experiments" },
-        { href: "/backtest", label: "Backtest" },
         { href: "/validation", label: "Validation" },
         { href: "/", label: "← Desk" },
       ]}
@@ -337,7 +340,7 @@ export default function QuantStrategyImporterDashboard() {
                   </button>
                 )}
                 <Link
-                  href={`/backtest?importId=${encodeURIComponent(selected.sourceId)}&source=quant-import`}
+                  href={`/strategy-lab/backtest?importId=${encodeURIComponent(selected.sourceId)}&source=quant-import`}
                   className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900/50"
                 >
                   Open backtest lab →

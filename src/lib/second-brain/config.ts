@@ -1,0 +1,4 @@
+export const SECOND_BRAIN_STORE_FILE = "second-brain.json";
+export const SECOND_BRAIN_MAX_MEMORIES = 200;
+export const SECOND_BRAIN_RETRIEVAL_LIMIT = 8;
+export const SECOND_BRAIN_CONSOLIDATE_INTERVAL_MS = 24 * 60 * 60_000;

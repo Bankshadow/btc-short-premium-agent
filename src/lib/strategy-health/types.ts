@@ -81,6 +81,9 @@ export interface StrategyHealthSignal {
   pausedCount: number;
   candidateForLiveCount: number;
   healthScorePct: number;
+  /** MVP 84 — avg decision-quality score across recent closed trades */
+  tradeQualityAvgScore?: number | null;
+  tradeQualityAvgGrade?: string | null;
 }
 
 export interface StrategyHealthInput {

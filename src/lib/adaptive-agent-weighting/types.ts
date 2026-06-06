@@ -101,6 +101,8 @@ export interface AdaptiveWeightingInput {
   targetAsset?: string;
   targetStrategy?: string;
   totalResolvedTrades?: number;
+  /** MVP 83 — step5 confidence for calibration-adjusted committee score */
+  step5Confidence?: number | null;
   /** When true, adaptive weighting is skipped unless liveAdaptiveApproval is set */
   isLiveContext?: boolean;
 }

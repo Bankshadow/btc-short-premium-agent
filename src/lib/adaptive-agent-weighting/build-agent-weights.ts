@@ -107,6 +107,11 @@ export function buildAgentWeightProfile(input: {
       trustedReasons.push("Well-calibrated confidence");
     }
 
+    const overconfident = (ev?.reasoning.confidenceCalibrationError ?? 0) >= 0.35;
+    if (overconfident) {
+      downweightedReasons.push("Overconfident agent — reduced trust (MVP 83)");
+    }
+
     const memoryBoost = (input.relevantMemory?.lessons ?? []).some((l) =>
       l.bullet.toLowerCase().includes(agentName.split(" ")[0].toLowerCase()),
     );
@@ -123,6 +128,8 @@ export function buildAgentWeightProfile(input: {
       recentDecay;
     weight *= 1 - fpPenalty - fnPenalty;
     weight *= 0.8 + calibrationScore / 250;
+    if (calibrationScore < 40) weight *= 0.82;
+    if (overconfident) weight *= 0.75;
     if (agentName === "Risk Manager Agent") {
       weight *= 0.5 + riskUsefulness / 200;
     }

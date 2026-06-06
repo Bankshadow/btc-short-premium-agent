@@ -19,6 +19,8 @@ export interface DeskMemoryClientPayload {
   councilSessions?: CouncilSessionResult[];
   adaptationProposals?: StrategyAdaptationProposal[];
   registryStrategies?: StrategySkill[];
+  /** MVP 74 — second brain advisory bullets (server or client). */
+  secondBrainBullets?: string[];
 }
 
 export interface DeskMemoryBuckets {

@@ -442,7 +442,10 @@ export function buildStrategyHealthSummary(input: StrategyHealthInput): Strategy
   };
 }
 
-export function buildStrategyHealthSignal(summary: StrategyHealthSummary): StrategyHealthSignal {
+export function buildStrategyHealthSignal(
+  summary: StrategyHealthSummary,
+  tradeQuality?: { avgCompositeScore: number; avgGrade: string | null },
+): StrategyHealthSignal {
   const healthyStrategies = summary.rows.filter(
     (r) =>
       r.currentStatus === "ACTIVE_PAPER" ||
@@ -450,9 +453,11 @@ export function buildStrategyHealthSignal(summary: StrategyHealthSummary): Strat
       r.currentStatus === "CANDIDATE_FOR_LIVE",
   ).length;
   const total = summary.totals.strategies || 1;
-  const score =
+  let score =
     (healthyStrategies * 100 - summary.totals.reviewRequired * 8 - summary.totals.paused * 15) /
     total;
+  if (tradeQuality && tradeQuality.avgCompositeScore < 55) score -= 10;
+  else if (tradeQuality && tradeQuality.avgCompositeScore >= 75) score += 4;
 
   return {
     generatedAt: summary.generatedAt,
@@ -462,5 +467,7 @@ export function buildStrategyHealthSignal(summary: StrategyHealthSummary): Strat
     pausedCount: summary.totals.paused,
     candidateForLiveCount: summary.totals.candidateForLive,
     healthScorePct: Number(Math.max(0, Math.min(100, score)).toFixed(1)),
+    tradeQualityAvgScore: tradeQuality?.avgCompositeScore ?? null,
+    tradeQualityAvgGrade: tradeQuality?.avgGrade ?? null,
   };
 }

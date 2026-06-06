@@ -81,6 +81,18 @@ import DeskNarratorPanel from "./operator/DeskNarratorPanel";
 import BacktestDeskPanel from "./operator/BacktestDeskPanel";
 import CommandCockpit from "@/components/cockpit/CommandCockpit";
 import CockpitAdvancedDrawers from "@/components/cockpit/CockpitAdvancedDrawers";
+import StrategySignalPanel from "@/components/strategy-lab/StrategySignalPanel";
+import AgentOsMatrixPanel from "@/components/agent-os/AgentOsMatrixPanel";
+import PermissionPrompt from "@/components/agent-os/PermissionPrompt";
+import { useAgentOs } from "@/hooks/useAgentOs";
+import { loadAgentOsSettings } from "@/lib/agent-os/settings-store";
+import AIStatusCard from "@/components/ai-status/AIStatusCard";
+import AIStatusTechnicalLog from "@/components/ai-status/AIStatusTechnicalLog";
+import SecondBrainPanel from "@/components/second-brain/SecondBrainPanel";
+import ParallelReviewPanel from "@/components/parallel-task-runner/ParallelReviewPanel";
+import ContinuousImprovementPanel from "@/components/continuous-improvement/ContinuousImprovementPanel";
+import TelegramControlPanel from "@/components/telegram-control/TelegramControlPanel";
+import { useAiStatusCard } from "@/hooks/useAiStatusCard";
 import { useAutopilot } from "@/hooks/useAutopilot";
 import { useBackgroundWorker } from "@/hooks/useBackgroundWorker";
 import { loadClientWorkerSettings } from "@/lib/background-worker/client-settings";
@@ -582,7 +594,34 @@ export default function AnalyzeDashboard({
     analyzePolicy != null &&
     (analyzePolicy.decision === "BLOCK" || analyzePolicy.decision === "REQUIRE_MORE_DATA");
 
-  const sendBinanceTestnetPreview = useCallback(async () => {
+  const agentOsSettings = loadAgentOsSettings();
+  const testnetConnected = wsSettings.tradingEnvironment === "TESTNET";
+  const topQueueAction = actionQueue[0];
+
+  const aiStatus = useAiStatusCard({ pollMs: 3000 });
+
+  const agentOs = useAgentOs({
+    observeOnly: agentOsSettings.observeOnly,
+    autopilotEnabled: autopilot.settings.autopilotEnabled,
+    paperAutopilotEnabled: autopilot.settings.paperAutopilotEnabled,
+    shadowModeEnabled: autopilot.settings.shadowModeEnabled,
+    testnetConnected,
+    automationEnabled: autopilot.settings.autopilotEnabled || workerEnabled,
+    testnetAllowAllSafe: agentOsSettings.testnetAllowAllSafe,
+    testnetAllowAllExplicitlyEnabled: agentOsSettings.testnetAllowAllExplicitlyEnabled,
+    currentAction:
+      data?.tradingDesk?.committee?.finalVerdict != null
+        ? `Committee verdict: ${data.tradingDesk.committee.finalVerdict}`
+        : "Standing by for analysis",
+    nextAction:
+      topQueueAction?.title ??
+      (testnetConnected ? "Review testnet preview or run desk cycle" : "Run AI analysis cycle"),
+    goalProgressPct: backbone?.portfolio?.paperPnlPct ?? null,
+    pendingAction: agentOsSettings.testnetAllowAllSafe ? null : null,
+    linkedDecisionId: lastLogId,
+  });
+
+  const runBinancePreview = useCallback(async () => {
     setBinancePreviewBusy(true);
     setBinancePreviewMessage(null);
     try {
@@ -614,6 +653,29 @@ export default function AnalyzeDashboard({
       setBinancePreviewBusy(false);
     }
   }, [data, lastLogId, logEntries, workspaceHeaders]);
+
+  const sendBinanceTestnetPreview = useCallback(() => {
+    const perm = agentOs.checkPermission("CREATE_TESTNET_PREVIEW");
+    if (perm.allowed) {
+      void runBinancePreview();
+      return;
+    }
+    if (perm.requiresPermission) {
+      agentOs.requestPermission(
+        "CREATE_TESTNET_PREVIEW",
+        {
+          action: "CREATE_TESTNET_PREVIEW",
+          title: "Create testnet preview",
+          why: "AI wants to stage a Binance testnet order from the current committee signal.",
+          risk: "No order until you separately approve execute. Live remains locked.",
+          expectedResult: "Preview queued for review on /binance-testnet.",
+          linkedDecisionId: lastLogId,
+          sessionSafe: true,
+        },
+        () => void runBinancePreview(),
+      );
+    }
+  }, [agentOs, runBinancePreview, lastLogId]);
 
   return (
     <TradingDeskLayout
@@ -656,6 +718,27 @@ export default function AnalyzeDashboard({
           {persistStatus.message}
         </p>
       )}
+
+      <AIStatusCard
+        card={aiStatus.card}
+        busy={aiStatus.busy}
+        onLoopGuardAction={() => void aiStatus.refresh()}
+      />
+
+      <PermissionPrompt
+        request={
+          agentOs.pendingPrompt ?? {
+            action: "EXECUTE_TESTNET_ORDER",
+            title: "Permission required",
+            why: "",
+            risk: "",
+            expectedResult: "",
+          }
+        }
+        open={agentOs.promptOpen}
+        onDecision={agentOs.handlePermissionDecision}
+        busy={binancePreviewBusy}
+      />
 
       <CommandCockpit
         data={data}
@@ -719,6 +802,22 @@ export default function AnalyzeDashboard({
           <CockpitAdvancedDrawers
             drawers={[
               {
+                id: "ai-status-technical",
+                title: "AI status technical log",
+                summary: `${aiStatus.card.progressPct}% · ${aiStatus.card.recentToolActions.length} events`,
+                children: (
+                  <AIStatusTechnicalLog events={aiStatus.card.recentToolActions} />
+                ),
+              },
+              {
+                id: "agent-os-matrix",
+                title: "Agent OS permissions",
+                summary: `${agentOs.state.modeLabel} · live locked`,
+                children: (
+                  <AgentOsMatrixPanel matrix={agentOs.matrix} />
+                ),
+              },
+              {
                 id: "agent-debate",
                 title: "Agent debate",
                 summary: "How the committee reached its verdict",
@@ -745,6 +844,46 @@ export default function AnalyzeDashboard({
                 summary: `BTC $${data.step1_marketSnapshot.spotPrice.toLocaleString()}`,
                 children: (
                   <DashboardView data={data} onMemoryPinsChange={() => trigger()} />
+                ),
+              },
+              {
+                id: "telegram-control",
+                title: "Telegram control channel",
+                summary: "Monitor & approve testnet from chat",
+                children: <TelegramControlPanel />,
+              },
+              {
+                id: "parallel-committee",
+                title: "Parallel agent committee",
+                summary: "Strategy · Risk · UX · Execution · Learning · Strategist",
+                children: <ParallelReviewPanel />,
+              },
+              {
+                id: "continuous-improvement",
+                title: "Continuous improvement loop",
+                summary: "Detect issues · committee · Cursor prompt · verify",
+                children: <ContinuousImprovementPanel />,
+              },
+              {
+                id: "second-brain",
+                title: "Second brain memory graph",
+                summary: aiStatus.card.memorySummary
+                  ? `${aiStatus.card.memorySummary.lessonCount} lessons · ${aiStatus.card.memorySummary.subconsciousCount} stored`
+                  : "Advisory memory",
+                children: <SecondBrainPanel />,
+              },
+              {
+                id: "strategy-signals",
+                title: "Strategy signals",
+                summary:
+                  (data.tradingDesk?.strategySignals?.length ?? 0) > 0
+                    ? `${data.tradingDesk?.strategySignals?.length} advisory signal(s)`
+                    : "No approved signals",
+                children: (
+                  <StrategySignalPanel
+                    signals={data.tradingDesk?.strategySignals}
+                    notice={data.tradingDesk?.strategySignalsNotice}
+                  />
                 ),
               },
               {

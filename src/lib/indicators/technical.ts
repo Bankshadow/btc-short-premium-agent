@@ -20,6 +20,22 @@ export interface SupportResistance {
   resistance: number;
 }
 
+export interface BollingerBandsResult {
+  upper: number;
+  middle: number;
+  lower: number;
+  bandwidth: number;
+}
+
+export interface HeikinAshiCandle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  bullish: boolean;
+}
+
 const MS_PER_DAY = 365;
 const DEFAULT_SR_LOOKBACK = 20;
 const MACD_FAST = 12;
@@ -103,6 +119,82 @@ function buildMacdSeries(values: number[]): number[] {
   }
 
   return series;
+}
+
+/** Wilder's RSI. Returns null when insufficient data. */
+export function rsi(values: number[], period = 14): number | null {
+  if (values.length < period + 1) return null;
+
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i += 1) {
+    const change = values[i] - values[i - 1];
+    if (change >= 0) gains += change;
+    else losses -= change;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+
+  for (let i = period + 1; i < values.length; i += 1) {
+    const change = values[i] - values[i - 1];
+    const gain = change > 0 ? change : 0;
+    const loss = change < 0 ? -change : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return round(100 - 100 / (1 + rs), 2);
+}
+
+/** Bollinger Bands (SMA middle, stddev bands). */
+export function bollingerBands(
+  values: number[],
+  period = 20,
+  stdDevMult = 2,
+): BollingerBandsResult | null {
+  if (period <= 0 || values.length < period) return null;
+  const window = values.slice(-period);
+  const middle = window.reduce((s, v) => s + v, 0) / period;
+  const variance =
+    window.reduce((s, v) => s + (v - middle) ** 2, 0) / period;
+  const std = Math.sqrt(variance);
+  const upper = middle + stdDevMult * std;
+  const lower = middle - stdDevMult * std;
+  return {
+    upper: round(upper),
+    middle: round(middle),
+    lower: round(lower),
+    bandwidth: middle > 0 ? round(((upper - lower) / middle) * 100, 2) : 0,
+  };
+}
+
+/** Convert OHLC candles to Heikin-Ashi series. */
+export function heikinAshi(candles: Candle[]): HeikinAshiCandle[] {
+  if (candles.length === 0) return [];
+  const out: HeikinAshiCandle[] = [];
+  let prevHaOpen = candles[0].open;
+  let prevHaClose =
+    (candles[0].open + candles[0].high + candles[0].low + candles[0].close) / 4;
+
+  for (const c of candles) {
+    const haClose = (c.open + c.high + c.low + c.close) / 4;
+    const haOpen = (prevHaOpen + prevHaClose) / 2;
+    const haHigh = Math.max(c.high, haOpen, haClose);
+    const haLow = Math.min(c.low, haOpen, haClose);
+    out.push({
+      timestamp: c.timestamp,
+      open: round(haOpen),
+      high: round(haHigh),
+      low: round(haLow),
+      close: round(haClose),
+      bullish: haClose >= haOpen,
+    });
+    prevHaOpen = haOpen;
+    prevHaClose = haClose;
+  }
+  return out;
 }
 
 /** MACD (12, 26, 9). Returns null if insufficient data. */

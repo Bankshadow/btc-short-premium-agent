@@ -10,6 +10,10 @@ import {
   type LearningEvaluationReport,
 } from "@/lib/self-learning";
 import { SELF_LEARNING_SAFETY_NOTICE } from "@/lib/self-learning/types";
+import ConfidenceCalibrationPanel from "./ConfidenceCalibrationPanel";
+import TradeQualityPanel from "./TradeQualityPanel";
+import type { ConfidenceCalibrationProfile } from "@/lib/confidence-calibration/types";
+import type { TradeQualitySummary } from "@/lib/trade-quality-score/types";
 
 function gradeClass(grade: string): string {
   if (grade === "A") return "text-emerald-300";
@@ -41,6 +45,58 @@ export default function LearningDashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState<LearningEvaluationReport | null>(null);
+  const [calibration, setCalibration] = useState<ConfidenceCalibrationProfile | null>(null);
+  const [tradeQuality, setTradeQuality] = useState<TradeQualitySummary | null>(null);
+
+  const loadCalibration = useCallback(async () => {
+    try {
+      const res = await fetch("/api/confidence-calibration/status", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setCalibration((data.status?.profile as ConfidenceCalibrationProfile | null) ?? null);
+      }
+    } catch {
+      /* optional */
+    }
+  }, []);
+
+  const loadTradeQuality = useCallback(async () => {
+    try {
+      const res = await fetch("/api/trade-quality-score/status", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setTradeQuality((data.status?.summary as TradeQualitySummary | null) ?? null);
+      }
+    } catch {
+      /* optional */
+    }
+  }, []);
+
+  const recomputeTradeQuality = useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/trade-quality-score/recompute", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setTradeQuality(data.summary as TradeQualitySummary);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const recomputeCalibration = useCallback(async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/confidence-calibration/recompute", { method: "POST" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setCalibration(data.profile as ConfidenceCalibrationProfile);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -49,6 +105,7 @@ export default function LearningDashboard() {
     const storedResults = loadEvaluationResults();
 
     try {
+      await Promise.all([loadCalibration(), loadTradeQuality()]);
       const res = await fetch("/api/self-learning/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,7 +121,7 @@ export default function LearningDashboard() {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [loadCalibration, loadTradeQuality]);
 
   const runEvaluate = useCallback(async () => {
     setBusy(true);
@@ -150,6 +207,22 @@ export default function LearningDashboard() {
           value={String(report?.improvementRecommendations.length ?? "—")}
         />
       </div>
+
+      <Panel title="Trade quality score">
+        <TradeQualityPanel
+          summary={tradeQuality}
+          busy={busy}
+          onRecompute={() => void recomputeTradeQuality()}
+        />
+      </Panel>
+
+      <Panel title="AI confidence calibration">
+        <ConfidenceCalibrationPanel
+          profile={calibration}
+          busy={busy}
+          onRecompute={() => void recomputeCalibration()}
+        />
+      </Panel>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Agent Leaderboard">
@@ -268,6 +341,9 @@ export default function LearningDashboard() {
                   </Link>
                   <br />
                   <span className="text-xs text-zinc-500">
+                    {r.tradeQuality
+                      ? `Quality ${r.tradeQuality.grade} (${r.tradeQuality.compositeScore}) · `
+                      : ""}
                     {r.improvementHints[0] ?? "No hints"}
                   </span>
                 </li>

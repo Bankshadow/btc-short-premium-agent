@@ -11,6 +11,7 @@ import type {
   TradeEvaluationResult,
 } from "./types";
 import { CORE_EVALUATION_AGENTS } from "./types";
+import { buildTradeQualityScore } from "@/lib/trade-quality-score/score-trade";
 
 const COMMITTEE_NAME = "Investment Committee";
 
@@ -317,7 +318,7 @@ export function evaluateClosedTrade(input: {
     strategies,
   );
 
-  return {
+  const base = {
     evaluationId: `eval-${entry.id}-${Date.now()}`,
     decisionLogId: entry.id,
     liveTradeId,
@@ -336,4 +337,14 @@ export function evaluateClosedTrade(input: {
       entry,
     ),
   };
+
+  const tradeQuality = buildTradeQualityScore({
+    entry,
+    evaluation: base,
+    source,
+    pnlPct,
+    tradeWouldWin,
+  });
+
+  return { ...base, tradeQuality };
 }

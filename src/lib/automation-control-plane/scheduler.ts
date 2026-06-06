@@ -14,6 +14,7 @@ import {
   loadFailedAutomationJobs,
   loadRecentIdempotencyKeys,
   loadServerPendingOperatorActions,
+  mergeServerPendingOperatorActions,
   recordIdempotencyKey,
   removeFailedAutomationJob,
   saveAutomationState,
@@ -211,6 +212,43 @@ export async function runAutomationCycle(
   const errors: string[] = [];
   let blocked = false;
 
+  if (!input.force) {
+    const { runPreCycleLoopCheck } = await import(
+      "@/lib/autopilot-loop-guard/run-guard"
+    );
+    const loopCheck = await runPreCycleLoopCheck(workspaceId);
+    if (loopCheck.blocked) {
+      if (loopCheck.operatorAction) {
+        await mergeServerPendingOperatorActions([loopCheck.operatorAction]);
+      }
+      const { emitAiStatusEvent } = await import("@/lib/ai-status/event-store");
+      await emitAiStatusEvent({
+        type: "PERMISSION_REQUESTED",
+        runId,
+        detail: loopCheck.decision.reason,
+        technical: `loop-guard:${loopCheck.decision.level}`,
+      });
+      await releaseRunLock(runId, workspaceId);
+      return {
+        runId,
+        workspaceId,
+        status: "BLOCKED",
+        trigger,
+        idempotencyKey,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        jobs: [],
+        errors: [loopCheck.decision.reason],
+        nextRunAt: state.nextRunAt,
+        linkedRunId: null,
+        safetyNotice: AUTOMATION_SAFETY_NOTICE,
+        ...AUTOMATION_GUARANTEES,
+        analyze: null,
+        autopilotResult: null,
+      };
+    }
+  }
+
   const ctx = {
     runId,
     workspaceId,
@@ -371,6 +409,27 @@ export async function runAutomationCycle(
     await buildObservabilitySnapshot(workspaceId, { promoteIncidents: true });
   } catch {
     /* observability refresh is best-effort */
+  }
+
+  try {
+    const { syncTelegramControlChannel, isTelegramControlEnabled } = await import(
+      "@/lib/telegram-control-channel"
+    );
+    if (isTelegramControlEnabled()) {
+      void syncTelegramControlChannel({ workspaceId, sendPermissionPrompt: true });
+    }
+  } catch {
+    /* telegram control sync is best-effort */
+  }
+
+  try {
+    const { evaluateMissionController, applyMissionControllerRiskAdjustment } = await import(
+      "@/lib/mission-controller"
+    );
+    const controller = await evaluateMissionController();
+    await applyMissionControllerRiskAdjustment(controller);
+  } catch {
+    /* mission controller risk adjust is best-effort */
   }
 
   return run;

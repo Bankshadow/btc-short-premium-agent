@@ -9,10 +9,18 @@ import LearningInsightsPanel from "./LearningInsightsPanel";
 import LearningReviewPanel from "./LearningReviewPanel";
 import MissionActivityFeed from "./MissionActivityFeed";
 import MissionAutopilotHero from "./MissionAutopilotHero";
+import OneButtonAiHero from "./OneButtonAiHero";
+import MissionControllerCard from "./MissionControllerCard";
+import { useMissionController } from "./use-mission-controller";
 import SelfLearningStatusPanel from "./SelfLearningStatusPanel";
 import StrategyHealthBanner from "./StrategyHealthBanner";
 import TestnetTradeModal from "./TestnetTradeModal";
 import { useMissionSnapshot } from "./use-mission-snapshot";
+import PermissionPrompt from "@/components/agent-os/PermissionPrompt";
+import { useAgentOs } from "@/hooks/useAgentOs";
+import { loadAgentOsSettings } from "@/lib/agent-os/settings-store";
+import AIStatusCard from "@/components/ai-status/AIStatusCard";
+import { useAiStatusCard } from "@/hooks/useAiStatusCard";
 
 function usd(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -117,6 +125,57 @@ export default function GoalDashboard() {
   ]);
 
   const hasData = m.totalTrades > 0 || Boolean(m.lastCycleAt);
+  const agentOsSettings = loadAgentOsSettings();
+  const testnetConnected = m.binanceTestnet.status === "CONNECTED";
+
+  const aiStatus = useAiStatusCard({ pollMs: 3000 });
+  const missionController = useMissionController(8000);
+
+  const agentOs = useAgentOs({
+    observeOnly: agentOsSettings.observeOnly || m.automation.paused,
+    autopilotEnabled: m.automation.enabled,
+    testnetConnected,
+    automationEnabled: m.automation.enabled && !m.automation.paused,
+    testnetAllowAllSafe: agentOsSettings.testnetAllowAllSafe,
+    testnetAllowAllExplicitlyEnabled: agentOsSettings.testnetAllowAllExplicitlyEnabled,
+    currentAction: m.aiStatus.lastAction,
+    nextAction: m.aiStatus.nextAction,
+    goalProgressPct: m.progressPct,
+    pendingAction: m.pendingTestnetPreview && !m.pendingTestnetPreview.blocked
+      ? "EXECUTE_TESTNET_ORDER"
+      : null,
+    linkedDecisionId: m.latestDecisionLogId,
+  });
+
+  const openTestnetModal = (mode: "execute" | "close") => {
+    const action =
+      mode === "close" ? ("CLOSE_TESTNET_POSITION" as const) : ("EXECUTE_TESTNET_ORDER" as const);
+    const perm = agentOs.checkPermission(action);
+    if (perm.allowed) {
+      setTradeModal({ open: true, mode });
+      return;
+    }
+    if (!perm.requiresPermission) return;
+    agentOs.requestPermission(
+      action,
+      {
+        action,
+        title: mode === "close" ? "Close testnet position" : "Execute testnet order",
+        why:
+          mode === "close"
+            ? "AI monitor suggests closing the open testnet position."
+            : "AI committee signal is ready for testnet execution.",
+        risk: "Testnet capital only — live remains locked.",
+        expectedResult:
+          mode === "close"
+            ? "Position closed and PnL recorded."
+            : "Order placed on Binance testnet after your confirmation.",
+        linkedDecisionId: m.latestDecisionLogId,
+        sessionSafe: true,
+      },
+      () => setTradeModal({ open: true, mode }),
+    );
+  };
 
   return (
     <GoalShell
@@ -142,11 +201,49 @@ export default function GoalDashboard() {
         snapshot={m}
       />
 
+      <OneButtonAiHero
+        onNeedsConfirm={(mode) => openTestnetModal(mode)}
+        onAfterRun={() => void refresh(true)}
+      />
+
+      <AIStatusCard
+        card={aiStatus.card}
+        busy={aiStatus.busy}
+        onLoopGuardAction={() => void aiStatus.refresh()}
+      />
+
+      <PermissionPrompt
+        request={
+          agentOs.pendingPrompt ?? {
+            action: "EXECUTE_TESTNET_ORDER",
+            title: "Permission required",
+            why: "",
+            risk: "",
+            expectedResult: "",
+          }
+        }
+        open={agentOs.promptOpen}
+        onDecision={agentOs.handlePermissionDecision}
+        busy={runningCycle}
+      />
+
       <MissionAutopilotHero
         snapshot={m}
         running={runningCycle}
         onRunNow={() => void runAutopilotCycle("manual")}
       />
+
+      {missionController.controller && (
+        <MissionControllerCard
+          mode={missionController.controller.mode}
+          reason={missionController.controller.modeReason}
+          nextAction={missionController.controller.nextAction}
+          humanApprovalNeeded={missionController.controller.humanApprovalNeeded}
+          aiConfidence={missionController.controller.aiConfidence}
+          calibrationHeadline={missionController.calibration?.headline ?? null}
+          busy={missionController.busy}
+        />
+      )}
 
       <StrategyHealthBanner strategy={m.strategyHealth} />
 
@@ -183,7 +280,7 @@ export default function GoalDashboard() {
           ) : (
             <button
               type="button"
-              onClick={() => setTradeModal({ open: true, mode: "execute" })}
+              onClick={() => openTestnetModal("execute")}
               className="mt-3 rounded-lg bg-cyan-800/70 px-4 py-2 text-xs font-semibold text-zinc-50 hover:bg-cyan-700/70"
             >
               Review testnet order
@@ -197,14 +294,6 @@ export default function GoalDashboard() {
           <p className="text-sm text-amber-100">{m.aiStatus.nextAction}</p>
         </section>
       )}
-
-      <p className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-4 py-2 text-xs text-zinc-400">
-        Human action required:{" "}
-        <span className={m.aiStatus.humanActionRequired ? "text-amber-300" : "text-emerald-300"}>
-          {m.aiStatus.humanActionRequired ? "Yes" : "No"}
-        </span>
-        {m.aiStatus.humanActionRequired ? ` — ${m.aiStatus.nextAction}` : ""}
-      </p>
 
       <Card title="Mission · $1,000 → $10,000" tone="good">
         <p className="text-[10px] uppercase tracking-widest text-emerald-400/80">
@@ -302,7 +391,7 @@ export default function GoalDashboard() {
                 {m.currentPosition.canCloseOnTestnet && (
                   <button
                     type="button"
-                    onClick={() => setTradeModal({ open: true, mode: "close" })}
+                    onClick={() => openTestnetModal("close")}
                     className="text-amber-300 hover:underline"
                   >
                     Close on testnet →

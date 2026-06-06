@@ -35,5 +35,11 @@ export async function appendServerEvaluationResult(
   const fp = filePath();
   await fs.mkdir(path.dirname(fp), { recursive: true });
   await fs.writeFile(fp, JSON.stringify(next, null, 2), "utf8");
+  if (result.tradeQuality) {
+    const { upsertTradeQualityScore } = await import(
+      "@/lib/trade-quality-score/quality-store"
+    );
+    await upsertTradeQualityScore(result.tradeQuality).catch(() => null);
+  }
   return next;
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
+import TradeBlackBoxPanel from "@/components/trades/TradeBlackBoxPanel";
 import type {
   TradeLifecycleTimelineView,
   TradeTimelineActor,
@@ -146,9 +147,9 @@ export default function TradeLifecycleTimelinePage({
 
   return (
     <OpsShell
-      badge="MVP 49 · Trade lifecycle timeline"
+      badge="MVP 85 · AI Trade Black Box"
       title={`Trade Timeline · ${tradeId}`}
-      subtitle="Full AI/TESTNET/PAPER lifecycle from signal to learning completion with linked IDs, payload, risk status, and errors."
+      subtitle="Full AI/TESTNET lifecycle with black box debug context, failure cause, and downloadable debug pack. No secrets stored."
       accent="indigo"
       iconLetters="TL"
       activePath="/trades"
@@ -256,6 +257,8 @@ export default function TradeLifecycleTimelinePage({
           </p>
         )}
       </section>
+
+      <TradeBlackBoxPanel tradeId={tradeId} />
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">

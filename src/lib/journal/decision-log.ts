@@ -100,6 +100,8 @@ export function buildDecisionLogEntry(
     avoidedLossR: 0,
     lessonTags: [],
     deskRiskProfile: meta?.deskRiskProfile,
+    playbookConfidence: data.step5_verdict.confidence,
+    committeeTradeScore: data.tradingDesk?.weightedCommittee?.tradeScore ?? undefined,
   };
 }
 
@@ -136,6 +138,10 @@ function normalizeEntry(raw: Record<string, unknown>): DecisionLogEntry | null {
       raw.deskRiskProfile === "balanced" || raw.deskRiskProfile === "aggressive"
         ? raw.deskRiskProfile
         : undefined,
+    playbookConfidence:
+      raw.playbookConfidence != null ? Number(raw.playbookConfidence) : undefined,
+    committeeTradeScore:
+      raw.committeeTradeScore != null ? Number(raw.committeeTradeScore) : undefined,
     agentOutputs: Array.isArray(raw.agentOutputs)
       ? (raw.agentOutputs as AgentOutput[])
       : [],

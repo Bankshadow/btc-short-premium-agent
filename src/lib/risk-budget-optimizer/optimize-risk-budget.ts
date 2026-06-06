@@ -204,6 +204,12 @@ export function optimizeRiskBudget(input: RiskBudgetInput): RiskBudgetResult {
     reductions.push(`Low agent confidence (${confidence}) — size ×0.7`);
   }
 
+  const calMult = input.confidenceCalibrationMultiplier ?? 1;
+  if (calMult < 1) {
+    sizePct *= calMult;
+    reductions.push(`Confidence calibration overconfidence — size ×${calMult}`);
+  }
+
   if (input.regimeBrain) {
     const mult = input.regimeBrain.sizingMultiplier;
     if (mult < 1) {

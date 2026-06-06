@@ -4,9 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import DailySelfReviewPanel from "./DailySelfReviewPanel";
+import TradeQualityPanel from "@/components/learning/TradeQualityPanel";
+import type { TradeQualitySummary } from "@/lib/trade-quality-score/types";
 import LearningInsightsPanel from "./LearningInsightsPanel";
 import MissionActivityFeed from "./MissionActivityFeed";
 import { useMissionSnapshot } from "./use-mission-snapshot";
+import type { DailySelfReviewRecord } from "@/lib/daily-self-review/types";
 
 function usd(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -27,6 +31,9 @@ export default function ReportsView() {
     useMissionSnapshot();
   const [digest, setDigest] = useState<string | null>(null);
   const [digestBusy, setDigestBusy] = useState(false);
+  const [dailyReview, setDailyReview] = useState<DailySelfReviewRecord | null>(null);
+  const [reviewBusy, setReviewBusy] = useState(false);
+  const [tradeQuality, setTradeQuality] = useState<TradeQualitySummary | null>(null);
 
   const loadDigest = useCallback(async () => {
     setDigestBusy(true);
@@ -41,9 +48,52 @@ export default function ReportsView() {
     }
   }, []);
 
+  const loadDailyReview = useCallback(async () => {
+    try {
+      const res = await fetch("/api/daily-self-review/latest", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        setDailyReview((json.status?.latest as DailySelfReviewRecord | null) ?? null);
+      }
+    } catch {
+      /* optional */
+    }
+  }, []);
+
+  const runDailyReview = useCallback(async (force = false) => {
+    setReviewBusy(true);
+    try {
+      const res = await fetch("/api/daily-self-review/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const json = await res.json();
+      if (res.ok && json.ok && json.record) {
+        setDailyReview(json.record as DailySelfReviewRecord);
+      }
+    } finally {
+      setReviewBusy(false);
+    }
+  }, []);
+
+  const loadTradeQuality = useCallback(async () => {
+    try {
+      const res = await fetch("/api/trade-quality-score/status", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && json.ok) {
+        setTradeQuality((json.status?.summary as TradeQualitySummary | null) ?? null);
+      }
+    } catch {
+      /* optional */
+    }
+  }, []);
+
   useEffect(() => {
     void loadDigest();
-  }, [loadDigest, m.lastUpdatedAt]);
+    void loadDailyReview();
+    void loadTradeQuality();
+  }, [loadDigest, loadDailyReview, loadTradeQuality, m.lastUpdatedAt]);
 
   const dailySummary =
     m.closedTrades > 0
@@ -92,6 +142,21 @@ export default function ReportsView() {
         warnings={warnings}
         snapshot={m}
       />
+
+      <Section title="Trade quality score">
+        <TradeQualityPanel summary={tradeQuality} />
+        <Link href="/learning" className="mt-2 inline-block text-xs text-indigo-300 hover:underline">
+          Full trade quality on Learning →
+        </Link>
+      </Section>
+
+      <Section title="Daily AI self-review">
+        <DailySelfReviewPanel
+          review={dailyReview}
+          busy={reviewBusy}
+          onRun={() => void runDailyReview(true)}
+        />
+      </Section>
 
       {digest && (
         <Section title="Mission digest">

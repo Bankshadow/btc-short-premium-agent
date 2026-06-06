@@ -11,10 +11,17 @@ import type {
   AnalyzeApiResponse,
   DecisionEngineInput,
 } from "@/lib/types/market";
+import { resolveApprovedStrategySignals } from "@/lib/strategy-signals/resolve-approved-signals";
+import type { AdvisoryStrategySignal } from "@/lib/strategy-signals/types";
+import { runForwardShadowCycle } from "@/lib/strategy-shadow/run-shadow-cycle";
+import type { SecondBrainCycleSnapshot } from "@/lib/second-brain/types";
 
 type AnalyzeRequestBody = Partial<DecisionEngineInput> &
   AnalysisInput &
-  Record<string, unknown>;
+  Record<string, unknown> & {
+    secondBrain?: SecondBrainCycleSnapshot;
+    secondBrainBullets?: string[];
+  };
 
 function hasFullEngineInput(
   body: Partial<DecisionEngineInput>,
@@ -34,12 +41,20 @@ function hasFullEngineInput(
 export async function runAnalyzeRequest(
   raw: Partial<DecisionEngineInput> & AnalysisInput = {},
 ): Promise<AnalyzeApiResponse> {
-  const body = normalizeAnalyzeRequest(
-    raw as AnalyzeRequestBody,
-  );
-  const deskMemory = (raw as AnalyzeRequestBody).deskMemory as
-    | DeskMemoryClientPayload
-    | undefined;
+  const requestBody = raw as AnalyzeRequestBody;
+  const body = normalizeAnalyzeRequest(requestBody);
+  const deskMemoryRaw = requestBody.deskMemory as DeskMemoryClientPayload | undefined;
+  const secondBrain = requestBody.secondBrain;
+  const secondBrainBullets = requestBody.secondBrainBullets;
+  const deskMemory: DeskMemoryClientPayload | undefined = deskMemoryRaw
+    ? {
+        ...deskMemoryRaw,
+        secondBrainBullets:
+          secondBrainBullets ?? deskMemoryRaw.secondBrainBullets,
+      }
+    : secondBrainBullets?.length
+      ? { secondBrainBullets }
+      : undefined;
   const ethQuote = (raw as AnalyzeRequestBody).ethQuote as SpotQuote | undefined;
   const deskRiskProfile = (raw as AnalyzeRequestBody).deskRiskProfile as
     | "balanced"
@@ -56,24 +71,44 @@ export async function runAnalyzeRequest(
     | undefined;
   applyDeskRiskProfile(deskRiskProfile);
 
-  if (hasFullEngineInput(body)) {
-    return runDecisionEngineFromInput(
-      body,
-      body.derivativesOverrides,
-      deskMemory,
-      ethQuote,
-      strategyRegistry,
-      governance,
-      adaptiveWeighting,
-    );
+  const clientSignals = (raw as AnalyzeRequestBody).advisoryStrategySignals as
+    | AdvisoryStrategySignal[]
+    | undefined;
+  const advisoryStrategySignals =
+    clientSignals ??
+    (await resolveApprovedStrategySignals().catch(() => [] as AdvisoryStrategySignal[]));
+
+  const response = hasFullEngineInput(body)
+    ? runDecisionEngineFromInput(
+        body,
+        body.derivativesOverrides,
+        deskMemory,
+        ethQuote,
+        strategyRegistry,
+        governance,
+        adaptiveWeighting,
+        advisoryStrategySignals,
+        secondBrain,
+      )
+    : await runAnalysisEngine({
+        ...body,
+        deskMemory,
+        ethQuote,
+        strategyRegistry,
+        governance,
+        adaptiveWeighting,
+        advisoryStrategySignals,
+        secondBrain,
+      } as Parameters<typeof runAnalysisEngine>[0]);
+
+  const spotPrice = response.step1_marketSnapshot?.spotPrice ?? 0;
+  if (spotPrice > 0 && advisoryStrategySignals.length > 0) {
+    void runForwardShadowCycle({
+      signals: advisoryStrategySignals,
+      spotPrice,
+      committeeVerdict: response.tradingDesk?.committee?.finalVerdict,
+    }).catch(() => undefined);
   }
 
-  return runAnalysisEngine({
-    ...body,
-    deskMemory,
-    ethQuote,
-    strategyRegistry,
-    governance,
-    adaptiveWeighting,
-  });
+  return response;
 }

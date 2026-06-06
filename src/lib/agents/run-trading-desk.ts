@@ -36,6 +36,13 @@ import { applyAdaptiveWeightingToAnalyzeResponse } from "@/lib/adaptive-agent-we
 import type { AdaptiveWeightingAnalyzePayload } from "@/lib/adaptive-agent-weighting/types";
 import { detectMarketRegime } from "@/lib/market-regime-brain/detect-regime";
 import { applyRegimeBrainToStrategyAgents } from "@/lib/market-regime-brain/apply-regime-gates";
+import {
+  applyAdvisorySignalsToDesk,
+  buildStrategySignalsNotice,
+} from "@/lib/strategy-signals/apply-advisory-signals";
+import type { AdvisoryStrategySignal } from "@/lib/strategy-signals/types";
+import type { SecondBrainCycleSnapshot } from "@/lib/second-brain/types";
+import { SECOND_BRAIN_SAFETY_NOTICE } from "@/lib/second-brain/types";
 
 export function runTradingDesk(
   input: DecisionEngineInput,
@@ -44,6 +51,8 @@ export function runTradingDesk(
   ethQuote?: SpotQuote | null,
   strategyRegistry?: StrategyRegistryAnalyzePayload | null,
   governance?: GovernanceAnalyzePayload | null,
+  advisoryStrategySignals: AdvisoryStrategySignal[] = [],
+  secondBrain?: SecondBrainCycleSnapshot | null,
 ): TradingDeskOutput {
   const serverRules = evaluateHardRuleLocks({ data: response });
   const hardRules = governance?.hardRules
@@ -65,11 +74,17 @@ export function runTradingDesk(
 
   const baseCtx = buildTradingDeskContext(input, response);
   const legacyRegime = resolveMarketRegime(baseCtx);
+  const secondBrainBullets = memoryPayload?.secondBrainBullets ?? [];
   const memoryGraphPrep = prepareDeskMemoryGraph(
     memoryPayload,
     legacyRegime,
     input.deskRiskProfile,
   );
+  if (secondBrainBullets.length > 0) {
+    memoryGraphPrep.bullets = [
+      ...new Set([...secondBrainBullets, ...memoryGraphPrep.bullets]),
+    ].slice(0, 10);
+  }
 
   const regimeBrain = detectMarketRegime({
     input,
@@ -90,7 +105,7 @@ export function runTradingDesk(
     regimeBrain,
   };
 
-  const research = runResearchLayer(ctx, { ethQuote });
+  let research = runResearchLayer(ctx, { ethQuote });
   ctx.researchBullets = research.summaryBullets;
 
   const deskMemory = runDeskMemoryAgent(ctx, memoryPayload);
@@ -112,9 +127,9 @@ export function runTradingDesk(
     ...registryGated,
     brain: regimeBrain,
   });
-  const riskManager = runRiskManagerAgent(ctx, bullThesis, bearThesis);
+  let riskManager = runRiskManagerAgent(ctx, bullThesis, bearThesis);
 
-  const { verdict: committeeRaw, debate } = runCommitteeAgent({
+  let { verdict: committeeRaw, debate } = runCommitteeAgent({
     ctx,
     spot,
     futures,
@@ -125,16 +140,32 @@ export function runTradingDesk(
     deskMemory,
     research,
   });
-  const committee = applyGovernanceToVerdict(committeeRaw, effectiveGovernance);
+  let committee = applyGovernanceToVerdict(committeeRaw, effectiveGovernance);
+
+  const advisoryApplied = applyAdvisorySignalsToDesk({
+    signals: advisoryStrategySignals,
+    research,
+    spot,
+    futures,
+    options,
+    riskManager,
+    committee,
+  });
+  research = advisoryApplied.research;
+  const spotAdvised = advisoryApplied.spot;
+  const futuresAdvised = advisoryApplied.futures;
+  const optionsAdvised = advisoryApplied.options;
+  riskManager = advisoryApplied.riskManager;
+  committee = advisoryApplied.committee;
 
   const agents = [
     ...research.agents,
     deskMemory.agent,
     bullThesis,
     bearThesis,
-    spot,
-    futures,
-    options,
+    spotAdvised,
+    futuresAdvised,
+    optionsAdvised,
     riskManager,
   ];
 
@@ -151,6 +182,13 @@ export function runTradingDesk(
     regimeBrain,
     debate,
     disclaimer: TRADING_DESK_DISCLAIMER,
+    strategySignals: advisoryStrategySignals,
+    strategySignalsNotice: buildStrategySignalsNotice(advisoryStrategySignals.length),
+    secondBrain: secondBrain ?? undefined,
+    secondBrainNotice:
+      secondBrain && secondBrain.relevantLessons.length > 0
+        ? `${secondBrain.summaryHeadline} · ${SECOND_BRAIN_SAFETY_NOTICE}`
+        : SECOND_BRAIN_SAFETY_NOTICE,
   };
 }
 
@@ -162,6 +200,8 @@ export function attachTradingDesk(
   strategyRegistry?: StrategyRegistryAnalyzePayload | null,
   governance?: GovernanceAnalyzePayload | null,
   adaptiveWeighting?: AdaptiveWeightingAnalyzePayload | null,
+  advisoryStrategySignals: AdvisoryStrategySignal[] = [],
+  secondBrain?: SecondBrainCycleSnapshot | null,
 ): AnalyzeApiResponse {
   const withDesk: AnalyzeApiResponse = {
     ...response,
@@ -172,6 +212,8 @@ export function attachTradingDesk(
       ethQuote,
       strategyRegistry,
       governance,
+      advisoryStrategySignals,
+      secondBrain,
     ),
   };
   const reliable = applyReliabilityLayerToAnalyzeResponse(

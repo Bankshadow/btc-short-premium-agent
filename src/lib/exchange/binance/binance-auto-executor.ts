@@ -26,6 +26,7 @@ export type BinanceAutoExecuteOutcome =
   | "PREVIEW_BLOCKED"
   | "STRATEGY_BLOCKED"
   | "EXECUTE_BLOCKED"
+  | "LOOP_GUARD_BLOCKED"
   | "EXECUTED"
   | "ERROR";
 
@@ -63,6 +64,7 @@ export async function runBinanceTestnetAutoExecute(input: {
   entries?: DecisionLogEntry[];
   orders?: PaperOrder[];
   commandCenterStatus?: string | null;
+  runId?: string | null;
 }): Promise<BinanceAutoExecuteResult> {
   const base: Omit<BinanceAutoExecuteResult, "outcome" | "summary"> = {
     previewId: null,
@@ -164,15 +166,36 @@ export async function runBinanceTestnetAutoExecute(input: {
     }
 
     const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const submittedPreviewIds = journal
+      .filter((j) =>
+        ["SUBMITTED", "FILLED", "CLOSING", "CLOSED"].includes(j.status),
+      )
+      .map((j) => j.previewId);
     const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
     const executedSymbols: string[] = [];
     const blockReasons: string[] = [];
+    const recentPreviewFingerprints: string[] = [];
     let lastPreviewId: string | null = null;
     let lastOrderId: string | null = null;
     let lastSymbol: string | null = null;
     let lastSide: string | null = null;
 
+    const {
+      checkOrderHardSafety,
+      buildPreviewFingerprint,
+      buildTradeCandidateKey,
+    } = await import("@/lib/autopilot-loop-guard");
+    const { recordLoopGuardAction } = await import(
+      "@/lib/autopilot-loop-guard/record-action"
+    );
+
     for (const candidate of candidates) {
+      const candidateKey = buildTradeCandidateKey({
+        symbol: candidate.symbol,
+        side: candidate.side,
+        reason: candidate.reason,
+        source: candidate.source,
+      });
       const previewInput = buildBinancePreviewInputFromAiSignal({
         data: input.analysis,
         decisionLogId: input.decisionLogId ?? null,
@@ -193,6 +216,38 @@ export async function runBinanceTestnetAutoExecute(input: {
         );
         continue;
       }
+
+      const previewFingerprint = buildPreviewFingerprint({
+        symbol: preview.symbol,
+        side: preview.side,
+        notionalUsd: preview.notionalUsd,
+        reason: candidate.reason,
+      });
+      const hardSafety = checkOrderHardSafety({
+        previewId: preview.previewId,
+        symbol: preview.symbol,
+        side: preview.side,
+        doubleConfirm: true,
+        submittedPreviewIds,
+        previewFingerprint,
+        recentPreviewFingerprints,
+      });
+      if (!hardSafety.allowed) {
+        blockReasons.push(hardSafety.reason);
+        await recordLoopGuardAction({
+          actionType: "BINANCE_PREVIEW",
+          actionKey: `hard-safety:${hardSafety.violation}`,
+          success: false,
+          failed: true,
+          tradeCandidateKey: candidateKey,
+          previewFingerprint,
+          previewId: preview.previewId,
+          runId: input.runId ?? null,
+          summary: `${hardSafety.violation}: ${hardSafety.reason}`,
+        });
+        continue;
+      }
+      recentPreviewFingerprints.push(previewFingerprint);
 
       const result = await executeBinanceTestnetOrder({
         execute: {
@@ -230,6 +285,10 @@ export async function runBinanceTestnetAutoExecute(input: {
       candidateSymbols: candidates.map((c) => c.symbol),
     });
 
+    const loopBlocked = blockReasons.some((r) =>
+      r.includes("Duplicate") || r.includes("loop guard"),
+    );
+
     if (executedSymbols.length > 0) {
       return {
         ...base,
@@ -250,7 +309,7 @@ export async function runBinanceTestnetAutoExecute(input: {
       symbol: lastSymbol,
       side: lastSide,
       blockReasons,
-      outcome: "EXECUTE_BLOCKED",
+      outcome: loopBlocked ? "LOOP_GUARD_BLOCKED" : "EXECUTE_BLOCKED",
       summary: blockReasons[0] ?? "All candidate orders blocked.",
     };
   } catch (error) {

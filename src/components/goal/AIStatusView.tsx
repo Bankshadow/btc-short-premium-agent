@@ -10,6 +10,9 @@ import MissionAutopilotHero from "./MissionAutopilotHero";
 import StrategyHealthBanner from "./StrategyHealthBanner";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
 import { useMissionSnapshot } from "./use-mission-snapshot";
+import AIStatusCard from "@/components/ai-status/AIStatusCard";
+import AIStatusTechnicalLog from "@/components/ai-status/AIStatusTechnicalLog";
+import { useAiStatusCard } from "@/hooks/useAiStatusCard";
 
 const STATUS_COPY: Record<string, string> = {
   IDLE: "Idle",
@@ -26,6 +29,7 @@ export default function AIStatusView() {
   const [engines, setEngines] = useState<CoreEngineRegistrySnapshot | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [runningCycle, setRunningCycle] = useState(false);
+  const aiStatus = useAiStatusCard({ pollMs: 2500, useSse: true });
 
   const loadEngines = useCallback(async () => {
     try {
@@ -85,6 +89,13 @@ export default function AIStatusView() {
         degraded={degraded}
         warnings={warnings}
         snapshot={m}
+      />
+
+      <AIStatusCard
+        card={aiStatus.card}
+        busy={aiStatus.busy}
+        showTechnical={showAdvanced}
+        onLoopGuardAction={() => void aiStatus.refresh()}
       />
 
       <MissionAutopilotHero
@@ -242,13 +253,19 @@ export default function AIStatusView() {
       </section>
 
       {showAdvanced && (
-        <p className="text-[11px] text-zinc-600">
-          Raw multi-agent debate:{" "}
-          <Link href="/cockpit" className="text-emerald-300 hover:underline">
-            Open advanced cockpit
-          </Link>
-          .
-        </p>
+        <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Technical event log
+          </h2>
+          <AIStatusTechnicalLog events={aiStatus.card.recentToolActions} />
+          <p className="mt-3 text-[11px] text-zinc-600">
+            Raw multi-agent debate:{" "}
+            <Link href="/cockpit" className="text-emerald-300 hover:underline">
+              Open advanced cockpit
+            </Link>
+            .
+          </p>
+        </section>
       )}
     </GoalShell>
   );

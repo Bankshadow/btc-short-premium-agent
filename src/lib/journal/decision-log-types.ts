@@ -56,6 +56,10 @@ export interface DecisionLogEntry {
   marketRegime: string;
   /** MVP 10 — risk profile at session time */
   deskRiskProfile?: DeskRiskProfile;
+  /** MVP 83 — step5 numeric confidence at analyze time */
+  playbookConfidence?: number;
+  /** MVP 83 — weighted committee TRADE score at analyze time */
+  committeeTradeScore?: number;
   agentOutputs: AgentOutput[];
   finalVerdict: AgentRecommendation;
   riskVeto: boolean;

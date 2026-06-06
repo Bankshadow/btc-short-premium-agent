@@ -33,5 +33,5 @@ export function assertImportExecutionBlocked(): true {
 }
 
 export function buildBacktestUrl(sourceId: string): string {
-  return `/backtest?importId=${encodeURIComponent(sourceId)}&source=quant-import`;
+  return `/strategy-lab/backtest?importId=${encodeURIComponent(sourceId)}&source=quant-import`;
 }

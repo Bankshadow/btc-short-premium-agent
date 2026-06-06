@@ -128,7 +128,15 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     testnetConnected ||
     Boolean(unifiedPortfolio);
 
+  const loopGuard = await import("@/lib/autopilot-loop-guard/run-guard")
+    .then((m) => m.getLoopGuardDashboardSnapshot())
+    .catch(() => null);
+
+  const loopBlocker =
+    loopGuard?.blocker.active === true ? loopGuard.blocker.reason : null;
+
   const blocker =
+    loopBlocker ??
     criticalIncident?.title ??
     (riskReport.blockNewTrades
       ? riskReport.triggeredLimits[0] ?? "Risk engine paused new trades."

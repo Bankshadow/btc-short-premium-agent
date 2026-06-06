@@ -195,6 +195,8 @@ export interface BinanceExecuteInput {
   previewId: string;
   doubleConfirm: boolean;
   operatorNote?: string;
+  /** Loop guard blocks blind retries without operator review. */
+  blindRetry?: boolean;
 }
 
 export interface BinanceExecuteResult {

@@ -90,6 +90,8 @@ export interface TradeEvaluationResult {
   agentEvaluations: AgentEvaluation[];
   committeeEvaluation: AgentEvaluation;
   improvementHints: string[];
+  /** MVP 84 — decision-quality grade independent of PnL alone */
+  tradeQuality?: import("@/lib/trade-quality-score/types").TradeQualityScore | null;
 }
 
 export interface ImprovementRecommendation {

@@ -8,6 +8,8 @@ import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
 import type { RiskBudgetInput } from "./types";
+import { getCachedCalibrationProfile } from "@/lib/confidence-calibration/calibration-cache";
+import { resolveCalibrationSizeMultiplier } from "@/lib/confidence-calibration/apply-calibration";
 
 export function buildRiskBudgetInput(input: {
   entries: DecisionLogEntry[];
@@ -39,13 +41,20 @@ export function buildRiskBudgetInput(input: {
     pilotConfig = null;
   }
 
+  const rawConfidence = analyze?.step5_verdict.confidence;
+  const calibrationProfile = getCachedCalibrationProfile();
+
   return {
     portfolio,
     baseSizePct: analyze?.step6_actionPlan.suggestedSizePct ?? 2.5,
     currentEquity: portfolio.metrics.totalEquity,
     deskRiskProfile: input.riskProfile,
     regimeBrain: analyze?.tradingDesk?.regimeBrain ?? null,
-    agentConfidence: analyze?.step5_verdict.confidence,
+    agentConfidence: rawConfidence,
+    confidenceCalibrationMultiplier: resolveCalibrationSizeMultiplier(
+      rawConfidence ?? 50,
+      calibrationProfile,
+    ),
     agentConflictLevel: analyze?.conflictAnalysis?.conflictLevel ?? "NONE",
     dataTrust: analyze?.dataTrust ?? null,
     conflictGate: analyze?.conflictGate ?? null,

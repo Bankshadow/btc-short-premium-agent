@@ -29,6 +29,13 @@ export const DEFAULT_MODULE_TOGGLES: AutomationModuleToggles = {
   BINANCE_TESTNET_MONITOR: true,
   BINANCE_TESTNET_AUTOEXECUTE: true,
   SELF_LEARNING_UPDATE: true,
+  SECOND_BRAIN_CONSOLIDATE: true,
+  PARALLEL_AGENT_REVIEW: true,
+  DAILY_SELF_REVIEW: true,
+  CONFIDENCE_CALIBRATION_UPDATE: true,
+  TRADE_QUALITY_SCORE_UPDATE: true,
+  TRADE_BLACK_BOX_CAPTURE: true,
+  CONTINUOUS_IMPROVEMENT_DETECT: true,
 };
 
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
@@ -42,6 +49,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
 
 export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
   "MARKET_SNAPSHOT",
+  "PARALLEL_AGENT_REVIEW",
   "DESK_ANALYZE",
   "BINANCE_TESTNET_MONITOR",
   "BINANCE_TESTNET_AUTOEXECUTE",
@@ -54,6 +62,12 @@ export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
   "COMMAND_CENTER_REFRESH",
   "NOTIFICATION_DIGEST",
   "PROJECT_STRATEGIST_REVIEW",
+  "SECOND_BRAIN_CONSOLIDATE",
+  "DAILY_SELF_REVIEW",
+  "CONFIDENCE_CALIBRATION_UPDATE",
+  "TRADE_QUALITY_SCORE_UPDATE",
+  "TRADE_BLACK_BOX_CAPTURE",
+  "CONTINUOUS_IMPROVEMENT_DETECT",
 ];
 
 export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
@@ -70,6 +84,13 @@ export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
   BINANCE_TESTNET_MONITOR: "Binance testnet monitor & auto-close",
   BINANCE_TESTNET_AUTOEXECUTE: "Binance testnet auto-execute",
   SELF_LEARNING_UPDATE: "Self-learning evaluation",
+  SECOND_BRAIN_CONSOLIDATE: "Second brain daily consolidate",
+  PARALLEL_AGENT_REVIEW: "Parallel agent committee review",
+  DAILY_SELF_REVIEW: "Daily AI self-review",
+  CONFIDENCE_CALIBRATION_UPDATE: "Confidence calibration update",
+  TRADE_QUALITY_SCORE_UPDATE: "Trade quality score update",
+  TRADE_BLACK_BOX_CAPTURE: "Trade black box capture",
+  CONTINUOUS_IMPROVEMENT_DETECT: "Continuous improvement detect",
 };
 
 /** Base backoff minutes by consecutive failure count (capped). */

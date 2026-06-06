@@ -51,18 +51,64 @@ export async function getLinearKlines(
   symbol: string,
   interval: BtcKlineInterval,
   limit = KLINE_LIMIT,
+  range?: { startMs?: number; endMs?: number },
 ): Promise<BtcCandle[]> {
-  const result = await bybitGet<KlineResult>("/v5/market/kline", {
+  const params: Record<string, string | number> = {
     category: "linear",
     symbol,
     interval,
     limit,
-  });
+  };
+  if (range?.startMs) params.start = range.startMs;
+  if (range?.endMs) params.end = range.endMs;
+
+  const result = await bybitGet<KlineResult>("/v5/market/kline", params);
 
   const candles = result.list.map(parseCandle);
 
   // Bybit returns newest first — normalize to ascending time.
   return candles.sort((a, b) => a.openTime - b.openTime);
+}
+
+const INTERVAL_MS: Record<BtcKlineInterval, number> = {
+  "60": 3_600_000,
+  "240": 14_400_000,
+  D: 86_400_000,
+};
+
+/** Fetches klines between start/end by paginating backwards from end. */
+export async function getLinearKlinesRange(
+  symbol: string,
+  interval: BtcKlineInterval,
+  startMs: number,
+  endMs: number,
+): Promise<BtcCandle[]> {
+  const step = INTERVAL_MS[interval];
+  const all: BtcCandle[] = [];
+  const seen = new Set<number>();
+  let cursorEnd = endMs;
+  let guard = 0;
+
+  while (cursorEnd > startMs && guard < 50) {
+    guard += 1;
+    const batch = await getLinearKlines(symbol, interval, KLINE_LIMIT, {
+      endMs: cursorEnd,
+    });
+    if (batch.length === 0) break;
+
+    for (const candle of batch) {
+      if (candle.openTime < startMs || candle.openTime > endMs) continue;
+      if (seen.has(candle.openTime)) continue;
+      seen.add(candle.openTime);
+      all.push(candle);
+    }
+
+    const oldest = batch[0]?.openTime;
+    if (!oldest || oldest <= startMs) break;
+    cursorEnd = oldest - step;
+  }
+
+  return all.sort((a, b) => a.openTime - b.openTime);
 }
 
 export async function getBtcKlines(

@@ -278,6 +278,8 @@ export interface AnalysisInput {
   governance?: import("@/lib/governance/governance-types").GovernanceAnalyzePayload;
   /** MVP 32 — self-learning leaderboard + adaptive weighting settings */
   adaptiveWeighting?: import("@/lib/adaptive-agent-weighting/types").AdaptiveWeightingAnalyzePayload;
+  /** MVP 69 — pre-resolved approved quant strategy signals (advisory only). */
+  advisoryStrategySignals?: import("@/lib/strategy-signals/types").AdvisoryStrategySignal[];
 }
 
 /** @deprecated Use DecisionEngineOutput — kept for dashboard compatibility */
