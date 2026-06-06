@@ -1,5 +1,9 @@
 import { fetchMarketSnapshot, fetchOptionCandidates } from "@/lib/bybit/market";
 import { getBtcKlines } from "@/lib/bybit/klines";
+import {
+  marketDataKlineSource,
+  marketDataTickerSource,
+} from "@/lib/market-data/provider";
 import { buildTechnicalSnapshot, type Candle } from "@/lib/indicators/technical";
 import type {
   AnalysisInput,
@@ -62,14 +66,14 @@ async function fetchKlinesWithReport(
     const klines = await getBtcKlines(interval);
     if (klines.length === 0) {
       sourceErrors.push({
-        source: `Bybit Klines (${interval})`,
+        source: marketDataKlineSource(interval),
         message: "No candle data returned.",
       });
     }
     return klines;
   } catch (error) {
     sourceErrors.push({
-      source: `Bybit Klines (${interval})`,
+      source: marketDataKlineSource(interval),
       message: errorMessage(error),
     });
     return [];
@@ -111,13 +115,13 @@ async function buildEngineInput(
       marketRaw = await fetchMarketSnapshot();
       if (marketRaw.spotPrice <= 0) {
         sourceErrors.push({
-          source: "Bybit Ticker",
+          source: marketDataTickerSource(),
           message: "BTC spot price unavailable or zero.",
         });
       }
     } catch (error) {
       sourceErrors.push({
-        source: "Bybit Ticker",
+        source: marketDataTickerSource(),
         message: errorMessage(error),
       });
       marketRaw = {

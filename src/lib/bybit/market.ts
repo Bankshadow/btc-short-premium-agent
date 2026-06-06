@@ -4,6 +4,11 @@ import type {
   OptionCandidate,
   SpotQuote,
 } from "@/lib/types/market";
+import {
+  fetchBinanceEthSpotQuote,
+  fetchBinanceMarketSnapshot,
+} from "@/lib/exchange/binance/binance-market-data";
+import { isBinanceMarketDataPreferred } from "@/lib/market-data/provider";
 import { findOptionCandidates, parseOptionChain } from "./option-chain";
 import { getBtcTicker, getEthTicker, getOptionTickers } from "./tickers";
 
@@ -36,6 +41,10 @@ export type {
 export async function fetchMarketSnapshot(
   symbol = "BTCUSDT",
 ): Promise<MarketSnapshot> {
+  if (isBinanceMarketDataPreferred()) {
+    return fetchBinanceMarketSnapshot(symbol);
+  }
+
   const ticker = await getBtcTicker();
   const spotPrice = ticker.price;
   const hv30 = 21.5;
@@ -61,6 +70,10 @@ export async function fetchMarketSnapshot(
 }
 
 export async function fetchEthSpotQuote(): Promise<SpotQuote> {
+  if (isBinanceMarketDataPreferred()) {
+    return fetchBinanceEthSpotQuote();
+  }
+
   const ticker = await getEthTicker();
 
   return {

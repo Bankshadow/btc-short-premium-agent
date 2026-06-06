@@ -1,3 +1,5 @@
+import { getBinanceBtcKlines } from "@/lib/exchange/binance/binance-market-data";
+import { isBinanceMarketDataPreferred } from "@/lib/market-data/provider";
 import { BybitApiError, bybitGet } from "./client";
 
 export type BtcKlineInterval = "60" | "240" | "D";
@@ -114,5 +116,8 @@ export async function getLinearKlinesRange(
 export async function getBtcKlines(
   interval: BtcKlineInterval,
 ): Promise<BtcCandle[]> {
+  if (isBinanceMarketDataPreferred()) {
+    return getBinanceBtcKlines(interval);
+  }
   return getLinearKlines("BTCUSDT", interval);
 }
