@@ -9,10 +9,12 @@ import {
 
 export type MissionAlertKind =
   | "cycle_complete"
+  | "automation_cycle"
   | "trade_verdict"
   | "blocker"
   | "trade_opened"
-  | "trade_closed";
+  | "trade_closed"
+  | "learning_ingested";
 
 function isTelegramConfigured(): boolean {
   return Boolean(

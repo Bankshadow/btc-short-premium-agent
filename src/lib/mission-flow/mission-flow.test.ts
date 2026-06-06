@@ -6,6 +6,7 @@ import { buildGoalProgressSnapshot } from "@/lib/goal-engine/build-goal-snapshot
 import { buildMissionSnapshotFromGoal } from "@/lib/goal-engine/build-mission-snapshot";
 import type { GoalDashboardServerPayload } from "@/lib/goal-engine/build-server-context";
 import { buildCoreEngineRegistry } from "@/lib/core-engine-registry";
+import { buildStrategyHealthSummary } from "@/lib/strategy-health";
 
 function minimalPayload(): GoalDashboardServerPayload {
   const goal = buildGoalProgressSnapshot({
@@ -14,11 +15,14 @@ function minimalPayload(): GoalDashboardServerPayload {
     risk: { testnetConfigured: true, testnetConnected: true },
   });
   const mission = buildMissionSnapshotFromGoal(goal);
+  const strategyHealth = buildStrategyHealthSummary({ entries: [], orders: [] });
   return {
     goal,
     mission,
     automation: null,
     learningPending: [],
+    learningRecords: [],
+    strategyHealth,
     telegramConfigured: true,
     binance: {
       configured: true,
@@ -96,6 +100,50 @@ test("mission flow snapshot reflects auto-execute and autopilot-first copy", () 
   assert.equal(flow.automation.autoExecuteEnabled, true);
   assert.equal(flow.automation.autoLearnEnabled, true);
   assert.ok(flow.nextRecommendation.includes("Autopilot"));
+});
+
+test("mission flow snapshot includes activity and learning insights extras", () => {
+  const flow = buildMissionFlowSnapshot(
+    minimalPayload(),
+    null,
+    0,
+    null,
+    undefined,
+    {
+      recentActivity: [
+        {
+          id: "run-1",
+          at: new Date().toISOString(),
+          trigger: "cron",
+          status: "SUCCESS",
+          summary: "Analyze created · SKIP",
+          verdict: "SKIP",
+          jobCount: 11,
+        },
+      ],
+      learningInsights: {
+        learnedCount: 2,
+        winCount: 1,
+        lossCount: 1,
+        avgR: 0.5,
+        recent: [],
+      },
+      strategyHealth: {
+        strategyId: "options_short_premium",
+        label: "BTC Short Premium",
+        status: "ACTIVE_TESTNET",
+        recommendation: "continue",
+        winRate: 50,
+        sampleSize: 2,
+        healthScorePct: 70,
+        tradeAllowed: true,
+        blockReason: null,
+      },
+    },
+  );
+  assert.equal(flow.recentActivity.length, 1);
+  assert.equal(flow.learningInsights.learnedCount, 2);
+  assert.equal(flow.strategyHealth?.tradeAllowed, true);
 });
 
 test("mission flow snapshot surfaces pending testnet preview", () => {

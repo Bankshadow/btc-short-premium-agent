@@ -1,3 +1,4 @@
+import { loadAutomationHistory } from "@/lib/automation-control-plane/state-store";
 import {
   buildGoalDashboardServerPayload,
   buildGoalTradeListServer,
@@ -6,7 +7,11 @@ import { findPendingTestnetPreview } from "@/lib/exchange/binance";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { filterProductionEntries } from "@/lib/journal/production-filter";
 import { loadGoalNotificationPrefs } from "@/lib/mission-notifications/goal-notification-store";
+import { buildStrategyHealthSignal } from "@/lib/strategy-health";
+import { buildMissionActivityFromRuns } from "./build-mission-activity";
+import { buildMissionLearningInsights } from "./build-mission-learning-insights";
 import { buildMissionFlowSnapshot } from "./build-mission-flow-snapshot";
+import { resolvePrimaryStrategyHealth } from "./resolve-primary-strategy-health";
 import { emptyMissionFlowSnapshot } from "./empty-snapshot";
 import {
   clearMissionSnapshotCache,
@@ -38,21 +43,23 @@ export async function buildMissionFlowServerSnapshot(
   const warnings: string[] = [];
 
   try {
-    const [payload, trades, entriesRaw, notificationPrefs] = await Promise.all([
-      buildGoalDashboardServerPayload().catch((err) => {
-        warnings.push(
-          err instanceof Error ? err.message : "Goal payload failed",
-        );
-        return null;
-      }),
-      buildGoalTradeListServer().catch(() => []),
-      loadServerAnalysisJournal().catch(() => []),
-      loadGoalNotificationPrefs().catch(() => ({
-        notifyOnTrade: true,
-        notifyOnBlocker: true,
-        lastAlertAt: null,
-      })),
-    ]);
+    const [payload, trades, entriesRaw, notificationPrefs, automationHistory] =
+      await Promise.all([
+        buildGoalDashboardServerPayload().catch((err) => {
+          warnings.push(
+            err instanceof Error ? err.message : "Goal payload failed",
+          );
+          return null;
+        }),
+        buildGoalTradeListServer().catch(() => []),
+        loadServerAnalysisJournal().catch(() => []),
+        loadGoalNotificationPrefs().catch(() => ({
+          notifyOnTrade: true,
+          notifyOnBlocker: true,
+          lastAlertAt: null,
+        })),
+        loadAutomationHistory().catch(() => []),
+      ]);
 
     if (!payload) {
       return {
@@ -76,12 +83,23 @@ export async function buildMissionFlowServerSnapshot(
       ? toMissionFlowPendingPreview(pendingRaw)
       : null;
 
+    const strategySignal = buildStrategyHealthSignal(payload.strategyHealth);
+    const strategyHealth = resolvePrimaryStrategyHealth(payload.strategyHealth);
+    if (strategyHealth) {
+      strategyHealth.healthScorePct = strategySignal.healthScorePct;
+    }
+
     const snapshot = buildMissionFlowSnapshot(
       payload,
       latestDecisionLogId,
       openTrades,
       pendingTestnetPreview,
       notificationPrefs,
+      {
+        recentActivity: buildMissionActivityFromRuns(automationHistory),
+        learningInsights: buildMissionLearningInsights(payload.learningRecords),
+        strategyHealth,
+      },
     );
 
     writeMissionSnapshotCache(snapshot);

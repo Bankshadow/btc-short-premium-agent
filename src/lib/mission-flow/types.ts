@@ -60,6 +60,42 @@ export interface MissionFlowLearningItem {
   updatedAt: string;
 }
 
+export interface MissionFlowActivityItem {
+  id: string;
+  at: string;
+  trigger: string;
+  status: string;
+  summary: string;
+  verdict: string | null;
+  jobCount: number;
+}
+
+export interface MissionFlowLearningInsights {
+  learnedCount: number;
+  winCount: number;
+  lossCount: number;
+  avgR: number | null;
+  recent: {
+    symbol: string;
+    result: string;
+    netPnl: number;
+    rMultiple: number;
+    updatedAt: string;
+  }[];
+}
+
+export interface MissionFlowStrategyHealth {
+  strategyId: string;
+  label: string;
+  status: string;
+  recommendation: string;
+  winRate: number;
+  sampleSize: number;
+  healthScorePct: number | null;
+  tradeAllowed: boolean;
+  blockReason: string | null;
+}
+
 export interface MissionFlowSnapshot {
   startCapital: number;
   targetCapital: number;
@@ -113,6 +149,9 @@ export interface MissionFlowSnapshot {
   learningPending: MissionFlowLearningItem[];
   automation: MissionFlowAutomation;
   notifications: MissionFlowNotifications;
+  recentActivity: MissionFlowActivityItem[];
+  learningInsights: MissionFlowLearningInsights;
+  strategyHealth: MissionFlowStrategyHealth | null;
 }
 
 export interface MissionFlowBuildResult {

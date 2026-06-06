@@ -5,8 +5,11 @@ import Link from "next/link";
 import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import LearningInsightsPanel from "./LearningInsightsPanel";
 import LearningReviewPanel from "./LearningReviewPanel";
+import MissionActivityFeed from "./MissionActivityFeed";
 import MissionAutopilotHero from "./MissionAutopilotHero";
+import StrategyHealthBanner from "./StrategyHealthBanner";
 import TestnetTradeModal from "./TestnetTradeModal";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -143,6 +146,8 @@ export default function GoalDashboard() {
         running={runningCycle}
         onRunNow={() => void runAutopilotCycle("manual")}
       />
+
+      <StrategyHealthBanner strategy={m.strategyHealth} />
 
       <LearningReviewPanel
         items={m.learningPending}
@@ -340,6 +345,11 @@ export default function GoalDashboard() {
           </div>
         </div>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MissionActivityFeed items={m.recentActivity} compact />
+        <LearningInsightsPanel insights={m.learningInsights} compact />
+      </div>
 
       <AutopilotControls
         automation={m.automation}

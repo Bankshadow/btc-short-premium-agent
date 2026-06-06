@@ -351,6 +351,22 @@ export async function runAutomationCycle(
   await recordIdempotencyKey(idempotencyKey);
 
   try {
+    const { emitMissionAlert } = await import("@/lib/mission-notifications/emit-mission-alert");
+    const verdict =
+      run.autopilotResult?.finalVerdict ??
+      run.analyze?.tradingDesk?.weightedCommittee?.weightedVerdict ??
+      run.analyze?.step5_verdict?.recommendation ??
+      "—";
+    void emitMissionAlert({
+      kind: "automation_cycle",
+      title: `Autopilot cycle ${status}`,
+      body: `Trigger ${trigger} · verdict ${verdict} · ${run.jobs.length} jobs`,
+    });
+  } catch {
+    /* alerts are best-effort */
+  }
+
+  try {
     const { buildObservabilitySnapshot } = await import("@/lib/observability");
     await buildObservabilitySnapshot(workspaceId, { promoteIncidents: true });
   } catch {

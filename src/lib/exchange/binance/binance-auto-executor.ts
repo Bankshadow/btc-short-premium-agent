@@ -6,6 +6,9 @@ import {
   isBinanceTestnetAutoExecuteEnabled,
   loadBinanceConfig,
 } from "./binance-config";
+import { resolvePrimaryStrategyHealth } from "@/lib/mission-flow/resolve-primary-strategy-health";
+import { buildStrategyHealthSummary } from "@/lib/strategy-health";
+import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 import { buildBinancePreviewInputFromAiSignal } from "./build-ai-preview";
 import { buildOrderPreview } from "./binance-order-preview";
 import { executeBinanceTestnetOrder } from "./binance-execution";
@@ -17,6 +20,7 @@ export type BinanceAutoExecuteOutcome =
   | "NOT_CONNECTED"
   | "NO_TRADE_SIGNAL"
   | "PREVIEW_BLOCKED"
+  | "STRATEGY_BLOCKED"
   | "EXECUTE_BLOCKED"
   | "EXECUTED"
   | "ERROR";
@@ -111,6 +115,22 @@ export async function runBinanceTestnetAutoExecute(input: {
       };
     }
 
+    if (input.entries && input.orders) {
+      const strategySummary = buildStrategyHealthSummary({
+        entries: input.entries,
+        orders: input.orders,
+      });
+      const strategy = resolvePrimaryStrategyHealth(strategySummary);
+      if (strategy && !strategy.tradeAllowed) {
+        return {
+          ...base,
+          outcome: "STRATEGY_BLOCKED",
+          blockReasons: [strategy.blockReason ?? "Strategy health blocked new trades."],
+          summary: strategy.blockReason ?? "Strategy health blocked new trades.",
+        };
+      }
+    }
+
     const previewInput = buildBinancePreviewInputFromAiSignal({
       data: input.analysis,
       decisionLogId: input.decisionLogId ?? null,
@@ -154,6 +174,12 @@ export async function runBinanceTestnetAutoExecute(input: {
           "Testnet execute blocked.",
       };
     }
+
+    void emitMissionAlert({
+      kind: "trade_opened",
+      title: "Autopilot opened testnet trade",
+      body: `${preview.side} ${preview.symbol} qty ${preview.estimatedQty} · order ${result.exchangeOrderId}`,
+    });
 
     return {
       ...base,

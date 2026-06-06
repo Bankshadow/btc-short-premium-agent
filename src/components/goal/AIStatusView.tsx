@@ -5,7 +5,9 @@ import Link from "next/link";
 import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import MissionActivityFeed from "./MissionActivityFeed";
 import MissionAutopilotHero from "./MissionAutopilotHero";
+import StrategyHealthBanner from "./StrategyHealthBanner";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
@@ -90,6 +92,10 @@ export default function AIStatusView() {
         running={runningCycle}
         onRunNow={() => void runAutopilotCycle()}
       />
+
+      <StrategyHealthBanner strategy={m.strategyHealth} />
+
+      <MissionActivityFeed items={m.recentActivity} />
 
       <AutopilotControls
         automation={m.automation}

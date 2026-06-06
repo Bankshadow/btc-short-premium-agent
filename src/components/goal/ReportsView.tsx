@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
+import LearningInsightsPanel from "./LearningInsightsPanel";
+import MissionActivityFeed from "./MissionActivityFeed";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
 function usd(n: number): string {
@@ -46,7 +48,7 @@ export default function ReportsView() {
   const dailySummary =
     m.closedTrades > 0
       ? `${m.closedTrades} completed trade(s) · ${m.wins}W / ${m.losses}L · net ${usd(m.netPnl)}`
-      : "No trades yet today. Run your first AI cycle to start.";
+      : "No trades yet — autopilot analyzes every 15 minutes.";
 
   const weeklySummary = m.trust.ready
     ? `Performance is statistically meaningful (${m.trust.completedTrades} trades). Win rate ${m.winRate ?? 0}%.`
@@ -115,6 +117,9 @@ export default function ReportsView() {
           )}
         </Section>
       )}
+
+      <MissionActivityFeed items={m.recentActivity} />
+      <LearningInsightsPanel insights={m.learningInsights} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="Daily summary">

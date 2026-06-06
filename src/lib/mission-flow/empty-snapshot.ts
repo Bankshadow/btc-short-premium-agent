@@ -75,5 +75,14 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
       notifyOnBlocker: true,
       lastAlertAt: null,
     },
+    recentActivity: [],
+    learningInsights: {
+      learnedCount: 0,
+      winCount: 0,
+      lossCount: 0,
+      avgR: null,
+      recent: [],
+    },
+    strategyHealth: null,
   };
 }

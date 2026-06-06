@@ -1,9 +1,13 @@
 import type { GoalDashboardServerPayload } from "@/lib/goal-engine/build-server-context";
 import type { GoalNotificationPrefs } from "@/lib/mission-notifications/goal-notification-store";
+import { resolvePrimaryStrategyHealth } from "./resolve-primary-strategy-health";
 import type {
   BinanceTestnetFlowStatus,
+  MissionFlowActivityItem,
+  MissionFlowLearningInsights,
   MissionFlowPendingPreview,
   MissionFlowSnapshot,
+  MissionFlowStrategyHealth,
 } from "./types";
 
 function resolveBinanceFlowStatus(
@@ -69,6 +73,10 @@ function buildNextRecommendation(
       ? `${mission.pendingLearningReview} trade(s) queued for learning — autopilot will ingest on next cycle.`
       : `Review ${mission.pendingLearningReview} closed trade(s) so AI can learn.`;
   }
+  const strategyHealthHint = resolvePrimaryStrategyHealth(payload.strategyHealth);
+  if (strategyHealthHint && !strategyHealthHint.tradeAllowed && strategyHealthHint.blockReason) {
+    return strategyHealthHint.blockReason;
+  }
   if (goal.risk.blocker) {
     return `Clear blocker: ${goal.risk.blocker}`;
   }
@@ -84,12 +92,25 @@ function buildNextRecommendation(
   return goal.primaryCta.description || mission.nextAction;
 }
 
+const EMPTY_LEARNING_INSIGHTS: MissionFlowLearningInsights = {
+  learnedCount: 0,
+  winCount: 0,
+  lossCount: 0,
+  avgR: null,
+  recent: [],
+};
+
 export function buildMissionFlowSnapshot(
   payload: GoalDashboardServerPayload,
   latestDecisionLogId: string | null,
   openTrades: number,
   pendingTestnetPreview: MissionFlowPendingPreview | null = null,
   notificationPrefs?: GoalNotificationPrefs,
+  extras?: {
+    recentActivity?: MissionFlowActivityItem[];
+    learningInsights?: MissionFlowLearningInsights;
+    strategyHealth?: MissionFlowStrategyHealth | null;
+  },
 ): MissionFlowSnapshot {
   const { goal, mission, binance, engines, automation, learningPending } = payload;
   const settings = automation?.state.settings;
@@ -203,5 +224,8 @@ export function buildMissionFlowSnapshot(
       notifyOnBlocker: notificationPrefs?.notifyOnBlocker ?? true,
       lastAlertAt: notificationPrefs?.lastAlertAt ?? null,
     },
+    recentActivity: extras?.recentActivity ?? [],
+    learningInsights: extras?.learningInsights ?? EMPTY_LEARNING_INSIGHTS,
+    strategyHealth: extras?.strategyHealth ?? null,
   };
 }

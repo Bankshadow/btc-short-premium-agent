@@ -4,12 +4,15 @@ import {
   loadBinanceConfig,
 } from "./binance-config";
 import { executeBinanceTestnetClose } from "./binance-execution";
+import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
+import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 
 export const TESTNET_AUTO_MONITOR_DEFAULTS = {
   stopLossPct: -2,
   takeProfitPct: 3,
   maxHoldHours: 24,
+  verdictFlipGraceHours: 1,
 };
 
 export type BinanceAutoMonitorOutcome =
@@ -57,9 +60,10 @@ function resolveCloseReason(input: {
     return `Take profit +${TESTNET_AUTO_MONITOR_DEFAULTS.takeProfitPct}% (uPnL ${input.uPnLPct}%)`;
   }
   if (
-    input.verdict === "SKIP" ||
-    input.verdict === "WAIT" ||
-    input.verdict === "LONG"
+    input.openedHours >= TESTNET_AUTO_MONITOR_DEFAULTS.verdictFlipGraceHours &&
+    (input.verdict === "SKIP" ||
+      input.verdict === "WAIT" ||
+      input.verdict === "LONG")
   ) {
     return `Committee ${input.verdict} — thesis no longer active`;
   }
@@ -124,7 +128,16 @@ export async function runBinanceTestnetAutoMonitor(input: {
     const entry = Number(pos.entryPrice);
     const amt = Number(pos.positionAmt);
     const uPnLPct = unrealizedPct(entry, mark, amt);
-    const openedHours = 0;
+    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const openTrade = journal.find(
+      (j) =>
+        j.symbol === pos.symbol &&
+        ["SUBMITTED", "FILLED", "CLOSING"].includes(j.status),
+    );
+    const openedAt = openTrade?.executedAt ?? openTrade?.createdAt ?? null;
+    const openedHours = openedAt
+      ? (Date.now() - Date.parse(openedAt)) / 3_600_000
+      : 0;
 
     const closeReason = resolveCloseReason({
       uPnLPct,
@@ -157,6 +170,12 @@ export async function runBinanceTestnetAutoMonitor(input: {
         summary: close.error ?? "Auto-close blocked by risk gate.",
       };
     }
+
+    void emitMissionAlert({
+      kind: "trade_closed",
+      title: "Autopilot closed testnet position",
+      body: `${pos.symbol} · ${closeReason}`,
+    });
 
     return {
       symbol: pos.symbol,

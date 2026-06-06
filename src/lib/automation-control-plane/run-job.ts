@@ -230,6 +230,16 @@ export async function runAutomationJob(
         }
         const learnSuffix =
           autoLearned > 0 ? ` · auto-learned ${autoLearned}` : "";
+        if (autoLearned > 0) {
+          const { emitMissionAlert } = await import(
+            "@/lib/mission-notifications/emit-mission-alert"
+          );
+          void emitMissionAlert({
+            kind: "learning_ingested",
+            title: "Autopilot ingested closed trades",
+            body: `${autoLearned} trade(s) marked learned for strategy feedback.`,
+          });
+        }
         return {
           summary: `${ls.label} · samples ${ls.strategySampleSize}${learnSuffix}`,
         };
