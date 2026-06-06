@@ -3,15 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
-import type { GoalProgressSnapshot } from "@/lib/goal-engine/types";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
-
-interface DashboardResponse {
-  ok: boolean;
-  goal?: GoalProgressSnapshot;
-  engines?: CoreEngineRegistrySnapshot;
-  error?: string;
-}
+import { useMissionSnapshot } from "./use-mission-snapshot";
 
 const STATUS_COPY: Record<string, string> = {
   IDLE: "Idle",
@@ -23,33 +16,29 @@ const STATUS_COPY: Record<string, string> = {
 };
 
 export default function AIStatusView() {
-  const [data, setData] = useState<DashboardResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { snapshot: m, busy, error, refresh } = useMissionSnapshot();
+  const [engines, setEngines] = useState<CoreEngineRegistrySnapshot | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setBusy(true);
-    setError(null);
+  const loadEngines = useCallback(async () => {
     try {
       const res = await fetch("/api/goal-dashboard", { cache: "no-store" });
-      const json = (await res.json()) as DashboardResponse;
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to load AI status");
-      setData(json);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load AI status");
-    } finally {
-      setBusy(false);
+      const json = await res.json();
+      if (res.ok && json.ok && json.engines) {
+        setEngines(json.engines as CoreEngineRegistrySnapshot);
+      }
+    } catch {
+      /* optional */
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void loadEngines();
+  }, [loadEngines]);
 
-  const goal = data?.goal;
-  const ai = goal?.aiActivity;
-  const engines = data?.engines;
+  const refreshAll = useCallback(async () => {
+    await Promise.all([refresh(), loadEngines()]);
+  }, [refresh, loadEngines]);
 
   return (
     <GoalShell
@@ -60,10 +49,10 @@ export default function AIStatusView() {
         <button
           type="button"
           disabled={busy}
-          onClick={() => void refresh()}
+          onClick={() => void refreshAll()}
           className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
         >
-          {busy ? "Loading..." : "Refresh"}
+          {busy ? "Refreshing..." : "Refresh"}
         </button>
       }
     >
@@ -73,56 +62,72 @@ export default function AIStatusView() {
         </p>
       )}
 
-      {ai && (
-        <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Current mode</p>
-          <p className="mt-1 font-mono text-2xl text-zinc-50">
-            {STATUS_COPY[ai.status] ?? ai.status}
-          </p>
-          <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-zinc-400">
-            <div>
-              <dt className="text-zinc-500">Last cycle</dt>
-              <dd className="mt-0.5 text-zinc-200">
-                {goal?.lastCycleAt
-                  ? new Date(goal.lastCycleAt).toLocaleString()
-                  : "No cycle has run yet."}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Last verdict</dt>
-              <dd className="mt-0.5 text-zinc-200">{goal?.lastVerdict ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Current strategy</dt>
-              <dd className="mt-0.5 text-zinc-200">{goal?.currentStrategy ?? "Default"}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Risk status</dt>
-              <dd className={`mt-0.5 ${goal?.risk.blocker ? "text-rose-300" : "text-emerald-300"}`}>
-                {goal?.risk.blocker ?? "Within safe limits"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Last action</dt>
-              <dd className="mt-0.5 text-zinc-200">{ai.lastAction}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Next action</dt>
-              <dd className="mt-0.5 text-zinc-200">{ai.nextPlannedAction}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Human action required</dt>
-              <dd className={`mt-0.5 ${ai.humanActionRequired ? "text-amber-300" : "text-emerald-300"}`}>
-                {ai.humanActionRequired ? "Yes" : "No"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Reason</dt>
-              <dd className="mt-0.5 text-zinc-200">{ai.reason}</dd>
-            </div>
-          </dl>
-        </section>
-      )}
+      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
+        <p className="text-xs uppercase tracking-wide text-zinc-500">Current mode</p>
+        <p className="mt-1 font-mono text-2xl text-zinc-50">
+          {STATUS_COPY[m.aiStatus.state] ?? m.aiStatus.state}
+        </p>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-zinc-400">
+          <div>
+            <dt className="text-zinc-500">Last cycle</dt>
+            <dd className="mt-0.5 text-zinc-200">
+              {m.lastCycleAt
+                ? new Date(m.lastCycleAt).toLocaleString()
+                : "No cycle has run yet."}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Last verdict</dt>
+            <dd className="mt-0.5 text-zinc-200">{m.lastVerdict ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Latest decision log</dt>
+            <dd className="mt-0.5 font-mono text-zinc-200">
+              {m.latestDecisionLogId ? (
+                <Link href={`/trades/${m.latestDecisionLogId}`} className="text-emerald-300 hover:underline">
+                  {m.latestDecisionLogId.slice(0, 20)}…
+                </Link>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Desk run</dt>
+            <dd className="mt-0.5 font-mono text-zinc-200">{m.lastDeskRunId ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Last action</dt>
+            <dd className="mt-0.5 text-zinc-200">{m.aiStatus.lastAction}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Next action</dt>
+            <dd className="mt-0.5 text-zinc-200">{m.aiStatus.nextAction}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Human action required</dt>
+            <dd className={`mt-0.5 ${m.aiStatus.humanActionRequired ? "text-amber-300" : "text-emerald-300"}`}>
+              {m.aiStatus.humanActionRequired ? "Yes" : "No"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Current blocker</dt>
+            <dd className={`mt-0.5 ${m.risk.blocker ? "text-rose-300" : "text-emerald-300"}`}>
+              {m.risk.blocker ?? "None"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Binance testnet</dt>
+            <dd className={`mt-0.5 ${m.binanceTestnet.status === "CONNECTED" ? "text-emerald-300" : "text-amber-300"}`}>
+              {m.binanceTestnet.status} — {m.binanceTestnet.reason}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Engines needing attention</dt>
+            <dd className="mt-0.5 text-zinc-200">{m.enginesNeedingAttention}</dd>
+          </div>
+        </dl>
+      </section>
 
       {engines && (
         <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
@@ -166,6 +171,14 @@ export default function AIStatusView() {
           </ul>
         </section>
       )}
+
+      <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4">
+        <p className="text-xs text-zinc-500">Next recommendation</p>
+        <p className="mt-1 text-sm text-emerald-300">{m.nextRecommendation}</p>
+        <Link href="/" className="mt-2 inline-block text-xs text-zinc-400 hover:underline">
+          Start AI from Dashboard →
+        </Link>
+      </section>
 
       {showAdvanced && (
         <p className="text-[11px] text-zinc-600">

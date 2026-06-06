@@ -52,7 +52,8 @@
     "test:strategy-health": "npx --yes tsx --test src/lib/strategy-health/strategy-health.test.ts",
     "test:live-evidence": "npx --yes tsx --test src/lib/live-evidence/live-evidence.test.ts",
     "test:execution-quality": "npx --yes tsx --test src/lib/execution-quality/execution-quality.test.ts",
-    "test:goal-engine": "npx --yes tsx --test src/lib/goal-engine/goal-engine.test.ts"
+    "test:goal-engine": "npx --yes tsx --test src/lib/goal-engine/goal-engine.test.ts",
+    "test:mission-flow": "npx --yes tsx --test src/lib/mission-flow/mission-flow.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",

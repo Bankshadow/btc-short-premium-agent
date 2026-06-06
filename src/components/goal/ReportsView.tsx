@@ -1,16 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
-import type { MissionSnapshot } from "@/lib/goal-engine/types";
-import { emptyMissionSnapshot } from "@/lib/goal-engine/build-mission-snapshot";
-
-interface DashboardResponse {
-  ok: boolean;
-  mission?: MissionSnapshot;
-  error?: string;
-}
+import { useMissionSnapshot } from "./use-mission-snapshot";
 
 function usd(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -27,44 +19,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function ReportsView() {
-  const [mission, setMission] = useState<MissionSnapshot>(emptyMissionSnapshot());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/goal-dashboard", { cache: "no-store" });
-      const json = (await res.json()) as DashboardResponse;
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to load reports");
-      if (json.mission) setMission(json.mission);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load reports");
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const { snapshot: m, busy, error, refresh } = useMissionSnapshot();
 
   const dailySummary =
-    mission.totalTrades > 0
-      ? `${mission.totalTrades} completed trade(s) · ${mission.winTrades}W / ${mission.lossTrades}L · net ${usd(mission.netPnl)}`
-      : "No trades yet. Run your first AI cycle to start.";
+    m.closedTrades > 0
+      ? `${m.closedTrades} completed trade(s) · ${m.wins}W / ${m.losses}L · net ${usd(m.netPnl)}`
+      : "No trades yet today. Run your first AI cycle to start.";
 
-  const weeklySummary = mission.trustReady
-    ? `Performance is statistically meaningful (${mission.totalTrades} trades). Win rate ${mission.winRate}%.`
-    : `AI needs ${mission.minTradesForTrust} completed trades before weekly performance can be trusted. ${mission.totalTrades} so far.`;
+  const weeklySummary = m.trust.ready
+    ? `Performance is statistically meaningful (${m.trust.completedTrades} trades). Win rate ${m.winRate ?? 0}%.`
+    : `${m.trust.completedTrades} / ${m.trust.minRequired} completed trades — AI needs ${m.trust.minRequired} before weekly performance can be trusted.`;
 
   const learningSummary =
-    mission.learnedTrades > 0
-      ? `${mission.learnedTrades} trade(s) learned · ${mission.pendingLearningReview} pending review.`
-      : mission.trustReady
-        ? "AI learning is on track — enough trades to evaluate performance."
-        : `AI needs ${mission.minTradesForTrust} completed trades before its performance can be trusted.`;
+    m.learnedTrades > 0
+      ? `${m.learnedTrades} trade(s) learned · ${m.pendingLearningReview} pending review.`
+      : `${m.trust.completedTrades} / ${m.trust.minRequired} completed trades for trusted performance.`;
 
   return (
     <GoalShell
@@ -78,7 +47,7 @@ export default function ReportsView() {
           onClick={() => void refresh()}
           className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
         >
-          {busy ? "Loading..." : "Refresh"}
+          {busy ? "Refreshing..." : "Refresh"}
         </button>
       }
     >
@@ -88,16 +57,11 @@ export default function ReportsView() {
         </p>
       )}
 
-      <p className="text-[11px] text-zinc-600">
-        Reports use the same mission snapshot as the dashboard ({mission.scopeLabel}).
-      </p>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="Daily summary">
           <p>{dailySummary}</p>
           <p className="mt-2 text-xs text-zinc-500">
-            AI status: {mission.aiStatus} · last updated{" "}
-            {new Date(mission.lastUpdatedAt).toLocaleString()}
+            AI: {m.aiStatus.state} — {m.aiStatus.lastAction}
           </p>
         </Section>
 
@@ -108,31 +72,31 @@ export default function ReportsView() {
         <Section title="Goal progress">
           <ul className="space-y-1 text-xs">
             <li>
-              Mission: {usd(mission.startCapital)} → {usd(mission.targetCapital)}
+              Mission: {usd(m.startCapital)} → {usd(m.targetCapital)}
             </li>
-            <li>Current equity: {usd(mission.currentEquity)}</li>
-            <li>Progress: {mission.progressPct}%</li>
-            <li>Remaining: {usd(mission.remainingToTarget)}</li>
+            <li>Current equity: {usd(m.currentEquity)}</li>
+            <li>Progress: {m.progressPct}%</li>
+            <li>Remaining: {usd(m.remainingToTarget)}</li>
           </ul>
         </Section>
 
         <Section title="PnL summary">
           <ul className="space-y-1 text-xs">
-            <li>Net PnL: {usd(mission.netPnl)}</li>
-            <li>Realized: {usd(mission.realizedPnl)}</li>
-            <li>Unrealized: {usd(mission.unrealizedPnl)}</li>
+            <li>Net PnL: {usd(m.netPnl)}</li>
+            <li>Realized: {usd(m.realizedPnl)}</li>
+            <li>Unrealized: {usd(m.unrealizedPnl)}</li>
+            <li>Max drawdown: {usd(-m.maxDrawdown)}</li>
           </ul>
         </Section>
 
         <Section title="Trades summary">
           <ul className="space-y-1 text-xs">
-            <li>Total closed: {mission.totalTrades}</li>
+            <li>Total closed: {m.closedTrades}</li>
             <li>
-              Wins / Losses / Breakeven: {mission.winTrades} / {mission.lossTrades} /{" "}
-              {mission.breakevenTrades}
+              Wins / Losses / Breakeven: {m.wins} / {m.losses} / {m.breakeven}
             </li>
-            <li>Win rate: {mission.winRate}%</li>
-            <li>Open positions: {mission.openPositionCount}</li>
+            <li>Win rate: {m.winRate != null ? `${m.winRate}%` : "—"}</li>
+            <li>Open positions: {m.openTrades}</li>
           </ul>
           <Link href="/trades" className="mt-2 inline-block text-xs text-emerald-300 hover:underline">
             View all trades →
@@ -141,31 +105,22 @@ export default function ReportsView() {
 
         <Section title="AI learning summary">
           <p>{learningSummary}</p>
-          {mission.pendingLearningReview > 0 && (
+          {m.pendingLearningReview > 0 && (
             <Link href="/learning" className="mt-2 inline-block text-xs text-amber-300 hover:underline">
-              Review {mission.pendingLearningReview} pending trade(s) →
+              Review {m.pendingLearningReview} pending trade(s) →
             </Link>
           )}
         </Section>
       </div>
 
       <Section title="Next recommendation">
-        <p>{mission.nextAction}</p>
-        <Link
-          href={mission.primaryCtaHref}
-          className="mt-2 inline-block text-sm font-semibold text-emerald-300 hover:underline"
-        >
-          {mission.primaryCtaLabel} →
-        </Link>
+        <p>{m.nextRecommendation}</p>
+        {m.binanceTestnet.status !== "CONNECTED" && (
+          <Link href="/binance-testnet" className="mt-2 inline-block text-sm font-semibold text-emerald-300 hover:underline">
+            Connect Binance Testnet →
+          </Link>
+        )}
       </Section>
-
-      <p className="text-[11px] text-zinc-600">
-        Need detailed export reports?{" "}
-        <Link href="/summary" className="text-emerald-300 hover:underline">
-          Open advanced reports
-        </Link>
-        .
-      </p>
     </GoalShell>
   );
 }

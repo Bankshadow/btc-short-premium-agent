@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
 import type { GoalTradeRow } from "@/lib/goal-engine/build-trade-list";
-import type { MissionSnapshot } from "@/lib/goal-engine/types";
-import { emptyMissionSnapshot } from "@/lib/goal-engine/build-mission-snapshot";
+import { useMissionSnapshot } from "./use-mission-snapshot";
 
 type EnvFilter = "PRACTICE" | "ALL" | "PAPER" | "SHADOW" | "TESTNET" | "LIVE";
 type StateFilter = "ALL" | "OPEN" | "CLOSED";
@@ -23,30 +22,21 @@ function resultClass(result: GoalTradeRow["result"]): string {
 }
 
 export default function TradesView() {
+  const { snapshot: m, busy: missionBusy, refresh: refreshMission } = useMissionSnapshot();
   const [trades, setTrades] = useState<GoalTradeRow[]>([]);
-  const [mission, setMission] = useState<MissionSnapshot>(emptyMissionSnapshot());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [env, setEnv] = useState<EnvFilter>("PRACTICE");
   const [state, setState] = useState<StateFilter>("ALL");
 
-  const refresh = useCallback(async () => {
+  const refreshTrades = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const [tradesRes, dashRes] = await Promise.all([
-        fetch("/api/goal-trades", { cache: "no-store" }),
-        fetch("/api/goal-dashboard", { cache: "no-store" }),
-      ]);
-      const tradesJson = await tradesRes.json();
-      const dashJson = await dashRes.json();
-      if (!tradesRes.ok || !tradesJson.ok) {
-        throw new Error(tradesJson.error ?? "Failed to load trades");
-      }
-      setTrades(tradesJson.trades as GoalTradeRow[]);
-      if (dashRes.ok && dashJson.ok && dashJson.mission) {
-        setMission(dashJson.mission as MissionSnapshot);
-      }
+      const res = await fetch("/api/goal-trades", { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to load trades");
+      setTrades(json.trades as GoalTradeRow[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load trades");
     } finally {
@@ -54,9 +44,13 @@ export default function TradesView() {
     }
   }, []);
 
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshMission(), refreshTrades()]);
+  }, [refreshMission, refreshTrades]);
+
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refreshTrades();
+  }, [refreshTrades]);
 
   const filtered = useMemo(() => {
     return trades.filter((t) => {
@@ -69,14 +63,10 @@ export default function TradesView() {
   }, [trades, env, state]);
 
   const useMissionTotals = env === "PRACTICE" && state === "ALL";
-  const totalTrades = useMissionTotals ? mission.totalTrades : filtered.filter((t) => t.result !== "OPEN").length;
-  const openCount = filtered.filter((t) => t.result === "OPEN").length;
-  const closedCount = useMissionTotals
-    ? mission.totalTrades
-    : filtered.filter((t) => t.result !== "OPEN").length;
-  const wins = useMissionTotals ? mission.winTrades : filtered.filter((t) => t.result === "WIN").length;
-  const losses = useMissionTotals ? mission.lossTrades : filtered.filter((t) => t.result === "LOSS").length;
-  const netPnl = useMissionTotals ? mission.netPnl : filtered.reduce((s, t) => s + t.pnlUsd, 0);
+  const emptyNextAction =
+    m.binanceTestnet.status !== "CONNECTED"
+      ? "Connect Binance Testnet"
+      : "Run first AI cycle";
 
   return (
     <GoalShell
@@ -86,11 +76,11 @@ export default function TradesView() {
       actions={
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || missionBusy}
           onClick={() => void refresh()}
           className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
         >
-          {busy ? "Loading..." : "Refresh"}
+          {busy || missionBusy ? "Loading..." : "Refresh"}
         </button>
       }
     >
@@ -100,31 +90,30 @@ export default function TradesView() {
         </p>
       )}
 
-      <p className="text-[11px] text-zinc-600">
-        Summary matches dashboard when filtered to practice (Paper + Testnet). Live is always separate.
-      </p>
-
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
           <p className="text-[10px] uppercase text-zinc-500">Total closed</p>
-          <p className="font-mono text-lg text-zinc-100">{totalTrades}</p>
+          <p className="font-mono text-lg text-zinc-100">
+            {useMissionTotals ? m.closedTrades : filtered.filter((t) => t.result !== "OPEN").length}
+          </p>
         </div>
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
           <p className="text-[10px] uppercase text-zinc-500">Open / Closed</p>
           <p className="font-mono text-lg text-zinc-100">
-            {openCount} / {closedCount}
+            {useMissionTotals ? m.openTrades : filtered.filter((t) => t.result === "OPEN").length} /{" "}
+            {useMissionTotals ? m.closedTrades : filtered.filter((t) => t.result !== "OPEN").length}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
           <p className="text-[10px] uppercase text-zinc-500">Win / Loss</p>
           <p className="font-mono text-lg text-zinc-100">
-            {wins} / {losses}
+            {useMissionTotals ? `${m.wins} / ${m.losses}` : `${filtered.filter((t) => t.result === "WIN").length} / ${filtered.filter((t) => t.result === "LOSS").length}`}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
           <p className="text-[10px] uppercase text-zinc-500">Net PnL</p>
-          <p className={`font-mono text-lg ${netPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-            {usd(netPnl)}
+          <p className={`font-mono text-lg ${(useMissionTotals ? m.netPnl : filtered.reduce((s, t) => s + t.pnlUsd, 0)) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+            {usd(useMissionTotals ? m.netPnl : filtered.reduce((s, t) => s + t.pnlUsd, 0))}
           </p>
         </div>
       </div>
@@ -151,17 +140,23 @@ export default function TradesView() {
           <option value="OPEN">Open only</option>
           <option value="CLOSED">Closed only</option>
         </select>
-        <span className="text-xs text-zinc-500">
-          {filtered.length} rows · {wins}W / {losses}L · net{" "}
-          <span className={netPnl >= 0 ? "text-emerald-300" : "text-rose-300"}>{usd(netPnl)}</span>
-        </span>
       </div>
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
         {filtered.length === 0 ? (
-          <p className="text-xs text-zinc-500">
-            No trades recorded yet. Run your first AI cycle or connect Binance Testnet.
-          </p>
+          <div className="text-xs text-zinc-500">
+            <p>No trades recorded yet.</p>
+            <p className="mt-2 text-amber-300/90">Next: {emptyNextAction}</p>
+            {m.binanceTestnet.status !== "CONNECTED" ? (
+              <Link href="/binance-testnet" className="mt-2 inline-block text-emerald-300 hover:underline">
+                Connect Binance Testnet →
+              </Link>
+            ) : (
+              <Link href="/" className="mt-2 inline-block text-emerald-300 hover:underline">
+                Run first AI cycle →
+              </Link>
+            )}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-xs text-zinc-300">
@@ -190,10 +185,7 @@ export default function TradesView() {
                     </td>
                     <td className={`py-2 pr-3 ${resultClass(t.result)}`}>{t.result}</td>
                     <td className="py-2">
-                      <Link
-                        href={`/trades/${t.id}`}
-                        className="text-emerald-300 hover:underline"
-                      >
+                      <Link href={`/trades/${t.id}`} className="text-emerald-300 hover:underline">
                         View full lifecycle →
                       </Link>
                     </td>
