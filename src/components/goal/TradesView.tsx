@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
 import type { GoalTradeRow } from "@/lib/goal-engine/build-trade-list";
+import type { MissionSnapshot } from "@/lib/goal-engine/types";
+import { emptyMissionSnapshot } from "@/lib/goal-engine/build-mission-snapshot";
 
-type EnvFilter = "ALL" | "PAPER" | "SHADOW" | "TESTNET" | "LIVE";
+type EnvFilter = "PRACTICE" | "ALL" | "PAPER" | "SHADOW" | "TESTNET" | "LIVE";
 type StateFilter = "ALL" | "OPEN" | "CLOSED";
 
 function usd(n: number): string {
@@ -22,19 +24,29 @@ function resultClass(result: GoalTradeRow["result"]): string {
 
 export default function TradesView() {
   const [trades, setTrades] = useState<GoalTradeRow[]>([]);
+  const [mission, setMission] = useState<MissionSnapshot>(emptyMissionSnapshot());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [env, setEnv] = useState<EnvFilter>("ALL");
+  const [env, setEnv] = useState<EnvFilter>("PRACTICE");
   const [state, setState] = useState<StateFilter>("ALL");
 
   const refresh = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/goal-trades", { cache: "no-store" });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to load trades");
-      setTrades(json.trades as GoalTradeRow[]);
+      const [tradesRes, dashRes] = await Promise.all([
+        fetch("/api/goal-trades", { cache: "no-store" }),
+        fetch("/api/goal-dashboard", { cache: "no-store" }),
+      ]);
+      const tradesJson = await tradesRes.json();
+      const dashJson = await dashRes.json();
+      if (!tradesRes.ok || !tradesJson.ok) {
+        throw new Error(tradesJson.error ?? "Failed to load trades");
+      }
+      setTrades(tradesJson.trades as GoalTradeRow[]);
+      if (dashRes.ok && dashJson.ok && dashJson.mission) {
+        setMission(dashJson.mission as MissionSnapshot);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load trades");
     } finally {
@@ -48,18 +60,23 @@ export default function TradesView() {
 
   const filtered = useMemo(() => {
     return trades.filter((t) => {
-      if (env !== "ALL" && t.environment !== env) return false;
+      if (env === "PRACTICE" && t.environment === "LIVE") return false;
+      if (env !== "ALL" && env !== "PRACTICE" && t.environment !== env) return false;
       if (state === "OPEN" && t.result !== "OPEN") return false;
       if (state === "CLOSED" && t.result === "OPEN") return false;
       return true;
     });
   }, [trades, env, state]);
 
+  const useMissionTotals = env === "PRACTICE" && state === "ALL";
+  const totalTrades = useMissionTotals ? mission.totalTrades : filtered.filter((t) => t.result !== "OPEN").length;
   const openCount = filtered.filter((t) => t.result === "OPEN").length;
-  const closedCount = filtered.filter((t) => t.result !== "OPEN").length;
-  const wins = filtered.filter((t) => t.result === "WIN").length;
-  const losses = filtered.filter((t) => t.result === "LOSS").length;
-  const netPnl = filtered.reduce((s, t) => s + t.pnlUsd, 0);
+  const closedCount = useMissionTotals
+    ? mission.totalTrades
+    : filtered.filter((t) => t.result !== "OPEN").length;
+  const wins = useMissionTotals ? mission.winTrades : filtered.filter((t) => t.result === "WIN").length;
+  const losses = useMissionTotals ? mission.lossTrades : filtered.filter((t) => t.result === "LOSS").length;
+  const netPnl = useMissionTotals ? mission.netPnl : filtered.reduce((s, t) => s + t.pnlUsd, 0);
 
   return (
     <GoalShell
@@ -83,10 +100,14 @@ export default function TradesView() {
         </p>
       )}
 
+      <p className="text-[11px] text-zinc-600">
+        Summary matches dashboard when filtered to practice (Paper + Testnet). Live is always separate.
+      </p>
+
       <div className="grid gap-3 sm:grid-cols-4">
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
-          <p className="text-[10px] uppercase text-zinc-500">Total</p>
-          <p className="font-mono text-lg text-zinc-100">{filtered.length}</p>
+          <p className="text-[10px] uppercase text-zinc-500">Total closed</p>
+          <p className="font-mono text-lg text-zinc-100">{totalTrades}</p>
         </div>
         <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
           <p className="text-[10px] uppercase text-zinc-500">Open / Closed</p>
@@ -114,6 +135,7 @@ export default function TradesView() {
           onChange={(e) => setEnv(e.target.value as EnvFilter)}
           className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200"
         >
+          <option value="PRACTICE">Practice (Paper + Testnet)</option>
           <option value="ALL">All environments</option>
           <option value="PAPER">Paper</option>
           <option value="SHADOW">Shadow</option>
@@ -130,7 +152,7 @@ export default function TradesView() {
           <option value="CLOSED">Closed only</option>
         </select>
         <span className="text-xs text-zinc-500">
-          {filtered.length} trades · {wins}W / {losses}L · net{" "}
+          {filtered.length} rows · {wins}W / {losses}L · net{" "}
           <span className={netPnl >= 0 ? "text-emerald-300" : "text-rose-300"}>{usd(netPnl)}</span>
         </span>
       </div>

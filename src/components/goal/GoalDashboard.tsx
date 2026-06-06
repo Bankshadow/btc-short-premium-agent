@@ -3,14 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
-import type { GoalProgressSnapshot } from "@/lib/goal-engine/types";
+import type { GoalProgressSnapshot, MissionSnapshot } from "@/lib/goal-engine/types";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
+import { emptyMissionSnapshot } from "@/lib/goal-engine/build-mission-snapshot";
 
 interface DashboardResponse {
   ok: boolean;
   goal?: GoalProgressSnapshot;
+  mission?: MissionSnapshot;
   engines?: CoreEngineRegistrySnapshot;
   error?: string;
+  cycle?: {
+    deskRunId: string;
+    verdict: string;
+    testnetPreviewId: string | null;
+  };
 }
 
 function usd(n: number): string {
@@ -65,7 +72,9 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 export default function GoalDashboard() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startMessage, setStartMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -82,19 +91,39 @@ export default function GoalDashboard() {
     }
   }, []);
 
+  const startAi = useCallback(async () => {
+    setStarting(true);
+    setError(null);
+    setStartMessage(null);
+    try {
+      const res = await fetch("/api/goal/start-ai", { method: "POST" });
+      const json = (await res.json()) as DashboardResponse;
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Start AI failed");
+      setData(json);
+      const verdict = json.cycle?.verdict ?? json.goal?.lastVerdict ?? "—";
+      const preview = json.cycle?.testnetPreviewId;
+      setStartMessage(
+        preview
+          ? `AI cycle complete · verdict ${verdict} · testnet preview ready (double confirm required).`
+          : `AI cycle complete · verdict ${verdict}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Start AI failed");
+    } finally {
+      setStarting(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
+  const mission = data?.mission ?? emptyMissionSnapshot();
   const goal = data?.goal;
   const engines = data?.engines;
-  const mission = goal?.mission;
-  const stats = goal?.tradeStats;
-  const equity = goal?.equity;
-  const ai = goal?.aiActivity;
-  const pos = goal?.currentPosition;
   const risk = goal?.risk;
   const cta = goal?.primaryCta;
+  const hasData = mission.dataConnected || mission.totalTrades > 0;
 
   return (
     <GoalShell
@@ -103,10 +132,18 @@ export default function GoalDashboard() {
       activePath="/"
       actions={
         <>
+          <button
+            type="button"
+            disabled={starting || busy}
+            onClick={() => void startAi()}
+            className="rounded-lg bg-emerald-700/90 px-4 py-2 text-xs font-semibold text-zinc-50 hover:bg-emerald-600 disabled:opacity-50"
+          >
+            {starting ? "Running AI…" : "Start AI"}
+          </button>
           {cta && (
             <Link
               href={cta.href}
-              className="rounded-lg bg-emerald-700/90 px-4 py-2 text-xs font-semibold text-zinc-50 hover:bg-emerald-600"
+              className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900/60"
             >
               {cta.label}
             </Link>
@@ -128,17 +165,18 @@ export default function GoalDashboard() {
         </p>
       )}
 
-      {goal?.zeroStateMessage && (
+      {startMessage && (
+        <p className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-2 text-xs text-emerald-200">
+          {startMessage}
+        </p>
+      )}
+
+      {!hasData && (
         <section className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
-          <p className="text-sm text-amber-100">{goal.zeroStateMessage}</p>
-          {cta && (
-            <Link
-              href={cta.href}
-              className="mt-2 inline-block text-xs font-semibold text-emerald-300 hover:underline"
-            >
-              {cta.label} →
-            </Link>
-          )}
+          <p className="text-sm text-amber-100">
+            {goal?.zeroStateMessage ??
+              "Trade data is not connected yet. Run your first AI cycle or connect Binance Testnet."}
+          </p>
         </section>
       )}
 
@@ -165,120 +203,118 @@ export default function GoalDashboard() {
           </ul>
         </section>
       ) : (
-        goal &&
-        goal.dataConnected && (
+        hasData && (
           <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-200/80">
-            Human action required: <span className="font-semibold">No</span> — AI is running
-            normally.
+            Human action required:{" "}
+            <span className="font-semibold">{mission.humanActionRequired ? "Yes" : "No"}</span>
+            {mission.humanActionRequired ? ` — ${mission.nextAction}` : " — AI is running normally."}
           </p>
         )
       )}
 
-      {/* Mission Hero */}
-      {mission && (
-        <Card title="Mission · $1,000 → $10,000" tone="good">
-          <p className="text-[10px] uppercase tracking-widest text-emerald-400/80">
-            AI Profit Mission
-          </p>
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="font-mono text-3xl text-zinc-50">{usd(mission.currentEquity)}</p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Current equity · {usd(mission.remainingToTarget)} left to $10,000
-              </p>
-            </div>
-            <p className="font-mono text-2xl text-emerald-300">{mission.progressPct}%</p>
-          </div>
-          <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
-              style={{ width: `${Math.min(100, Math.max(0, mission.progressPct))}%` }}
-            />
-          </div>
-          <p className="mt-2 text-[11px] text-zinc-600">
-            Goal: {usd(mission.startCapital)} → {usd(mission.targetCapital)} · Net PnL{" "}
-            {mission.netPnl >= 0 ? "+" : ""}
-            {usd(mission.netPnl)}
-          </p>
-        </Card>
-      )}
-
-      {/* Trading Stats */}
-      {stats && equity && (
-        <Card title="Trading stats">
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Metric label="Total trades" value={String(stats.totalTrades)} />
-            <Metric label="Wins" value={String(stats.winTrades)} />
-            <Metric label="Losses" value={String(stats.lossTrades)} />
-            <Metric label="Breakeven" value={String(stats.breakevenTrades)} />
-            <Metric label="Win rate" value={`${stats.winRate}%`} />
-            <Metric label="Net PnL" value={usd(equity.netPnl)} />
-            <Metric label="Realized PnL" value={usd(equity.realizedPnl)} />
-            <Metric label="Unrealized PnL" value={usd(equity.unrealizedPnl)} />
-            <Metric label="Max drawdown" value={usd(-stats.maxDrawdown)} />
-          </div>
-          {!goal?.trustReady && (
-            <p className="mt-3 text-[11px] text-amber-300/80">
-              AI needs {goal?.minTradesForTrust} completed trades before its performance can be
-              trusted. {stats.totalTrades} done so far.
+      <Card title="Mission · $1,000 → $10,000" tone="good">
+        <p className="text-[10px] uppercase tracking-widest text-emerald-400/80">
+          AI Profit Mission · {mission.scopeLabel}
+        </p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="font-mono text-3xl text-zinc-50">{usd(mission.currentEquity)}</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Current equity · {usd(mission.remainingToTarget)} left to $10,000
             </p>
-          )}
-          {stats.totalTrades === 0 && (
-            <p className="mt-3 text-[11px] text-zinc-500">No trades recorded yet.</p>
-          )}
-        </Card>
-      )}
+          </div>
+          <p className="font-mono text-2xl text-emerald-300">{mission.progressPct}%</p>
+        </div>
+        <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+            style={{ width: `${Math.min(100, Math.max(0, mission.progressPct))}%` }}
+          />
+        </div>
+        <p className="mt-2 text-[11px] text-zinc-600">
+          Goal: {usd(mission.startCapital)} → {usd(mission.targetCapital)} · Net PnL{" "}
+          {mission.netPnl >= 0 ? "+" : ""}
+          {usd(mission.netPnl)}
+        </p>
+      </Card>
+
+      <Card title="Trading stats">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Metric label="Total trades" value={String(mission.totalTrades)} />
+          <Metric label="Wins" value={String(mission.winTrades)} />
+          <Metric label="Losses" value={String(mission.lossTrades)} />
+          <Metric label="Win / Loss" value={`${mission.winTrades} / ${mission.lossTrades}`} />
+          <Metric label="Win rate" value={`${mission.winRate}%`} />
+          <Metric label="Net PnL" value={usd(mission.netPnl)} />
+          <Metric label="Realized PnL" value={usd(mission.realizedPnl)} />
+          <Metric label="Unrealized PnL" value={usd(mission.unrealizedPnl)} />
+          <Metric label="Open positions" value={String(mission.openPositionCount)} />
+        </div>
+        {!mission.trustReady && (
+          <p className="mt-3 text-[11px] text-amber-300/80">
+            AI needs {mission.minTradesForTrust} completed trades before its performance can be
+            trusted. {mission.totalTrades} done so far.
+          </p>
+        )}
+        {mission.totalTrades === 0 && (
+          <p className="mt-3 text-[11px] text-zinc-500">
+            No trades recorded yet. Press Start AI or connect Binance Testnet.
+          </p>
+        )}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* AI Status */}
-        {ai && (
-          <Card title="AI status" tone={ai.humanActionRequired ? "alert" : "default"}>
-            <p className="font-mono text-xl text-zinc-100">
-              {STATUS_COPY[ai.status] ?? ai.status}
-            </p>
-            <dl className="mt-3 space-y-1.5 text-xs text-zinc-400">
+        <Card
+          title="AI status"
+          tone={mission.humanActionRequired ? "alert" : "default"}
+        >
+          <p className="font-mono text-xl text-zinc-100">
+            {STATUS_COPY[mission.aiStatus] ?? mission.aiStatus}
+          </p>
+          <dl className="mt-3 space-y-1.5 text-xs text-zinc-400">
+            <div className="flex gap-2">
+              <dt className="w-36 shrink-0 text-zinc-500">Human action required</dt>
+              <dd className={mission.humanActionRequired ? "text-amber-300" : "text-emerald-300"}>
+                {mission.humanActionRequired ? "Yes" : "No"}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-36 shrink-0 text-zinc-500">Next action</dt>
+              <dd>{mission.nextAction}</dd>
+            </div>
+            {mission.lastVerdict && (
               <div className="flex gap-2">
-                <dt className="w-36 shrink-0 text-zinc-500">Last action</dt>
-                <dd>{ai.lastAction}</dd>
+                <dt className="w-36 shrink-0 text-zinc-500">Last verdict</dt>
+                <dd>{mission.lastVerdict}</dd>
               </div>
+            )}
+            {mission.lastCycleAt && (
               <div className="flex gap-2">
-                <dt className="w-36 shrink-0 text-zinc-500">Next action</dt>
-                <dd>{ai.nextPlannedAction}</dd>
+                <dt className="w-36 shrink-0 text-zinc-500">Last cycle</dt>
+                <dd>{new Date(mission.lastCycleAt).toLocaleString()}</dd>
               </div>
-              <div className="flex gap-2">
-                <dt className="w-36 shrink-0 text-zinc-500">Human action required</dt>
-                <dd className={ai.humanActionRequired ? "text-amber-300" : "text-emerald-300"}>
-                  {ai.humanActionRequired ? "Yes" : "No"}
-                </dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="w-36 shrink-0 text-zinc-500">Reason</dt>
-                <dd>{ai.reason}</dd>
-              </div>
-            </dl>
-            <Link href="/ai-status" className="mt-3 inline-block text-xs text-emerald-300 hover:underline">
-              Full AI status →
-            </Link>
-          </Card>
-        )}
+            )}
+          </dl>
+          <Link href="/ai-status" className="mt-3 inline-block text-xs text-emerald-300 hover:underline">
+            Full AI status →
+          </Link>
+        </Card>
 
-        {/* Current Position */}
         <Card title="Current position">
-          {!pos ? (
+          {!mission.currentPositionSummary ? (
             <p className="text-sm text-zinc-500">No active position.</p>
           ) : (
             <div className="space-y-1.5 text-xs text-zinc-400">
-              <p className="font-mono text-base text-zinc-100">
-                {pos.symbol} · {pos.side}
-              </p>
-              <p>Environment: {pos.environment}</p>
-              <p>Entry: {pos.entryPrice}</p>
-              <p>Mark: {pos.markPrice ?? "—"}</p>
-              <p className={pos.unrealizedPnlUsd >= 0 ? "text-emerald-300" : "text-rose-300"}>
-                Unrealized: {pos.unrealizedPnlUsd >= 0 ? "+" : ""}
-                {usd(pos.unrealizedPnlUsd)}
-              </p>
-              {pos.durationLabel && <p>Duration: {pos.durationLabel}</p>}
+              <p className="font-mono text-base text-zinc-100">{mission.currentPositionSummary}</p>
+              {goal?.currentPosition && (
+                <>
+                  <p>Entry: {goal.currentPosition.entryPrice}</p>
+                  <p>Mark: {goal.currentPosition.markPrice ?? "—"}</p>
+                  {goal.currentPosition.durationLabel && (
+                    <p>Duration: {goal.currentPosition.durationLabel}</p>
+                  )}
+                </>
+              )}
               <Link href="/trades" className="mt-2 inline-block text-emerald-300 hover:underline">
                 View trade →
               </Link>
@@ -287,7 +323,6 @@ export default function GoalDashboard() {
         </Card>
       </div>
 
-      {/* Risk / Safety */}
       {risk && (
         <Card title="Risk & safety" tone={risk.blocker ? "alert" : "default"}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs text-zinc-400">
@@ -299,7 +334,11 @@ export default function GoalDashboard() {
             </div>
             <div>
               <p className="text-zinc-500">Testnet</p>
-              <p className={risk.testnetStatus.includes("not connected") ? "text-amber-300" : "text-emerald-300"}>
+              <p
+                className={
+                  risk.testnetStatus.includes("not connected") ? "text-amber-300" : "text-emerald-300"
+                }
+              >
                 {risk.testnetStatus}
               </p>
             </div>
@@ -318,21 +357,16 @@ export default function GoalDashboard() {
         </Card>
       )}
 
-      {/* Primary CTA detail */}
-      {cta && (
-        <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4 text-center">
-          <p className="text-xs text-zinc-500">Recommended next step</p>
-          <Link
-            href={cta.href}
-            className="mt-1 inline-block text-base font-semibold text-emerald-300 hover:underline"
-          >
-            {cta.label}
+      <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4 text-center">
+        <p className="text-xs text-zinc-500">Recommended next step</p>
+        <p className="mt-1 text-base font-semibold text-emerald-300">{mission.nextAction}</p>
+        {cta && (
+          <Link href={cta.href} className="mt-2 inline-block text-xs text-zinc-500 hover:underline">
+            {cta.label} →
           </Link>
-          <p className="mt-1 text-[11px] text-zinc-500">{cta.description}</p>
-        </section>
-      )}
+        )}
+      </section>
 
-      {/* Engines needing attention only */}
       {engines && engines.visibleEngines.length > 0 && (
         <Card title="Needs attention">
           <ul className="space-y-2 text-xs">

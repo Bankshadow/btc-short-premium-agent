@@ -18,12 +18,23 @@ import { GOAL_MIN_TRADES_FOR_TRUST } from "./types";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
+import { loadServerBackboneRecord } from "@/lib/background-worker/server-backbone";
 import { buildGoalProgressSnapshot } from "./build-goal-snapshot";
+import {
+  buildMissionSnapshotFromGoal,
+  resolveProxyProviderLabel,
+} from "./build-mission-snapshot";
 import { buildGoalTradeList, type GoalTradeRow } from "./build-trade-list";
-import type { GoalProgressSnapshot } from "./types";
+import type {
+  GoalBinanceConnectionSnapshot,
+  GoalProgressSnapshot,
+  MissionSnapshot,
+} from "./types";
 
 export interface GoalDashboardServerPayload {
   goal: GoalProgressSnapshot;
+  mission: MissionSnapshot;
+  binance: GoalBinanceConnectionSnapshot;
   engines: CoreEngineRegistrySnapshot;
 }
 
@@ -38,6 +49,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     paperRows,
     liveRows,
     binanceStatus,
+    serverBackbone,
   ] = await Promise.all([
     loadServerAnalysisJournal().catch(() => []),
     buildTestnetMonitorSnapshot().catch(() => null),
@@ -51,6 +63,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     listWarehouseRows("paper_trades", 500).catch(() => []),
     listWarehouseRows("live_trades", 300).catch(() => []),
     getBinanceStatus().catch(() => null),
+    loadServerBackboneRecord().catch(() => null),
   ]);
 
   const entries = filterProductionEntries(entriesRaw);
@@ -113,18 +126,29 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
       ? riskReport.triggeredLimits[0] ?? "Risk engine paused new trades."
       : null);
 
+  const lastDeskRun = serverBackbone?.run ?? null;
+  const lastCycleAt =
+    lastDeskRun?.completedAt ??
+    automation?.state.lastSuccessfulRunAt ??
+    entries[0]?.timestamp ??
+    null;
+
   const goal = buildGoalProgressSnapshot({
     entries,
     orders,
     unifiedPortfolio,
     testnetSnapshot,
     liveTrades,
+    lastDeskRun,
     ai: {
       automationEnabled: settings?.automationEnabled,
       automationPaused: settings?.paused,
-      lastRunStatus: automation?.state.lastRun?.status ?? null,
-      lastRunAt: automation?.state.lastSuccessfulRunAt ?? null,
-      lastVerdict,
+      lastRunStatus:
+        lastDeskRun?.status === "RUNNING"
+          ? "RUNNING"
+          : (automation?.state.lastRun?.status ?? null),
+      lastRunAt: lastCycleAt,
+      lastVerdict: lastVerdict ?? lastDeskRun?.finalVerdict ?? null,
       riskBlocked: riskReport.blockNewTrades,
       blockerReason: blocker,
       nextRunAt: automation?.state.nextRunAt ?? null,
@@ -144,6 +168,32 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
       learnedCount,
     },
   });
+
+  const mission = buildMissionSnapshotFromGoal(goal, {
+    lastDeskRun,
+    learnedTrades: learnedCount,
+    pendingLearningReview,
+  });
+
+  const binanceBlocker =
+    binanceStatus?.blockers?.[0]?.detail ??
+    binanceStatus?.error ??
+    null;
+
+  const binance: GoalBinanceConnectionSnapshot = {
+    configured: Boolean(binanceStatus?.configured),
+    testnetEnabled: Boolean(binanceStatus?.testnetEnabled),
+    connected: Boolean(binanceStatus?.connected),
+    proxyEnabled: Boolean(binanceStatus?.proxyEnabled),
+    proxyProvider: resolveProxyProviderLabel(binanceStatus),
+    baseUrl: binanceStatus?.baseUrl ?? "",
+    upstreamBaseUrl: binanceStatus?.upstreamBaseUrl ?? "",
+    autoExecuteEnabled: Boolean(binanceStatus?.autoExecuteEnabled),
+    liveLocked: Boolean(binanceStatus?.liveBlocked ?? true),
+    blocker: binanceBlocker,
+    error: binanceStatus?.error ?? null,
+    debugHref: "/binance-testnet",
+  };
 
   const engines = buildCoreEngineRegistry({
     market: {
@@ -214,7 +264,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     },
   });
 
-  return { goal, engines };
+  return { goal, mission, binance, engines };
 }
 
 export async function buildGoalTradeListServer(): Promise<GoalTradeRow[]> {

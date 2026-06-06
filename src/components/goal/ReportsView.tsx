@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
-import type { GoalProgressSnapshot } from "@/lib/goal-engine/types";
+import type { MissionSnapshot } from "@/lib/goal-engine/types";
+import { emptyMissionSnapshot } from "@/lib/goal-engine/build-mission-snapshot";
 
 interface DashboardResponse {
   ok: boolean;
-  goal?: GoalProgressSnapshot;
+  mission?: MissionSnapshot;
   error?: string;
 }
 
@@ -26,7 +27,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function ReportsView() {
-  const [data, setData] = useState<DashboardResponse | null>(null);
+  const [mission, setMission] = useState<MissionSnapshot>(emptyMissionSnapshot());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +38,7 @@ export default function ReportsView() {
       const res = await fetch("/api/goal-dashboard", { cache: "no-store" });
       const json = (await res.json()) as DashboardResponse;
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Failed to load reports");
-      setData(json);
+      if (json.mission) setMission(json.mission);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load reports");
     } finally {
@@ -49,27 +50,21 @@ export default function ReportsView() {
     void refresh();
   }, [refresh]);
 
-  const goal = data?.goal;
-  const mission = goal?.mission;
-  const stats = goal?.tradeStats;
-  const equity = goal?.equity;
-
   const dailySummary =
-    stats && stats.totalTrades > 0
-      ? `${stats.totalTrades} closed trade(s) · ${stats.winTrades}W / ${stats.lossTrades}L · net ${usd(equity?.netPnl ?? 0)}`
-      : "No trades yet today. Run your first AI cycle to start.";
+    mission.totalTrades > 0
+      ? `${mission.totalTrades} completed trade(s) · ${mission.winTrades}W / ${mission.lossTrades}L · net ${usd(mission.netPnl)}`
+      : "No trades yet. Run your first AI cycle to start.";
 
-  const weeklySummary = goal?.trustReady
-    ? `Performance is statistically meaningful (${stats?.totalTrades} trades). Win rate ${stats?.winRate}%.`
-    : `AI needs ${goal?.minTradesForTrust ?? 12} completed trades before weekly performance can be trusted. ${stats?.totalTrades ?? 0} so far.`;
+  const weeklySummary = mission.trustReady
+    ? `Performance is statistically meaningful (${mission.totalTrades} trades). Win rate ${mission.winRate}%.`
+    : `AI needs ${mission.minTradesForTrust} completed trades before weekly performance can be trusted. ${mission.totalTrades} so far.`;
 
-  const learningSummary = goal?.trustReady
-    ? "AI learning is on track — enough trades to evaluate performance."
-    : `AI needs ${goal?.minTradesForTrust ?? 12} completed trades before its performance can be trusted.`;
-
-  const nextRecommendation = goal?.primaryCta
-    ? `${goal.primaryCta.label}: ${goal.primaryCta.description}`
-    : "Keep AI running on testnet and review trades as they close.";
+  const learningSummary =
+    mission.learnedTrades > 0
+      ? `${mission.learnedTrades} trade(s) learned · ${mission.pendingLearningReview} pending review.`
+      : mission.trustReady
+        ? "AI learning is on track — enough trades to evaluate performance."
+        : `AI needs ${mission.minTradesForTrust} completed trades before its performance can be trusted.`;
 
   return (
     <GoalShell
@@ -93,14 +88,17 @@ export default function ReportsView() {
         </p>
       )}
 
+      <p className="text-[11px] text-zinc-600">
+        Reports use the same mission snapshot as the dashboard ({mission.scopeLabel}).
+      </p>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="Daily summary">
           <p>{dailySummary}</p>
-          {goal?.aiActivity && (
-            <p className="mt-2 text-xs text-zinc-500">
-              AI status: {goal.aiActivity.status} — {goal.aiActivity.lastAction}
-            </p>
-          )}
+          <p className="mt-2 text-xs text-zinc-500">
+            AI status: {mission.aiStatus} · last updated{" "}
+            {new Date(mission.lastUpdatedAt).toLocaleString()}
+          </p>
         </Section>
 
         <Section title="Weekly summary">
@@ -108,43 +106,34 @@ export default function ReportsView() {
         </Section>
 
         <Section title="Goal progress">
-          {mission ? (
-            <ul className="space-y-1 text-xs">
-              <li>
-                Mission: {usd(mission.startCapital)} → {usd(mission.targetCapital)}
-              </li>
-              <li>Current equity: {usd(mission.currentEquity)}</li>
-              <li>Progress: {mission.progressPct}%</li>
-              <li>Remaining: {usd(mission.remainingToTarget)}</li>
-            </ul>
-          ) : (
-            <p className="text-zinc-500">Loading…</p>
-          )}
+          <ul className="space-y-1 text-xs">
+            <li>
+              Mission: {usd(mission.startCapital)} → {usd(mission.targetCapital)}
+            </li>
+            <li>Current equity: {usd(mission.currentEquity)}</li>
+            <li>Progress: {mission.progressPct}%</li>
+            <li>Remaining: {usd(mission.remainingToTarget)}</li>
+          </ul>
         </Section>
 
         <Section title="PnL summary">
-          {equity ? (
-            <ul className="space-y-1 text-xs">
-              <li>Net PnL: {usd(equity.netPnl)}</li>
-              <li>Realized: {usd(equity.realizedPnl)}</li>
-              <li>Unrealized: {usd(equity.unrealizedPnl)}</li>
-              <li>Max drawdown: {usd(-(stats?.maxDrawdown ?? 0))}</li>
-            </ul>
-          ) : (
-            <p className="text-zinc-500">No PnL data yet.</p>
-          )}
+          <ul className="space-y-1 text-xs">
+            <li>Net PnL: {usd(mission.netPnl)}</li>
+            <li>Realized: {usd(mission.realizedPnl)}</li>
+            <li>Unrealized: {usd(mission.unrealizedPnl)}</li>
+          </ul>
         </Section>
 
         <Section title="Trades summary">
-          {stats ? (
-            <ul className="space-y-1 text-xs">
-              <li>Total: {stats.totalTrades}</li>
-              <li>Wins / Losses / Breakeven: {stats.winTrades} / {stats.lossTrades} / {stats.breakevenTrades}</li>
-              <li>Win rate: {stats.winRate}%</li>
-            </ul>
-          ) : (
-            <p className="text-zinc-500">No trades recorded yet.</p>
-          )}
+          <ul className="space-y-1 text-xs">
+            <li>Total closed: {mission.totalTrades}</li>
+            <li>
+              Wins / Losses / Breakeven: {mission.winTrades} / {mission.lossTrades} /{" "}
+              {mission.breakevenTrades}
+            </li>
+            <li>Win rate: {mission.winRate}%</li>
+            <li>Open positions: {mission.openPositionCount}</li>
+          </ul>
           <Link href="/trades" className="mt-2 inline-block text-xs text-emerald-300 hover:underline">
             View all trades →
           </Link>
@@ -152,19 +141,22 @@ export default function ReportsView() {
 
         <Section title="AI learning summary">
           <p>{learningSummary}</p>
+          {mission.pendingLearningReview > 0 && (
+            <Link href="/learning" className="mt-2 inline-block text-xs text-amber-300 hover:underline">
+              Review {mission.pendingLearningReview} pending trade(s) →
+            </Link>
+          )}
         </Section>
       </div>
 
       <Section title="Next recommendation">
-        <p>{nextRecommendation}</p>
-        {goal?.primaryCta && (
-          <Link
-            href={goal.primaryCta.href}
-            className="mt-2 inline-block text-sm font-semibold text-emerald-300 hover:underline"
-          >
-            {goal.primaryCta.label} →
-          </Link>
-        )}
+        <p>{mission.nextAction}</p>
+        <Link
+          href={mission.primaryCtaHref}
+          className="mt-2 inline-block text-sm font-semibold text-emerald-300 hover:underline"
+        >
+          {mission.primaryCtaLabel} →
+        </Link>
       </Section>
 
       <p className="text-[11px] text-zinc-600">

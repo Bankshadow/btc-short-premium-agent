@@ -533,6 +533,7 @@ export function buildGoalProgressSnapshot(
   const dataConnected =
     tradeStats.totalTrades > 0 ||
     (input.entries?.length ?? 0) > 0 ||
+    Boolean(input.lastDeskRun) ||
     testnetConnected ||
     Boolean(input.unifiedPortfolio);
 

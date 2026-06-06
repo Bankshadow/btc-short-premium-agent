@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import GoalShell from "./GoalShell";
+import type { GoalBinanceConnectionSnapshot } from "@/lib/goal-engine/types";
 
 const SETTINGS_KEY = "btc-desk:goal-settings";
 
@@ -32,13 +33,6 @@ const DEFAULT_SETTINGS: GoalSettings = {
   advancedMode: false,
 };
 
-interface BinanceStatus {
-  configured: boolean;
-  testnetEnabled: boolean;
-  connected: boolean;
-  network: string | null;
-}
-
 function loadSettings(): GoalSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
@@ -52,29 +46,49 @@ function loadSettings(): GoalSettings {
 
 export default function SettingsView() {
   const [settings, setSettings] = useState<GoalSettings>(DEFAULT_SETTINGS);
-  const [binance, setBinance] = useState<BinanceStatus | null>(null);
+  const [binance, setBinance] = useState<GoalBinanceConnectionSnapshot | null>(null);
+  const [binanceLoading, setBinanceLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+
+  const loadBinance = useCallback(async () => {
+    setBinanceLoading(true);
+    try {
+      const res = await fetch("/api/goal-dashboard", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok && json.ok && json.binance) {
+        setBinance(json.binance as GoalBinanceConnectionSnapshot);
+        return;
+      }
+      const statusRes = await fetch("/api/exchange/binance/status", { cache: "no-store" });
+      const statusJson = await statusRes.json();
+      const status = statusJson?.status;
+      if (statusRes.ok && status) {
+        setBinance({
+          configured: Boolean(status.configured),
+          testnetEnabled: Boolean(status.testnetEnabled),
+          connected: Boolean(status.connected),
+          proxyEnabled: Boolean(status.proxyEnabled),
+          proxyProvider: status.proxyEnabled ? "Proxy enabled" : "Direct",
+          baseUrl: status.baseUrl ?? "",
+          upstreamBaseUrl: status.upstreamBaseUrl ?? "",
+          autoExecuteEnabled: Boolean(status.autoExecuteEnabled),
+          liveLocked: Boolean(status.liveBlocked ?? true),
+          blocker: status.blockers?.[0]?.detail ?? status.error ?? null,
+          error: status.error ?? null,
+          debugHref: "/binance-testnet",
+        });
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setBinanceLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     setSettings(loadSettings());
-    void (async () => {
-      try {
-        const res = await fetch("/api/exchange/binance/status", { cache: "no-store" });
-        const json = await res.json();
-        const status = json?.status;
-        if (res.ok && status) {
-          setBinance({
-            configured: Boolean(status.configured),
-            testnetEnabled: Boolean(status.testnetEnabled),
-            connected: Boolean(status.connected),
-            network: status.upstreamBaseUrl ?? status.baseUrl ?? null,
-          });
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, []);
+    void loadBinance();
+  }, [loadBinance]);
 
   const update = useCallback(<K extends keyof GoalSettings>(key: K, value: GoalSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -165,28 +179,68 @@ export default function SettingsView() {
       </section>
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          Binance testnet connection
-        </h2>
-        {!binance ? (
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Binance testnet connection
+          </h2>
+          <button
+            type="button"
+            onClick={() => void loadBinance()}
+            className="text-[10px] text-zinc-500 hover:text-zinc-300"
+          >
+            Refresh
+          </button>
+        </div>
+        {binanceLoading ? (
           <p className="mt-2 text-xs text-zinc-500">Checking connection…</p>
+        ) : !binance ? (
+          <p className="mt-2 text-xs text-amber-300">Could not load Binance status.</p>
         ) : (
-          <ul className="mt-2 space-y-1 text-xs text-zinc-400">
+          <ul className="mt-2 space-y-1.5 text-xs text-zinc-400">
             <li>
               Status:{" "}
               <span className={binance.connected ? "text-emerald-300" : "text-amber-300"}>
-                {binance.connected
-                  ? "Binance Testnet is connected."
-                  : "Binance Testnet is not connected yet."}
+                {binance.connected ? "Connected" : "Disconnected"}
+              </span>
+            </li>
+            <li>
+              Testnet enabled:{" "}
+              <span className={binance.testnetEnabled ? "text-emerald-300" : "text-amber-300"}>
+                {binance.testnetEnabled ? "Yes" : "No"}
               </span>
             </li>
             <li>API keys: {binance.configured ? "Configured" : "Not configured"}</li>
-            <li>Network: {binance.network ?? "—"}</li>
+            <li>
+              Proxy: {binance.proxyEnabled ? binance.proxyProvider : "Direct (no proxy)"}
+            </li>
+            <li>Upstream: {binance.upstreamBaseUrl || "—"}</li>
+            <li>
+              Auto-execute:{" "}
+              <span className="text-zinc-300">
+                {binance.autoExecuteEnabled ? "Enabled (double confirm still required)" : "Off"}
+              </span>
+            </li>
+            <li>
+              Live trading:{" "}
+              <span className="text-emerald-300">
+                {binance.liveLocked ? "Locked (safe)" : "Unlocked"}
+              </span>
+            </li>
+            {!binance.connected && (binance.blocker || binance.error) && (
+              <li className="text-amber-300">
+                Blocker: {binance.blocker ?? binance.error}
+              </li>
+            )}
           </ul>
         )}
-        <Link href="/binance-testnet" className="mt-2 inline-block text-xs text-emerald-300 hover:underline">
-          Open testnet config →
-        </Link>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Link href="/binance-testnet" className="text-xs text-emerald-300 hover:underline">
+            Open testnet config →
+          </Link>
+          <Link href="/binance-testnet" className="text-xs text-zinc-500 hover:underline">
+            Binance Testnet Debug →
+          </Link>
+        </div>
       </section>
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">

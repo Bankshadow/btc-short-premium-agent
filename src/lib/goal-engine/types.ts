@@ -1,3 +1,4 @@
+import type { DeskRun } from "@/lib/data-backbone/types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { UnifiedPortfolioSnapshot } from "@/lib/portfolio/unified-types";
@@ -139,6 +140,40 @@ export interface GoalProgressSnapshot {
   lastVerdict: string | null;
 }
 
+/** Flat KPI snapshot for mission dashboard (MVP 58). */
+export interface MissionSnapshot {
+  startCapital: number;
+  targetCapital: number;
+  currentEquity: number;
+  progressPct: number;
+  remainingToTarget: number;
+  netPnl: number;
+  realizedPnl: number;
+  unrealizedPnl: number;
+  totalTrades: number;
+  winTrades: number;
+  lossTrades: number;
+  breakevenTrades: number;
+  winRate: number;
+  openPositionCount: number;
+  currentPositionSummary: string | null;
+  aiStatus: AIActivityStatus;
+  humanActionRequired: boolean;
+  nextAction: string;
+  lastUpdatedAt: string;
+  scopeLabel: string;
+  learnedTrades: number;
+  pendingLearningReview: number;
+  minTradesForTrust: number;
+  trustReady: boolean;
+  dataConnected: boolean;
+  lastDeskRunId: string | null;
+  lastVerdict: string | null;
+  lastCycleAt: string | null;
+  primaryCtaLabel: string;
+  primaryCtaHref: string;
+}
+
 export interface GoalEngineInput {
   startCapital?: number;
   targetCapital?: number;
@@ -171,6 +206,24 @@ export interface GoalEngineInput {
     pendingReview?: number;
     learnedCount?: number;
   };
+  lastDeskRun?: DeskRun | null;
+}
+
+export type MissionSnapshotInput = GoalEngineInput;
+
+export interface GoalBinanceConnectionSnapshot {
+  configured: boolean;
+  testnetEnabled: boolean;
+  connected: boolean;
+  proxyEnabled: boolean;
+  proxyProvider: string;
+  baseUrl: string;
+  upstreamBaseUrl: string;
+  autoExecuteEnabled: boolean;
+  liveLocked: boolean;
+  blocker: string | null;
+  error: string | null;
+  debugHref: string;
 }
 
 export const GOAL_START_CAPITAL = 1_000;
