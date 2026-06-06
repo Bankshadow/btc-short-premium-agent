@@ -84,6 +84,7 @@ describe("P-MVP 3 Unified Trading Ledger", () => {
       perpPositions: [],
       livePilotJournal: [],
       optionsTestnetJournal: [],
+      binanceTestnetJournal: [],
     };
     const ledger = buildLedgerEntriesFromSources(bundle, "ws-test");
     const trade = ledger.find((e) => e.entryKind === "TRADE");
@@ -103,6 +104,7 @@ describe("P-MVP 3 Unified Trading Ledger", () => {
         perpPositions: [],
         livePilotJournal: [],
         optionsTestnetJournal: [],
+      binanceTestnetJournal: [],
       },
       "ws-test",
     );

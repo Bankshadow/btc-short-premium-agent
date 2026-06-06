@@ -11,6 +11,7 @@ const ACTION_PERMISSION: Partial<
   PREVIEW_LIVE_ORDER: "canApproveLiveTrade",
   EXECUTE_LIVE_PERP: "canApproveLiveTrade",
   EXECUTE_OPTIONS_TESTNET: "canApproveLiveTrade",
+  EXECUTE_BINANCE_TESTNET: "canApproveLiveTrade",
   EXECUTE_OPTIONS_LIVE: "canApproveLiveTrade",
   CHANGE_RISK_PROFILE: "canChangeRiskSettings",
   APPROVE_STRATEGY_CHANGE: "canApproveStrategyChanges",

@@ -1,0 +1,182 @@
+export type BinanceOrderSide = "BUY" | "SELL";
+export type BinanceOrderType = "MARKET" | "LIMIT";
+export type BinancePreviewSource = "ai_signal" | "manual_test";
+
+export interface BinanceCredentials {
+  apiKey: string;
+  apiSecret: string;
+  baseUrl: string;
+}
+
+export interface BinanceConfig {
+  testnetEnabled: boolean;
+  liveEnabled: boolean;
+  baseUrl: string;
+  allowedSymbols: string[];
+  maxNotionalUsd: number;
+  maxTradesPerDay: number;
+  maxOpenPositions: number;
+  requireDoubleConfirm: boolean;
+  leverage: number;
+}
+
+export interface BinanceRiskCheck {
+  id: string;
+  label: string;
+  status: "PASS" | "WARNING" | "FAIL";
+  message: string;
+  blocking: boolean;
+}
+
+export interface BinanceOrderPreviewInput {
+  source: BinancePreviewSource;
+  symbol: string;
+  side: BinanceOrderSide;
+  notionalUsd: number;
+  reason: string;
+  decisionLogId?: string | null;
+}
+
+export interface BinanceOrderPreview {
+  previewId: string;
+  symbol: string;
+  side: BinanceOrderSide;
+  estimatedQty: string;
+  notionalUsd: number;
+  markPrice: number | null;
+  riskChecks: BinanceRiskCheck[];
+  blocked: boolean;
+  blockReasons: string[];
+  requiresDoubleConfirm: boolean;
+  expiresAt: string;
+  source: BinancePreviewSource;
+  reason: string;
+  decisionLogId: string | null;
+  generatedAt: string;
+}
+
+export interface BinanceExchangeInfoSymbol {
+  symbol: string;
+  status: string;
+  baseAsset: string;
+  quoteAsset: string;
+  pricePrecision: number;
+  quantityPrecision: number;
+  filters: Array<Record<string, string>>;
+}
+
+export interface BinanceBalance {
+  asset: string;
+  balance: string;
+  crossWalletBalance: string;
+  availableBalance: string;
+}
+
+export interface BinancePosition {
+  symbol: string;
+  positionAmt: string;
+  entryPrice: string;
+  markPrice: string;
+  unRealizedProfit: string;
+  leverage: string;
+  positionSide: string;
+  notional: string;
+}
+
+export interface BinanceOpenOrder {
+  orderId: number;
+  symbol: string;
+  side: BinanceOrderSide;
+  type: string;
+  origQty: string;
+  executedQty: string;
+  status: string;
+  reduceOnly: boolean;
+  time: number;
+}
+
+export interface BinanceAccountSnapshot {
+  totalWalletBalance: string;
+  availableBalance: string;
+  totalUnrealizedProfit: string;
+  canTrade: boolean;
+}
+
+export interface BinanceStatusResult {
+  configured: boolean;
+  testnetEnabled: boolean;
+  liveEnabled: boolean;
+  liveBlocked: boolean;
+  baseUrl: string;
+  allowedSymbols: string[];
+  connected: boolean;
+  serverTimeMs: number | null;
+  clockSkewMs: number | null;
+  safetyNotice: string;
+  error: string | null;
+}
+
+export type BinanceJournalStatus =
+  | "PREVIEWED"
+  | "SUBMITTED"
+  | "FILLED"
+  | "CLOSING"
+  | "CLOSED"
+  | "BLOCKED"
+  | "FAILED";
+
+export interface BinanceTestnetJournalEntry {
+  binanceTestnetTradeId: string;
+  previewId: string;
+  symbol: string;
+  side: BinanceOrderSide;
+  notionalUsd: number;
+  quantity: string;
+  status: BinanceJournalStatus;
+  source: BinancePreviewSource;
+  reason: string;
+  decisionLogId: string | null;
+  exchangeOrderId: string | null;
+  clientOrderId: string | null;
+  operatorNote: string | null;
+  blockReasons: string[];
+  createdAt: string;
+  executedAt: string | null;
+  closedAt: string | null;
+  realizedPnl: number | null;
+  fees: number | null;
+}
+
+export interface BinanceExecuteInput {
+  previewId: string;
+  doubleConfirm: boolean;
+  operatorNote?: string;
+}
+
+export interface BinanceExecuteResult {
+  ok: boolean;
+  blocked: boolean;
+  exchangeOrderId: string | null;
+  journalEntry: BinanceTestnetJournalEntry;
+  error: string | null;
+}
+
+export interface BinanceCloseInput {
+  symbol: string;
+  operatorNote?: string;
+  doubleConfirm: boolean;
+}
+
+export interface BinanceCloseResult {
+  ok: boolean;
+  blocked: boolean;
+  exchangeOrderId: string | null;
+  journalEntry: BinanceTestnetJournalEntry | null;
+  error: string | null;
+}
+
+export const BINANCE_TESTNET_SAFETY_NOTICE =
+  "Binance USD-M Futures Testnet only — production Binance live trading is disabled.";
+
+export const BINANCE_PRODUCTION_HARD_BLOCK =
+  "Binance production live trading is disabled. Testnet endpoints only.";

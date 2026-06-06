@@ -133,7 +133,15 @@ function evaluatePolicyInner(input: PolicyInput): PolicyResult {
     reasons.push("Kill switch may only reduce risk.");
   }
 
-  if (pm?.blocksTicket && ["CREATE_PAPER_TRADE", "EXECUTE_LIVE_PERP", "EXECUTE_OPTIONS_TESTNET"].includes(input.action)) {
+  if (
+    pm?.blocksTicket &&
+    [
+      "CREATE_PAPER_TRADE",
+      "EXECUTE_LIVE_PERP",
+      "EXECUTE_OPTIONS_TESTNET",
+      "EXECUTE_BINANCE_TESTNET",
+    ].includes(input.action)
+  ) {
     ruleIds.push("pre_mortem_block");
     blockers.push(pm.summary ?? "Pre-mortem BLOCK — action not allowed.");
   }

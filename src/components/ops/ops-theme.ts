@@ -117,6 +117,7 @@ export const OPS_MODULE_LINKS = [
   { href: "/live-supervisor", label: "Supervisor", accent: "rose" as OpsAccent },
   { href: "/options-live-readiness", label: "Options ready", accent: "violet" as OpsAccent },
   { href: "/options-testnet", label: "Options TN", accent: "cyan" as OpsAccent },
+  { href: "/binance-testnet", label: "Binance TN", accent: "cyan" as OpsAccent },
   { href: "/options-dry-run", label: "Options DR", accent: "violet" as OpsAccent },
   { href: "/options-risk", label: "Options Risk", accent: "violet" as OpsAccent },
   { href: "/strategies", label: "Strategies", accent: "indigo" as OpsAccent },

@@ -102,6 +102,8 @@ import DemoSeedPanel from "@/components/demo/DemoSeedPanel";
 import { writeDeskCycle } from "@/lib/data-backbone/write-desk-cycle";
 import { loadDeskBackbone } from "@/lib/data-backbone/read-desk-state";
 import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
+import { buildBinancePreviewInputFromAiSignal } from "@/lib/exchange/binance/build-ai-preview";
+import { enqueueBinanceTestnetPreview } from "@/lib/exchange/binance/binance-preview-queue";
 
 const DEFAULT_MACRO_EVENT_STATUS = macroSelectionToStatus(DEFAULT_MACRO_EVENT);
 const DEFAULT_DERIVATIVES_OVERRIDES = resolveDerivativesOverrides(
@@ -173,6 +175,10 @@ export default function AnalyzeDashboard({
   const automation = useDeskAutomation(logHydrated);
   const [actionQueue, setActionQueue] = useState(
     () => loadOperatorActionQueue().filter((a) => a.status === "OPEN"),
+  );
+  const [binancePreviewBusy, setBinancePreviewBusy] = useState(false);
+  const [binancePreviewMessage, setBinancePreviewMessage] = useState<string | null>(
+    null,
   );
   const [persistStatus, setPersistStatus] = useState<{
     ok: boolean;
@@ -576,6 +582,39 @@ export default function AnalyzeDashboard({
     analyzePolicy != null &&
     (analyzePolicy.decision === "BLOCK" || analyzePolicy.decision === "REQUIRE_MORE_DATA");
 
+  const sendBinanceTestnetPreview = useCallback(async () => {
+    setBinancePreviewBusy(true);
+    setBinancePreviewMessage(null);
+    try {
+      const latestLog =
+        logEntries[0] ??
+        (lastLogId ? loadDecisionLog().find((e) => e.id === lastLogId) : null);
+      const input = buildBinancePreviewInputFromAiSignal({
+        data,
+        decisionLogId: latestLog?.id ?? null,
+      });
+      const res = await fetch("/api/exchange/binance/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...workspaceHeaders },
+        body: JSON.stringify(input),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Preview failed");
+      enqueueBinanceTestnetPreview(body.preview);
+      setBinancePreviewMessage(
+        body.preview.blocked
+          ? `Preview blocked — open /binance-testnet. ${body.preview.blockReasons[0] ?? ""}`
+          : `Queued ${body.preview.symbol} ${body.preview.side} preview — execute on /binance-testnet with double confirm.`,
+      );
+    } catch (e) {
+      setBinancePreviewMessage(
+        e instanceof Error ? e.message : "Binance preview failed",
+      );
+    } finally {
+      setBinancePreviewBusy(false);
+    }
+  }, [data, lastLogId, logEntries, workspaceHeaders]);
+
   return (
     <TradingDeskLayout
       data={data}
@@ -662,6 +701,9 @@ export default function AnalyzeDashboard({
         liveReadinessReady={backbone ? !backbone.risk.liveReadinessBlocked : false}
         liveReadinessBlockers={backbone?.risk.blockers ?? []}
         onRunAnalyze={() => void autopilot.runCycle({ triggerAnalyze: true })}
+        onSendBinancePreview={() => void sendBinanceTestnetPreview()}
+        binancePreviewBusy={binancePreviewBusy}
+        binancePreviewMessage={binancePreviewMessage}
       />
 
       {data?.tradingDesk && (

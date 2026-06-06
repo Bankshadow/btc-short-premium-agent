@@ -3,9 +3,11 @@ import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
 import type { OptionsTestnetJournalEntry } from "@/lib/options-execution/types";
+import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import { getActiveWorkspaceId } from "@/lib/platform/workspace-registry";
 import { hashLedgerPayload } from "./hash";
 import {
+  lifecycleFromBinanceTestnet,
   lifecycleFromDecision,
   lifecycleFromLiveTrade,
   lifecycleFromOptionsTestnet,
@@ -257,6 +259,31 @@ export function mapLiveTradeToLedger(
   return entries;
 }
 
+export function mapBinanceTestnetToLedger(
+  entry: BinanceTestnetJournalEntry,
+  workspaceId: string,
+): LedgerEntry {
+  const payload = { binanceTestnet: entry };
+  return makeEntry({
+    ledgerEntryId: ledgerId("binance-testnet", entry.binanceTestnetTradeId, "TRADE"),
+    workspaceId,
+    entryKind: "TRADE",
+    sourceType: "EXCHANGE",
+    environment: "TESTNET",
+    linkedDecisionId: entry.decisionLogId,
+    linkedTradeId: entry.binanceTestnetTradeId,
+    linkedOrderId: entry.exchangeOrderId,
+    linkedRunId: null,
+    timestamp: entry.createdAt,
+    lifecycleStage: lifecycleFromBinanceTestnet(entry),
+    asset: entry.symbol,
+    strategy: entry.source,
+    assetClass: "binance_testnet",
+    legacyRef: { store: "binance-testnet-journal", id: entry.binanceTestnetTradeId },
+    payload,
+  });
+}
+
 export function mapOptionsTestnetToLedger(
   entry: OptionsTestnetJournalEntry,
   workspaceId: string,
@@ -313,6 +340,11 @@ export function buildLedgerEntriesFromSources(
 
   for (const opt of bundle.optionsTestnetJournal) {
     const led = mapOptionsTestnetToLedger(opt, ws);
+    byId.set(led.ledgerEntryId, led);
+  }
+
+  for (const bn of bundle.binanceTestnetJournal) {
+    const led = mapBinanceTestnetToLedger(bn, ws);
     byId.set(led.ledgerEntryId, led);
   }
 

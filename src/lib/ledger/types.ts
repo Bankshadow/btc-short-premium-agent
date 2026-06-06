@@ -3,6 +3,7 @@ import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
 import type { OptionsTestnetJournalEntry } from "@/lib/options-execution/types";
+import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 
 export type LedgerSourceType = "AI" | "USER" | "SYSTEM" | "EXCHANGE";
 
@@ -33,6 +34,7 @@ export type LedgerAssetClass =
   | "btc_options"
   | "perp_directional"
   | "options_testnet"
+  | "binance_testnet"
   | "options_live"
   | "unknown";
 
@@ -140,6 +142,7 @@ export interface LedgerSourceBundle {
   perpPositions: PerpPaperPosition[];
   livePilotJournal: LiveTradeJournalEntry[];
   optionsTestnetJournal: OptionsTestnetJournalEntry[];
+  binanceTestnetJournal: BinanceTestnetJournalEntry[];
 }
 
 export interface LedgerAnalyticsInput extends LedgerSourceBundle {

@@ -2,6 +2,7 @@ import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
 import type { OptionsTestnetJournalEntry } from "@/lib/options-execution/types";
+import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { TradeLifecycleStage } from "./types";
 
@@ -43,6 +44,15 @@ export function lifecycleFromOptionsTestnet(
   if (entry.status === "CLOSED" || entry.status === "RECONCILED") return "CLOSED";
   if (entry.status === "SUBMITTED") return "OPENED";
   if (entry.status === "PENDING") return "APPROVED";
+  return "PREVIEW";
+}
+
+export function lifecycleFromBinanceTestnet(
+  entry: BinanceTestnetJournalEntry,
+): TradeLifecycleStage {
+  if (entry.status === "FILLED" || entry.status === "SUBMITTED") return "MONITORING";
+  if (entry.status === "CLOSED" || entry.status === "CLOSING") return "CLOSED";
+  if (entry.status === "BLOCKED" || entry.status === "FAILED") return "PREVIEW";
   return "PREVIEW";
 }
 

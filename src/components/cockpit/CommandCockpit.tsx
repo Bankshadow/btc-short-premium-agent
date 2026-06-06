@@ -61,6 +61,9 @@ type Props = {
   liveReadinessStatus?: string | null;
   liveReadinessReady?: boolean;
   liveReadinessBlockers?: string[];
+  onSendBinancePreview?: () => void;
+  binancePreviewBusy?: boolean;
+  binancePreviewMessage?: string | null;
 };
 
 export default function CommandCockpit({
@@ -83,6 +86,9 @@ export default function CommandCockpit({
   liveReadinessStatus = null,
   liveReadinessReady = false,
   liveReadinessBlockers = [],
+  onSendBinancePreview,
+  binancePreviewBusy = false,
+  binancePreviewMessage = null,
 }: Props) {
   const committee = data?.tradingDesk?.weightedCommittee;
   const verdict =
@@ -329,6 +335,34 @@ export default function CommandCockpit({
           <p className="mt-1 text-xs text-cyan-200/70">
             {autopilot?.briefing ?? "Paper and shadow trades run automatically when enabled."}
           </p>
+        </section>
+
+        <section className="rounded-xl border border-yellow-900/40 bg-yellow-950/15 p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-yellow-300/70">
+            Binance testnet
+          </p>
+          <p className="mt-2 text-xs text-yellow-200/80">
+            Preview only — no auto execute. Human double-confirm required on testnet desk.
+          </p>
+          {binancePreviewMessage && (
+            <p className="mt-2 text-[11px] text-yellow-100/90">{binancePreviewMessage}</p>
+          )}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!onSendBinancePreview || binancePreviewBusy || !hasRun}
+              onClick={onSendBinancePreview}
+              className="rounded border border-yellow-700/50 bg-yellow-950/40 px-2 py-1 text-[11px] text-yellow-200 hover:bg-yellow-900/40 disabled:opacity-50"
+            >
+              Send to Binance Testnet Preview
+            </button>
+            <Link
+              href="/binance-testnet"
+              className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800"
+            >
+              Testnet desk →
+            </Link>
+          </div>
         </section>
 
         <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4">

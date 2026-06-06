@@ -3,12 +3,14 @@ import { loadPaperOrders } from "@/lib/paper/paper-orders";
 import { loadPerpPositions } from "@/lib/multi-asset/perp-paper-store";
 import { loadLivePilotJournal } from "@/lib/live-pilot/journal-store";
 import { loadOptionsTestnetJournal } from "@/lib/options-execution/testnet-journal-store";
+import { loadBinanceTestnetJournalClient } from "@/lib/exchange/binance/binance-testnet-journal";
 import { loadDeskSettings } from "@/lib/desk/desk-settings";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
 import type { OptionsTestnetJournalEntry } from "@/lib/options-execution/types";
+import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import { syncLedgerFromSources } from "./store";
 import type { LedgerAnalyticsInput, LedgerSourceBundle, UnifiedLedgerSnapshot } from "./types";
 
@@ -19,6 +21,7 @@ export function loadLedgerSourceBundle(): LedgerSourceBundle {
     perpPositions: loadPerpPositions(),
     livePilotJournal: loadLivePilotJournal(),
     optionsTestnetJournal: loadOptionsTestnetJournal(),
+    binanceTestnetJournal: loadBinanceTestnetJournalClient(),
   };
 }
 
@@ -29,6 +32,7 @@ export function extractSourcesFromLedger(snapshot: UnifiedLedgerSnapshot): Ledge
   const perpPositions: PerpPaperPosition[] = [];
   const livePilotJournal: LiveTradeJournalEntry[] = [];
   const optionsTestnetJournal: OptionsTestnetJournalEntry[] = [];
+  const binanceTestnetJournal: BinanceTestnetJournalEntry[] = [];
 
   const seen = {
     decision: new Set<string>(),
@@ -36,6 +40,7 @@ export function extractSourcesFromLedger(snapshot: UnifiedLedgerSnapshot): Ledge
     perp: new Set<string>(),
     live: new Set<string>(),
     options: new Set<string>(),
+    binance: new Set<string>(),
   };
 
   for (const e of snapshot.entries) {
@@ -75,6 +80,13 @@ export function extractSourcesFromLedger(snapshot: UnifiedLedgerSnapshot): Ledge
         optionsTestnetJournal.push(o);
       }
     }
+    if (e.legacyRef?.store === "binance-testnet-journal" && payload.binanceTestnet) {
+      const b = payload.binanceTestnet as BinanceTestnetJournalEntry;
+      if (!seen.binance.has(b.binanceTestnetTradeId)) {
+        seen.binance.add(b.binanceTestnetTradeId);
+        binanceTestnetJournal.push(b);
+      }
+    }
   }
 
   return {
@@ -87,6 +99,10 @@ export function extractSourcesFromLedger(snapshot: UnifiedLedgerSnapshot): Ledge
       optionsTestnetJournal.length > 0
         ? optionsTestnetJournal
         : loadOptionsTestnetJournal(),
+    binanceTestnetJournal:
+      binanceTestnetJournal.length > 0
+        ? binanceTestnetJournal
+        : loadBinanceTestnetJournalClient(),
   };
 }
 

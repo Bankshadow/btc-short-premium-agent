@@ -43,7 +43,8 @@
     "test:ledger": "npx --yes tsx --test src/lib/ledger/ledger.test.ts",
     "test:automation-control-plane": "npx --yes tsx --test src/lib/automation-control-plane/automation-control-plane.test.ts",
     "test:policy-engine": "npx --yes tsx --test src/lib/policy-engine/policy.test.ts",
-    "test:observability": "npx --yes tsx --test src/lib/observability/observability.test.ts"
+    "test:observability": "npx --yes tsx --test src/lib/observability/observability.test.ts",
+    "test:binance": "npx --yes tsx --test src/lib/exchange/binance/binance.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.107.0",
