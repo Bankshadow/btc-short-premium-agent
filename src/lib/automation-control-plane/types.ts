@@ -15,7 +15,9 @@ export type AutomationJobType =
   | "RISK_CHECK"
   | "NOTIFICATION_DIGEST"
   | "ACTION_QUEUE_REFRESH"
-  | "COMMAND_CENTER_REFRESH";
+  | "COMMAND_CENTER_REFRESH"
+  | "PROJECT_STRATEGIST_REVIEW"
+  | "BINANCE_TESTNET_AUTOEXECUTE";
 
 export type AutomationJobStatus =
   | "QUEUED"
@@ -77,6 +79,8 @@ export interface AutomationModuleToggles {
   NOTIFICATION_DIGEST: boolean;
   ACTION_QUEUE_REFRESH: boolean;
   COMMAND_CENTER_REFRESH: boolean;
+  PROJECT_STRATEGIST_REVIEW: boolean;
+  BINANCE_TESTNET_AUTOEXECUTE: boolean;
 }
 
 export interface AutomationSettings {

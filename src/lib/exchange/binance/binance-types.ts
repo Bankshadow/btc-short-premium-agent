@@ -106,6 +106,30 @@ export interface BinanceAccountSnapshot {
   canTrade: boolean;
 }
 
+export type BinanceBlockerCategory =
+  | "MISSING_KEY"
+  | "MISSING_SECRET"
+  | "TESTNET_DISABLED"
+  | "LIVE_ENABLED"
+  | "WRONG_BASE_URL"
+  | "API_ERROR"
+  | "CLOCK_SKEW"
+  | "PERMISSION";
+
+export interface BinanceConnectionBlocker {
+  category: BinanceBlockerCategory;
+  detail: string;
+}
+
+export interface BinanceEnvCheckItem {
+  key: string;
+  label: string;
+  /** Display value — secrets are masked to "set"/"missing". */
+  value: string;
+  ok: boolean;
+  secret: boolean;
+}
+
 export interface BinanceStatusResult {
   configured: boolean;
   testnetEnabled: boolean;
@@ -114,12 +138,15 @@ export interface BinanceStatusResult {
   baseUrl: string;
   upstreamBaseUrl: string;
   proxyEnabled: boolean;
+  autoExecuteEnabled: boolean;
   allowedSymbols: string[];
   connected: boolean;
   serverTimeMs: number | null;
   clockSkewMs: number | null;
   safetyNotice: string;
   error: string | null;
+  envChecklist: BinanceEnvCheckItem[];
+  blockers: BinanceConnectionBlocker[];
 }
 
 export type BinanceJournalStatus =

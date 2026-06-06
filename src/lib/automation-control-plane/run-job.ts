@@ -23,6 +23,8 @@ import {
 import { mergeServerPendingOperatorActions } from "./state-store";
 import { assertAutomationJobSafety } from "./safety";
 import { buildPolicyInput, evaluatePolicy } from "@/lib/policy-engine";
+import { getProjectStrategistStatus, runProjectStrategist } from "@/lib/project-strategist";
+import { runBinanceTestnetAutoExecute } from "@/lib/exchange/binance/binance-auto-executor";
 import type { AutomationJob, AutomationJobType, AutomationRunInput } from "./types";
 import type { AutomationServerContext } from "./server-context";
 
@@ -332,6 +334,43 @@ export async function runAutomationJob(
             delivered.length > 0
               ? `Digest via ${delivered.join(", ")}`
               : "Digest logged (no external channel)",
+        };
+      });
+
+    case "BINANCE_TESTNET_AUTOEXECUTE":
+      return runTimed(jobType, ctx, async () => {
+        const auto = await runBinanceTestnetAutoExecute({
+          analysis: ctx.analyze,
+          entries,
+          orders,
+          commandCenterStatus: null,
+        });
+        return { summary: `${auto.outcome} · ${auto.summary}` };
+      });
+
+    case "PROJECT_STRATEGIST_REVIEW":
+      return runTimed(jobType, ctx, async () => {
+        const status = await getProjectStrategistStatus(ctx.workspaceId);
+        const now = Date.now();
+        const nextDaily = status.state.nextDailyReviewAt
+          ? Date.parse(status.state.nextDailyReviewAt)
+          : 0;
+        const nextWeekly = status.state.nextWeeklyReviewAt
+          ? Date.parse(status.state.nextWeeklyReviewAt)
+          : 0;
+        const shouldWeekly = nextWeekly > 0 && now >= nextWeekly;
+        const shouldDaily = nextDaily <= 0 || now >= nextDaily;
+        if (!shouldDaily && !shouldWeekly) {
+          return { summary: "Strategist review not due yet." };
+        }
+        const strategist = await runProjectStrategist({
+          workspaceId: ctx.workspaceId,
+          trigger: shouldWeekly ? "weekly" : "daily",
+          latestUserGoal:
+            "Propose one one-day MVP that improves execution-readiness and UX simplicity without enabling live trading.",
+        });
+        return {
+          summary: `Strategist ${strategist.report.projectHealthStatus} · MVP ${strategist.report.recommendedMVP.title}`,
         };
       });
 

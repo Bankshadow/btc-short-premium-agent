@@ -1,6 +1,7 @@
 import {
   assertBinanceTestnetOnly,
   blockBinanceProductionOrder,
+  isBinanceTestnetAutoExecuteEnabled,
   loadBinanceConfig,
   resolveBinanceCredentials,
 } from "./binance-config";
@@ -11,6 +12,10 @@ import {
   fetchBinanceServerTime,
 } from "./binance-client";
 import { newClientOrderId } from "./binance-signer";
+import {
+  buildBinanceBlockers,
+  buildBinanceEnvChecklist,
+} from "./binance-diagnostics";
 import type {
   BinanceAccountSnapshot,
   BinanceBalance,
@@ -36,12 +41,15 @@ export async function getBinanceStatus(): Promise<BinanceStatusResult> {
       baseUrl: config.baseUrl,
       upstreamBaseUrl: config.upstreamBaseUrl,
       proxyEnabled: config.proxyEnabled,
+      autoExecuteEnabled: isBinanceTestnetAutoExecuteEnabled(),
       allowedSymbols: config.allowedSymbols,
       connected: false,
       serverTimeMs: null,
       clockSkewMs: null,
       safetyNotice: BINANCE_TESTNET_SAFETY_NOTICE,
       error: "BINANCE_API_KEY / BINANCE_API_SECRET not configured",
+      envChecklist: buildBinanceEnvChecklist(),
+      blockers: buildBinanceBlockers({ apiError: null, clockSkewMs: null }),
     };
   }
 
@@ -66,6 +74,7 @@ export async function getBinanceStatus(): Promise<BinanceStatusResult> {
     baseUrl: creds.baseUrl,
     upstreamBaseUrl: config.upstreamBaseUrl,
     proxyEnabled: config.proxyEnabled,
+    autoExecuteEnabled: isBinanceTestnetAutoExecuteEnabled(),
     allowedSymbols: config.allowedSymbols,
     connected,
     serverTimeMs,
@@ -73,6 +82,12 @@ export async function getBinanceStatus(): Promise<BinanceStatusResult> {
       serverTimeMs != null ? Math.abs(Date.now() - serverTimeMs) : null,
     safetyNotice: BINANCE_TESTNET_SAFETY_NOTICE,
     error,
+    envChecklist: buildBinanceEnvChecklist(),
+    blockers: buildBinanceBlockers({
+      apiError: error,
+      clockSkewMs:
+        serverTimeMs != null ? Math.abs(Date.now() - serverTimeMs) : null,
+    }),
   };
 }
 

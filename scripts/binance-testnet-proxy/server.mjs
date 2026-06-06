@@ -59,15 +59,27 @@ const HOP_BY_HOP = new Set([
   "content-length",
 ]);
 
+const REQUEST_HEADERS_TO_STRIP = new Set([
+  "x-binance-proxy-secret",
+  "accept-encoding",
+]);
+
+const RESPONSE_HEADERS_TO_STRIP = new Set([
+  "content-encoding",
+  "content-length",
+]);
+
 function copyForwardHeaders(incoming) {
   const out = {};
   for (const [key, value] of Object.entries(incoming)) {
     if (!value) continue;
     const lower = key.toLowerCase();
     if (HOP_BY_HOP.has(lower)) continue;
-    if (lower === "x-binance-proxy-secret") continue;
+    if (REQUEST_HEADERS_TO_STRIP.has(lower)) continue;
     out[key] = Array.isArray(value) ? value.join(", ") : value;
   }
+  // Prevent compressed upstream payload/header mismatch when relaying bodies.
+  out["Accept-Encoding"] = "identity";
   return out;
 }
 
@@ -119,7 +131,9 @@ const server = http.createServer(async (req, res) => {
 
     const responseHeaders = {};
     upstream.headers.forEach((value, key) => {
-      if (HOP_BY_HOP.has(key.toLowerCase())) return;
+      const lower = key.toLowerCase();
+      if (HOP_BY_HOP.has(lower)) return;
+      if (RESPONSE_HEADERS_TO_STRIP.has(lower)) return;
       responseHeaders[key] = value;
     });
 

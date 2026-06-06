@@ -41,6 +41,11 @@ export function resolveBinanceProxyUrl(): string | null {
   return raw || null;
 }
 
+/** Autonomous testnet execution — testnet-only, never affects live. */
+export function isBinanceTestnetAutoExecuteEnabled(): boolean {
+  return envBool("BINANCE_TESTNET_AUTOEXECUTE_ENABLED", false);
+}
+
 /** API base used for HTTP calls — proxy when configured, else direct testnet. */
 export function resolveBinanceEffectiveBaseUrl(): string {
   return resolveBinanceProxyUrl() ?? resolveBinanceUpstreamBaseUrl();

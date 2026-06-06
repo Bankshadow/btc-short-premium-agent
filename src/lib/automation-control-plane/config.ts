@@ -25,6 +25,8 @@ export const DEFAULT_MODULE_TOGGLES: AutomationModuleToggles = {
   NOTIFICATION_DIGEST: true,
   ACTION_QUEUE_REFRESH: true,
   COMMAND_CENTER_REFRESH: true,
+  PROJECT_STRATEGIST_REVIEW: true,
+  BINANCE_TESTNET_AUTOEXECUTE: true,
 };
 
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
@@ -39,6 +41,7 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
 export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
   "MARKET_SNAPSHOT",
   "DESK_ANALYZE",
+  "BINANCE_TESTNET_AUTOEXECUTE",
   "PAPER_MONITOR",
   "PORTFOLIO_SNAPSHOT",
   "LEARNING_UPDATE",
@@ -46,6 +49,7 @@ export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
   "ACTION_QUEUE_REFRESH",
   "COMMAND_CENTER_REFRESH",
   "NOTIFICATION_DIGEST",
+  "PROJECT_STRATEGIST_REVIEW",
 ];
 
 export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
@@ -58,6 +62,8 @@ export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
   NOTIFICATION_DIGEST: "Notification digest",
   ACTION_QUEUE_REFRESH: "Action queue refresh",
   COMMAND_CENTER_REFRESH: "Command center refresh",
+  PROJECT_STRATEGIST_REVIEW: "Project strategist review",
+  BINANCE_TESTNET_AUTOEXECUTE: "Binance testnet auto-execute",
 };
 
 /** Base backoff minutes by consecutive failure count (capped). */

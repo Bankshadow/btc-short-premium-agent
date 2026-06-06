@@ -13,3 +13,13 @@ export {
   executeBinanceTestnetOrder,
   executeBinanceTestnetClose,
 } from "./binance-execution";
+export {
+  runBinanceTestnetAutoExecute,
+  type BinanceAutoExecuteResult,
+  type BinanceAutoExecuteOutcome,
+} from "./binance-auto-executor";
+export {
+  buildBinanceEnvChecklist,
+  buildBinanceBlockers,
+  buildBinanceEnvChecklistText,
+} from "./binance-diagnostics";

@@ -63,6 +63,30 @@ export default function BinanceTestnetDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorLog, setErrorLog] = useState<string[]>([]);
+  const [checklistCopied, setChecklistCopied] = useState(false);
+
+  const copyEnvChecklist = useCallback(async () => {
+    if (!status) return;
+    const lines: string[] = [
+      "# Binance USD-M Futures Testnet — env checklist",
+      "",
+      ...status.envChecklist.map(
+        (item) => `${item.ok ? "[x]" : "[ ]"} ${item.key} = ${item.value}`,
+      ),
+      "",
+      "# Blockers",
+      ...(status.blockers.length > 0
+        ? status.blockers.map((b) => `- (${b.category}) ${b.detail}`)
+        : ["- none"]),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setChecklistCopied(true);
+      setTimeout(() => setChecklistCopied(false), 2000);
+    } catch {
+      setError("Unable to copy env checklist.");
+    }
+  }, [status]);
 
   const pushError = (msg: string) => {
     setError(msg);
@@ -291,6 +315,18 @@ export default function BinanceTestnetDashboard() {
         <Panel title="Connection status">
           <ul className="space-y-1 text-xs text-zinc-400">
             <li>Base URL: {status?.baseUrl ?? "—"}</li>
+            {status?.proxyEnabled && (
+              <li>Upstream: {status.upstreamBaseUrl}</li>
+            )}
+            <li>Proxy: {status?.proxyEnabled ? "enabled" : "direct"}</li>
+            <li>
+              Auto-execute:{" "}
+              {status?.autoExecuteEnabled ? (
+                <span className="text-amber-300">ON (testnet)</span>
+              ) : (
+                "off"
+              )}
+            </li>
             <li>Configured: {status?.configured ? "yes" : "no"}</li>
             <li>Live blocked: {status?.liveBlocked ? "yes" : "no"}</li>
             <li>
@@ -306,6 +342,46 @@ export default function BinanceTestnetDashboard() {
             className="mt-3 rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
           >
             Refresh
+          </button>
+        </Panel>
+
+        <Panel title="Config health">
+          {(status?.blockers?.length ?? 0) > 0 ? (
+            <ul className="mb-3 space-y-1 text-xs">
+              {status?.blockers.map((b) => (
+                <li key={`${b.category}-${b.detail}`} className="text-rose-400">
+                  <span className="font-mono text-[10px] uppercase text-rose-300">
+                    {b.category}
+                  </span>{" "}
+                  {b.detail}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-3 text-xs text-emerald-400">
+              No blockers — environment looks healthy.
+            </p>
+          )}
+          <ul className="space-y-1 text-xs text-zinc-400">
+            {(status?.envChecklist ?? []).map((item) => (
+              <li key={item.key} className="flex items-center gap-2">
+                <span className={item.ok ? "text-emerald-400" : "text-rose-400"}>
+                  {item.ok ? "✓" : "✗"}
+                </span>
+                <span className="font-mono text-[10px] text-zinc-500">
+                  {item.key}
+                </span>
+                <span className="ml-auto text-zinc-300">{item.value}</span>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            disabled={!status}
+            onClick={() => void copyEnvChecklist()}
+            className="mt-3 rounded border border-cyan-800 bg-cyan-950/30 px-2 py-1 text-xs text-cyan-200 hover:bg-cyan-900/40 disabled:opacity-50"
+          >
+            {checklistCopied ? "Copied!" : "Copy env checklist"}
           </button>
         </Panel>
 
@@ -537,8 +613,12 @@ export default function BinanceTestnetDashboard() {
       </div>
 
       <p className="mt-4 text-xs text-zinc-600">
+        <Link href="/testnet-monitor" className="text-cyan-500 hover:underline">
+          AI Testnet Monitor →
+        </Link>
+        {" · "}
         <Link href="/" className="text-cyan-500 hover:underline">
-          ← Desk cockpit
+          Desk cockpit
         </Link>
         {" · "}
         <Link href="/ledger" className="text-cyan-500 hover:underline">
