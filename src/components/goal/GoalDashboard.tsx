@@ -19,12 +19,12 @@ function usd(n: number): string {
 }
 
 const STATUS_COPY: Record<string, string> = {
-  IDLE: "Idle — not started",
-  ANALYZING: "Reviewing the market",
-  MONITORING: "Watching for a setup",
-  IN_TRADE: "Managing a trade",
-  WAITING: "Paused — waiting for you",
-  BLOCKED: "Paused by a safety blocker",
+  IDLE: "Idle",
+  ANALYZING: "Analyzing",
+  MONITORING: "Monitoring",
+  IN_TRADE: "In trade",
+  WAITING: "Waiting",
+  BLOCKED: "Blocked",
 };
 
 function Card({
@@ -65,9 +65,7 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 export default function GoalDashboard() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [busy, setBusy] = useState(false);
-  const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -84,30 +82,6 @@ export default function GoalDashboard() {
     }
   }, []);
 
-  const setAi = useCallback(
-    async (paused: boolean) => {
-      setActionBusy(true);
-      setNotice(null);
-      setError(null);
-      try {
-        const res = await fetch("/api/automation/pause", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paused, automationEnabled: !paused }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json.ok) throw new Error(json.error ?? "Action failed");
-        setNotice(paused ? "AI paused. It will not trade until resumed." : "AI started. It will review the market on schedule.");
-        await refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Action failed");
-      } finally {
-        setActionBusy(false);
-      }
-    },
-    [refresh],
-  );
-
   useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -116,51 +90,27 @@ export default function GoalDashboard() {
   const engines = data?.engines;
   const mission = goal?.mission;
   const stats = goal?.tradeStats;
+  const equity = goal?.equity;
   const ai = goal?.aiActivity;
   const pos = goal?.currentPosition;
   const risk = goal?.risk;
+  const cta = goal?.primaryCta;
 
   return (
     <GoalShell
-      title="$1,000 → $10,000"
-      subtitle="Your AI is working toward turning $1,000 of practice money into $10,000. This page shows the only things you need to know."
+      title="AI Profit Mission"
+      subtitle="Track progress from $1,000 to $10,000. Everything else runs in the background."
       activePath="/"
       actions={
         <>
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => void setAi(false)}
-            className="rounded-lg bg-emerald-700/90 px-3 py-2 text-xs font-semibold text-zinc-50 hover:bg-emerald-600 disabled:opacity-50"
-          >
-            Start AI
-          </button>
-          <button
-            type="button"
-            disabled={actionBusy}
-            onClick={() => void setAi(true)}
-            className="rounded-lg border border-amber-700/50 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-950/40 disabled:opacity-50"
-          >
-            Pause AI
-          </button>
-          <Link
-            href="/trades"
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900/60"
-          >
-            View Trades
-          </Link>
-          <Link
-            href="/ai-status"
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900/60"
-          >
-            View Reasoning
-          </Link>
-          <Link
-            href="/settings"
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-900/60"
-          >
-            Settings
-          </Link>
+          {cta && (
+            <Link
+              href={cta.href}
+              className="rounded-lg bg-emerald-700/90 px-4 py-2 text-xs font-semibold text-zinc-50 hover:bg-emerald-600"
+            >
+              {cta.label}
+            </Link>
+          )}
           <button
             type="button"
             disabled={busy}
@@ -177,48 +127,64 @@ export default function GoalDashboard() {
           {error}
         </p>
       )}
-      {notice && (
-        <p className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-200">
-          {notice}
-        </p>
+
+      {goal?.zeroStateMessage && (
+        <section className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
+          <p className="text-sm text-amber-100">{goal.zeroStateMessage}</p>
+          {cta && (
+            <Link
+              href={cta.href}
+              className="mt-2 inline-block text-xs font-semibold text-emerald-300 hover:underline"
+            >
+              {cta.label} →
+            </Link>
+          )}
+        </section>
       )}
 
-      {goal?.userActionRequired.items.length ? (
+      {goal?.userActionRequired.items.some((i) => i.severity !== "INFO") ? (
         <section className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-300">
-            Action needed
+            Your action required
           </h2>
           <ul className="space-y-2 text-xs text-amber-100">
-            {goal.userActionRequired.items.map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-3">
-                <span>
-                  <span className="font-semibold">{item.title}</span> — {item.detail}
-                </span>
-                {item.href && (
-                  <Link href={item.href} className="shrink-0 text-emerald-300 hover:underline">
-                    Open →
-                  </Link>
-                )}
-              </li>
-            ))}
+            {goal.userActionRequired.items
+              .filter((i) => i.severity !== "INFO")
+              .map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-3">
+                  <span>
+                    <span className="font-semibold">{item.title}</span> — {item.detail}
+                  </span>
+                  {item.href && (
+                    <Link href={item.href} className="shrink-0 text-emerald-300 hover:underline">
+                      Open →
+                    </Link>
+                  )}
+                </li>
+              ))}
           </ul>
         </section>
       ) : (
-        goal && (
+        goal &&
+        goal.dataConnected && (
           <p className="rounded-lg border border-emerald-900/40 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-200/80">
-            Nothing needs your attention right now. AI will alert you if it does.
+            Human action required: <span className="font-semibold">No</span> — AI is running
+            normally.
           </p>
         )
       )}
 
-      {/* Mission Card */}
+      {/* Mission Hero */}
       {mission && (
         <Card title="Mission · $1,000 → $10,000" tone="good">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+          <p className="text-[10px] uppercase tracking-widest text-emerald-400/80">
+            AI Profit Mission
+          </p>
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="font-mono text-3xl text-zinc-50">{usd(mission.currentEquity)}</p>
               <p className="mt-1 text-xs text-zinc-500">
-                {goal?.scopeLabel} · {usd(mission.remainingToTarget)} left to reach $10,000
+                Current equity · {usd(mission.remainingToTarget)} left to $10,000
               </p>
             </div>
             <p className="font-mono text-2xl text-emerald-300">{mission.progressPct}%</p>
@@ -230,21 +196,25 @@ export default function GoalDashboard() {
             />
           </div>
           <p className="mt-2 text-[11px] text-zinc-600">
-            Net result so far: {mission.netPnl >= 0 ? "+" : ""}
-            {usd(mission.netPnl)} · current multiple {mission.currentMultiple}x of 10x goal
+            Goal: {usd(mission.startCapital)} → {usd(mission.targetCapital)} · Net PnL{" "}
+            {mission.netPnl >= 0 ? "+" : ""}
+            {usd(mission.netPnl)}
           </p>
         </Card>
       )}
 
-      {/* Performance Cards */}
-      {stats && (
-        <Card title="Performance">
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {/* Trading Stats */}
+      {stats && equity && (
+        <Card title="Trading stats">
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <Metric label="Total trades" value={String(stats.totalTrades)} />
             <Metric label="Wins" value={String(stats.winTrades)} />
             <Metric label="Losses" value={String(stats.lossTrades)} />
+            <Metric label="Breakeven" value={String(stats.breakevenTrades)} />
             <Metric label="Win rate" value={`${stats.winRate}%`} />
-            <Metric label="Net PnL" value={usd(mission?.netPnl ?? 0)} />
+            <Metric label="Net PnL" value={usd(equity.netPnl)} />
+            <Metric label="Realized PnL" value={usd(equity.realizedPnl)} />
+            <Metric label="Unrealized PnL" value={usd(equity.unrealizedPnl)} />
             <Metric label="Max drawdown" value={usd(-stats.maxDrawdown)} />
           </div>
           {!goal?.trustReady && (
@@ -253,44 +223,49 @@ export default function GoalDashboard() {
               trusted. {stats.totalTrades} done so far.
             </p>
           )}
+          {stats.totalTrades === 0 && (
+            <p className="mt-3 text-[11px] text-zinc-500">No trades recorded yet.</p>
+          )}
         </Card>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* AI Status Card */}
+        {/* AI Status */}
         {ai && (
-          <Card title="What AI is doing" tone={ai.humanActionRequired ? "alert" : "default"}>
-            <p className="font-mono text-lg text-zinc-100">{STATUS_COPY[ai.status] ?? ai.status}</p>
+          <Card title="AI status" tone={ai.humanActionRequired ? "alert" : "default"}>
+            <p className="font-mono text-xl text-zinc-100">
+              {STATUS_COPY[ai.status] ?? ai.status}
+            </p>
             <dl className="mt-3 space-y-1.5 text-xs text-zinc-400">
               <div className="flex gap-2">
-                <dt className="w-28 shrink-0 text-zinc-500">Last action</dt>
+                <dt className="w-36 shrink-0 text-zinc-500">Last action</dt>
                 <dd>{ai.lastAction}</dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-28 shrink-0 text-zinc-500">Position</dt>
-                <dd>{ai.currentPositionSummary}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="w-28 shrink-0 text-zinc-500">Next action</dt>
+                <dt className="w-36 shrink-0 text-zinc-500">Next action</dt>
                 <dd>{ai.nextPlannedAction}</dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-28 shrink-0 text-zinc-500">Your action?</dt>
+                <dt className="w-36 shrink-0 text-zinc-500">Human action required</dt>
                 <dd className={ai.humanActionRequired ? "text-amber-300" : "text-emerald-300"}>
-                  {ai.humanActionRequired ? "Yes — see action needed above" : "No"}
+                  {ai.humanActionRequired ? "Yes" : "No"}
                 </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="w-36 shrink-0 text-zinc-500">Reason</dt>
+                <dd>{ai.reason}</dd>
               </div>
             </dl>
             <Link href="/ai-status" className="mt-3 inline-block text-xs text-emerald-300 hover:underline">
-              See full reasoning →
+              Full AI status →
             </Link>
           </Card>
         )}
 
-        {/* Current Position Card */}
+        {/* Current Position */}
         <Card title="Current position">
           {!pos ? (
-            <p className="text-xs text-zinc-500">No open position right now.</p>
+            <p className="text-sm text-zinc-500">No active position.</p>
           ) : (
             <div className="space-y-1.5 text-xs text-zinc-400">
               <p className="font-mono text-base text-zinc-100">
@@ -303,42 +278,38 @@ export default function GoalDashboard() {
                 Unrealized: {pos.unrealizedPnlUsd >= 0 ? "+" : ""}
                 {usd(pos.unrealizedPnlUsd)}
               </p>
-              <div className="mt-2 flex gap-2">
-                <Link href="/trades" className="rounded border border-zinc-700 px-2 py-1 text-zinc-200 hover:bg-zinc-900/60">
-                  View
-                </Link>
-                {pos.canCloseOnTestnet && (
-                  <Link
-                    href="/testnet-monitor"
-                    className="rounded border border-amber-800/50 px-2 py-1 text-amber-200 hover:bg-amber-950/40"
-                  >
-                    Close on testnet
-                  </Link>
-                )}
-              </div>
+              {pos.durationLabel && <p>Duration: {pos.durationLabel}</p>}
+              <Link href="/trades" className="mt-2 inline-block text-emerald-300 hover:underline">
+                View trade →
+              </Link>
             </div>
           )}
         </Card>
       </div>
 
-      {/* Risk Card */}
+      {/* Risk / Safety */}
       {risk && (
         <Card title="Risk & safety" tone={risk.blocker ? "alert" : "default"}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs text-zinc-400">
             <div>
-              <p className="text-zinc-500">Daily loss</p>
-              <p className="text-zinc-200">{risk.dailyLossStatus}</p>
-            </div>
-            <div>
-              <p className="text-zinc-500">Open risk</p>
-              <p className="text-zinc-200">{usd(risk.openRiskUsd)}</p>
-            </div>
-            <div>
               <p className="text-zinc-500">Live trading</p>
-              <p className="text-zinc-200">{risk.liveLocked ? "Locked (safe)" : "Enabled in server env"}</p>
+              <p className="text-emerald-300">
+                {risk.liveLocked ? "Locked (safe)" : "Enabled in server env"}
+              </p>
             </div>
             <div>
-              <p className="text-zinc-500">Blocker</p>
+              <p className="text-zinc-500">Testnet</p>
+              <p className={risk.testnetStatus.includes("not connected") ? "text-amber-300" : "text-emerald-300"}>
+                {risk.testnetStatus}
+              </p>
+            </div>
+            <div>
+              <p className="text-zinc-500">Daily loss limit</p>
+              <p className="text-zinc-200">{risk.dailyLossLimitLabel}</p>
+              <p className="text-[10px] text-zinc-600">{risk.dailyLossStatus}</p>
+            </div>
+            <div>
+              <p className="text-zinc-500">Current blocker</p>
               <p className={risk.blocker ? "text-rose-300" : "text-emerald-300"}>
                 {risk.blocker ?? "None"}
               </p>
@@ -347,9 +318,23 @@ export default function GoalDashboard() {
         </Card>
       )}
 
-      {/* Background engines — only show when important */}
+      {/* Primary CTA detail */}
+      {cta && (
+        <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4 text-center">
+          <p className="text-xs text-zinc-500">Recommended next step</p>
+          <Link
+            href={cta.href}
+            className="mt-1 inline-block text-base font-semibold text-emerald-300 hover:underline"
+          >
+            {cta.label}
+          </Link>
+          <p className="mt-1 text-[11px] text-zinc-500">{cta.description}</p>
+        </section>
+      )}
+
+      {/* Engines needing attention only */}
       {engines && engines.visibleEngines.length > 0 && (
-        <Card title="Background engines that need attention">
+        <Card title="Needs attention">
           <ul className="space-y-2 text-xs">
             {engines.visibleEngines.map((engine) => (
               <li
@@ -357,14 +342,15 @@ export default function GoalDashboard() {
                 className="flex items-center justify-between gap-3 rounded border border-zinc-800/70 px-3 py-2"
               >
                 <span className="text-zinc-300">
-                  <span className="font-semibold">{engine.label}</span> — {engine.summary}
-                  {engine.importantOutput && (
-                    <span className="block text-[11px] text-amber-300/80">{engine.importantOutput}</span>
-                  )}
+                  <span className="font-semibold">{engine.label}</span> —{" "}
+                  {engine.userVisibleSummary}
                 </span>
-                {engine.advancedHref && (
-                  <Link href={engine.advancedHref} className="shrink-0 text-emerald-300 hover:underline">
-                    Open →
+                {(engine.actionHref ?? engine.advancedHref) && (
+                  <Link
+                    href={engine.actionHref ?? engine.advancedHref ?? "#"}
+                    className="shrink-0 text-emerald-300 hover:underline"
+                  >
+                    {engine.actionLabel ?? "Open"} →
                   </Link>
                 )}
               </li>
@@ -374,8 +360,7 @@ export default function GoalDashboard() {
       )}
 
       <p className="text-center text-[10px] text-zinc-600">
-        Practice money only. AI cannot enable live trading or auto-execute live orders. Testnet
-        actions still require double confirmation.
+        Practice money only. Live trading stays locked. Testnet orders require double confirmation.
       </p>
     </GoalShell>
   );

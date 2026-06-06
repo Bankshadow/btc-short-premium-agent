@@ -1,9 +1,9 @@
 import GoalDashboard from "@/components/goal/GoalDashboard";
 
 export const metadata = {
-  title: "$1,000 → $10,000 · AI Trading Mission",
+  title: "AI Profit Mission · $1,000 → $10,000",
   description:
-    "Goal-first AI trading dashboard. Track progress from $1,000 to $10,000, current equity, trades, win rate, and what the AI is doing.",
+    "Goal-only dashboard. Track equity, progress %, trades, win rate, PnL, and what the AI is doing now.",
 };
 
 export default function Home() {

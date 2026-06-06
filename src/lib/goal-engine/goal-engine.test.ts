@@ -119,3 +119,31 @@ test("AI status reflects blocked when risk blocker present", () => {
   assert.equal(snapshot.aiActivity.status, "BLOCKED");
   assert.equal(snapshot.userActionRequired.required, true);
 });
+
+test("zero state shows friendly message when no data", () => {
+  const snapshot = buildGoalProgressSnapshot({
+    entries: [],
+    orders: [],
+    risk: { testnetConfigured: false, testnetConnected: false },
+  });
+  assert.equal(snapshot.dataConnected, false);
+  assert.ok(snapshot.zeroStateMessage?.includes("Trade data is not connected yet"));
+  assert.equal(snapshot.primaryCta.label, "Configure Binance Testnet");
+});
+
+test("primary CTA suggests first cycle when testnet connected but no trades", () => {
+  const snapshot = buildGoalProgressSnapshot({
+    entries: [],
+    orders: [],
+    risk: { testnetConfigured: true, testnetConnected: true },
+  });
+  assert.equal(snapshot.primaryCta.label, "Run First AI Cycle");
+});
+
+test("environmentBreakdown mirrors byEnvironment", () => {
+  const snapshot = buildGoalProgressSnapshot({
+    entries: [],
+    orders: [order("o1", { realizedPnlPct: 5 })],
+  });
+  assert.equal(snapshot.environmentBreakdown.PAPER.tradeStats.totalTrades, 1);
+});

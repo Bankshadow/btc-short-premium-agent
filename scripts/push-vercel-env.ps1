@@ -23,6 +23,7 @@ Get-Content $EnvFile | ForEach-Object {
 
 $pushKeys = @(
     "CRON_SECRET",
+    "ALLOW_TEST_AUTOMATION",
     "BYBIT_API_KEY",
     "BYBIT_API_SECRET",
     "BYBIT_TESTNET",
@@ -54,7 +55,7 @@ $vercel = Get-Command vercel -ErrorAction SilentlyContinue
 if (-not $vercel) {
     Write-Host "Vercel CLI not found. Install: npm i -g vercel" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Or set manually in Vercel Dashboard → Settings → Environment Variables:" -ForegroundColor Yellow
+    Write-Host "Or set manually in Vercel Dashboard > Settings > Environment Variables:" -ForegroundColor Yellow
     foreach ($key in $pushKeys) {
         if ($vars.ContainsKey($key)) {
             $display = if ($key -match "SECRET|KEY") { "****" } else { $vars[$key] }

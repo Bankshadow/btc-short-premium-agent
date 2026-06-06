@@ -17,25 +17,35 @@ export const GOAL_PRIMARY_NAV: GoalNavLink[] = [
 ];
 
 export const GOAL_ADVANCED_NAV: GoalNavLink[] = [
-  { href: "/cockpit", label: "Agents / Cockpit" },
-  { href: "/council", label: "Council" },
-  { href: "/ledger", label: "Ledger" },
+  { href: "/cockpit", label: "Cockpit (legacy)" },
+  { href: "/autopilot", label: "Autopilot internals" },
+  { href: "/portfolio", label: "Portfolio (raw)" },
+  { href: "/actions", label: "Actions (raw)" },
+  { href: "/notifications", label: "Notifications (raw)" },
   { href: "/strategies", label: "Strategies" },
-  { href: "/strategy-health", label: "Strategy Health" },
   { href: "/validation", label: "Validation" },
   { href: "/capital", label: "Capital" },
+  { href: "/ledger", label: "Ledger" },
+  { href: "/workspace", label: "Workspace" },
+  { href: "/data", label: "Data" },
+  { href: "/automation-control", label: "Automation Control" },
+  { href: "/policies", label: "Policies" },
   { href: "/governance", label: "Governance" },
-  { href: "/testnet-monitor", label: "Testnet" },
-  { href: "/binance-testnet", label: "Binance Testnet" },
+  { href: "/audit", label: "Audit" },
+  { href: "/admin/health", label: "Admin" },
+  { href: "/council", label: "Agents / Council" },
+  { href: "/simulation", label: "Simulation" },
+  { href: "/war-room", label: "War Room" },
+  { href: "/api-docs", label: "API Docs" },
+  { href: "/binance-testnet", label: "Binance Testnet Debug" },
+  { href: "/testnet-monitor", label: "Testnet Monitor Debug" },
+  { href: "/strategy-health", label: "Strategy Health" },
   { href: "/execution-quality", label: "Execution Quality" },
   { href: "/live-evidence", label: "Live Evidence" },
   { href: "/live-readiness", label: "Live Readiness" },
-  { href: "/risk-replay", label: "Risk Replay" },
-  { href: "/war-room", label: "War Room" },
-  { href: "/simulation", label: "Simulation" },
-  { href: "/audit", label: "Audit" },
-  { href: "/api-docs", label: "API Docs" },
-  { href: "/admin/health", label: "Admin" },
+  { href: "/learning", label: "Learning" },
+  { href: "/command-center", label: "Command Center" },
+  { href: "/project-strategist", label: "Project Strategist" },
 ];
 
 export default function GoalShell({
@@ -58,7 +68,7 @@ export default function GoalShell({
       <header className="desk-panel relative overflow-hidden px-5 py-5 sm:px-6">
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="desk-section-title text-emerald-300/90">AI Trading Mission</p>
+            <p className="desk-section-title text-emerald-300/90">AI Profit Mission</p>
             <h1 className="text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">
               {title}
             </h1>
@@ -91,7 +101,7 @@ export default function GoalShell({
             onClick={() => setShowAdvanced((v) => !v)}
             className="ml-auto rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300"
           >
-            {showAdvanced ? "Hide advanced" : "Advanced view"}
+            {showAdvanced ? "Hide advanced" : "Advanced"}
           </button>
         </nav>
 

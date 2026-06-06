@@ -14,12 +14,12 @@ interface DashboardResponse {
 }
 
 const STATUS_COPY: Record<string, string> = {
-  IDLE: "Idle — not started",
-  ANALYZING: "Reviewing the market",
-  MONITORING: "Watching for a setup",
-  IN_TRADE: "Managing a trade",
-  WAITING: "Paused — waiting for you",
-  BLOCKED: "Paused by a safety blocker",
+  IDLE: "Idle",
+  ANALYZING: "Analyzing",
+  MONITORING: "Monitoring",
+  IN_TRADE: "In trade",
+  WAITING: "Waiting",
+  BLOCKED: "Blocked",
 };
 
 export default function AIStatusView() {
@@ -54,7 +54,7 @@ export default function AIStatusView() {
   return (
     <GoalShell
       title="AI Status"
-      subtitle="A plain-language view of what the AI is thinking and doing right now."
+      subtitle="What the AI is doing now, last cycle results, and which background engines need you."
       activePath="/ai-status"
       actions={
         <button
@@ -81,32 +81,44 @@ export default function AIStatusView() {
           </p>
           <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-zinc-400">
             <div>
-              <dt className="text-zinc-500">Last action</dt>
-              <dd className="mt-0.5 text-zinc-200">{ai.lastAction}</dd>
+              <dt className="text-zinc-500">Last cycle</dt>
+              <dd className="mt-0.5 text-zinc-200">
+                {goal?.lastCycleAt
+                  ? new Date(goal.lastCycleAt).toLocaleString()
+                  : "No cycle has run yet."}
+              </dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Current position</dt>
-              <dd className="mt-0.5 text-zinc-200">{ai.currentPositionSummary}</dd>
+              <dt className="text-zinc-500">Last verdict</dt>
+              <dd className="mt-0.5 text-zinc-200">{goal?.lastVerdict ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Current strategy</dt>
+              <dd className="mt-0.5 text-zinc-200">{goal?.currentStrategy ?? "Default"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Risk status</dt>
+              <dd className={`mt-0.5 ${goal?.risk.blocker ? "text-rose-300" : "text-emerald-300"}`}>
+                {goal?.risk.blocker ?? "Within safe limits"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Last action</dt>
+              <dd className="mt-0.5 text-zinc-200">{ai.lastAction}</dd>
             </div>
             <div>
               <dt className="text-zinc-500">Next action</dt>
               <dd className="mt-0.5 text-zinc-200">{ai.nextPlannedAction}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Reason</dt>
-              <dd className="mt-0.5 text-zinc-200">{ai.reason}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Risk blocker</dt>
-              <dd className={`mt-0.5 ${goal?.risk.blocker ? "text-rose-300" : "text-emerald-300"}`}>
-                {goal?.risk.blocker ?? "None"}
-              </dd>
-            </div>
-            <div>
               <dt className="text-zinc-500">Human action required</dt>
               <dd className={`mt-0.5 ${ai.humanActionRequired ? "text-amber-300" : "text-emerald-300"}`}>
                 {ai.humanActionRequired ? "Yes" : "No"}
               </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Reason</dt>
+              <dd className="mt-0.5 text-zinc-200">{ai.reason}</dd>
             </div>
           </dl>
         </section>
@@ -123,7 +135,7 @@ export default function AIStatusView() {
               onClick={() => setShowAdvanced((v) => !v)}
               className="text-[11px] text-zinc-500 hover:text-zinc-300"
             >
-              {showAdvanced ? "Show only important" : "Advanced — show all"}
+              {showAdvanced ? "Hide advanced reasoning" : "Show advanced reasoning"}
             </button>
           </div>
           <p className="mt-1 text-[11px] text-zinc-600">{engines.safetyNotice}</p>
@@ -135,10 +147,14 @@ export default function AIStatusView() {
               >
                 <span className="text-zinc-300">
                   <span className="font-semibold">{engine.label}</span>{" "}
-                  <span className="text-zinc-500">[{engine.status}]</span> — {engine.summary}
+                  <span className="text-zinc-500">[{engine.status}]</span> —{" "}
+                  {showAdvanced ? engine.summary : engine.userVisibleSummary}
                 </span>
-                {engine.advancedHref && (
-                  <Link href={engine.advancedHref} className="shrink-0 text-emerald-300 hover:underline">
+                {(engine.actionHref ?? engine.advancedHref) && (
+                  <Link
+                    href={engine.actionHref ?? engine.advancedHref ?? "#"}
+                    className="shrink-0 text-emerald-300 hover:underline"
+                  >
                     Open →
                   </Link>
                 )}
@@ -151,13 +167,15 @@ export default function AIStatusView() {
         </section>
       )}
 
-      <p className="text-[11px] text-zinc-600">
-        Want the raw multi-agent debate?{" "}
-        <Link href="/cockpit" className="text-emerald-300 hover:underline">
-          Open the advanced cockpit
-        </Link>
-        .
-      </p>
+      {showAdvanced && (
+        <p className="text-[11px] text-zinc-600">
+          Raw multi-agent debate:{" "}
+          <Link href="/cockpit" className="text-emerald-300 hover:underline">
+            Open advanced cockpit
+          </Link>
+          .
+        </p>
+      )}
     </GoalShell>
   );
 }

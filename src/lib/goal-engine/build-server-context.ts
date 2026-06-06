@@ -11,8 +11,10 @@ import {
   buildStrategyHealthSummary,
 } from "@/lib/strategy-health";
 import { liveExecutionStatus } from "@/lib/exchange/live-execution-gate";
+import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
 import { filterProductionEntries, filterProductionOrders } from "@/lib/journal/production-filter";
 import { buildCoreEngineRegistry } from "@/lib/core-engine-registry";
+import { GOAL_MIN_TRADES_FOR_TRUST } from "./types";
 import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
@@ -35,6 +37,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     incidents,
     paperRows,
     liveRows,
+    binanceStatus,
   ] = await Promise.all([
     loadServerAnalysisJournal().catch(() => []),
     buildTestnetMonitorSnapshot().catch(() => null),
@@ -47,6 +50,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     loadAnomalyIncidents().catch(() => []),
     listWarehouseRows("paper_trades", 500).catch(() => []),
     listWarehouseRows("live_trades", 300).catch(() => []),
+    getBinanceStatus().catch(() => null),
   ]);
 
   const entries = filterProductionEntries(entriesRaw);
@@ -91,6 +95,17 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
 
   const settings = automation?.state.settings;
   const lastVerdict = entries.find((e) => e.finalVerdict)?.finalVerdict ?? null;
+  const testnetConfigured = Boolean(binanceStatus?.configured);
+  const testnetConnected = Boolean(binanceStatus?.connected);
+  const pendingLearningReview =
+    testnetSnapshot?.learningRecords.filter((r) => r.status === "PENDING_REVIEW").length ?? 0;
+  const learnedCount =
+    testnetSnapshot?.learningRecords.filter((r) => r.status === "LEARNED").length ?? 0;
+  const dataConnected =
+    entries.length > 0 ||
+    orders.length > 0 ||
+    testnetConnected ||
+    Boolean(unifiedPortfolio);
 
   const blocker =
     criticalIncident?.title ??
@@ -118,8 +133,15 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
       dailyLossStatus: riskReport.blockNewTrades
         ? "Daily loss limit reached — trading paused."
         : "Within safe daily loss limit.",
+      dailyLossLimitLabel: "3% daily loss limit",
       liveLocked: !live.enabled,
       blocker,
+      testnetConfigured,
+      testnetConnected,
+    },
+    learning: {
+      pendingReview: pendingLearningReview,
+      learnedCount,
     },
   });
 
@@ -133,6 +155,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
       lastVerdict,
       lastRunAt: automation?.state.lastSuccessfulRunAt ?? null,
       running: automation?.state.lastRun?.status === "RUNNING",
+      hasRunCycle: entries.length > 0 || Boolean(automation?.state.lastSuccessfulRunAt),
     },
     strategy: {
       pausedCount: strategyHealth.totals.paused,
@@ -143,11 +166,19 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
       blockNewTrades: riskReport.blockNewTrades,
       blocker,
     },
-    policy: {
-      recentBlocks: observability?.signals.policyBlocks1h ?? 0,
+    ledger: {
+      healthy: true,
+      entryCount: entries.length,
+      lastRunAt: entries[0]?.timestamp ?? null,
+    },
+    portfolio: {
+      dataConnected,
+      lastRunAt: unifiedPortfolio?.generatedAt ?? null,
     },
     testnetExecution: {
-      enabled: Boolean(testnetSnapshot?.connected),
+      configured: testnetConfigured,
+      connected: testnetConnected,
+      enabled: testnetConnected,
       openPositions: testnetSnapshot?.openPositions.length ?? 0,
       requiresDoubleConfirm: true,
       failedRecently: (testnetSnapshot?.executionQuality?.failedOrderCount ?? 0) > 0,
@@ -156,20 +187,30 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
       openPositions:
         (testnetSnapshot?.openPositions.length ?? 0) +
         (unifiedPortfolio?.openPositions.length ?? 0),
+      affectsOpenPosition:
+        (testnetSnapshot?.openPositions.length ?? 0) +
+          (unifiedPortfolio?.openPositions.length ?? 0) >
+        0,
     },
     pnl: {
       netPnlUsd: goal.equity.netPnl,
+      affectsGoalProgress: goal.tradeStats.totalTrades > 0,
     },
     learning: {
-      learnedCount:
-        testnetSnapshot?.learningRecords.filter((r) => r.status === "LEARNED").length ?? 0,
-      pendingReview:
-        testnetSnapshot?.learningRecords.filter((r) => r.status === "PENDING_REVIEW").length ?? 0,
+      learnedCount,
+      pendingReview: pendingLearningReview,
+      minTradesForTrust: GOAL_MIN_TRADES_FOR_TRUST,
     },
     notification: {
       anyChannelConfigured: observability?.signals.alerts.anyChannelConfigured ?? false,
       recentDeliveryFailures: observability?.signals.alerts.recentDeliveryFailures ?? 0,
       lastDeliveryAt: observability?.signals.alerts.lastDeliveryAt ?? null,
+    },
+    reporting: {
+      lastReportAt: automation?.state.lastSuccessfulRunAt ?? null,
+    },
+    projectStrategist: {
+      pendingProposals: 0,
     },
   });
 

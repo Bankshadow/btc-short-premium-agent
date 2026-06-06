@@ -62,7 +62,15 @@ export interface CurrentPositionSummary {
   entryPrice: number;
   markPrice: number | null;
   unrealizedPnlUsd: number;
+  openedAt: string | null;
+  durationLabel: string | null;
   canCloseOnTestnet: boolean;
+}
+
+export interface PrimaryCta {
+  label: string;
+  href: string;
+  description: string;
 }
 
 export interface AIActivitySnapshot {
@@ -98,8 +106,10 @@ export interface GoalEnvironmentBreakdown {
 
 export interface GoalRiskSummary {
   dailyLossStatus: string;
+  dailyLossLimitLabel: string;
   openRiskUsd: number;
   liveLocked: boolean;
+  testnetStatus: string;
   blocker: string | null;
 }
 
@@ -115,10 +125,18 @@ export interface GoalProgressSnapshot {
   currentPosition: CurrentPositionSummary | null;
   risk: GoalRiskSummary;
   byEnvironment: Record<GoalEnvironment, GoalEnvironmentBreakdown>;
+  /** Alias for byEnvironment — per-environment breakdown. */
+  environmentBreakdown: Record<GoalEnvironment, GoalEnvironmentBreakdown>;
   /** LIVE is always reported separately and never folded into the mission. */
   live: GoalEnvironmentBreakdown;
   minTradesForTrust: number;
   trustReady: boolean;
+  dataConnected: boolean;
+  zeroStateMessage: string | null;
+  primaryCta: PrimaryCta;
+  currentStrategy: string | null;
+  lastCycleAt: string | null;
+  lastVerdict: string | null;
 }
 
 export interface GoalEngineInput {
@@ -143,8 +161,15 @@ export interface GoalEngineInput {
   };
   risk?: {
     dailyLossStatus?: string;
+    dailyLossLimitLabel?: string;
     liveLocked?: boolean;
     blocker?: string | null;
+    testnetConfigured?: boolean;
+    testnetConnected?: boolean;
+  };
+  learning?: {
+    pendingReview?: number;
+    learnedCount?: number;
   };
 }
 

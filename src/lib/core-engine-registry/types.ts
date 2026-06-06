@@ -3,37 +3,39 @@ export type CoreEngineId =
   | "AgentDecisionEngine"
   | "StrategyEngine"
   | "RiskEngine"
-  | "PolicyEngine"
-  | "ExecutionPreviewEngine"
+  | "LedgerEngine"
+  | "PortfolioEngine"
   | "TestnetExecutionEngine"
-  | "PositionMonitorEngine"
   | "PnLEngine"
   | "LearningEngine"
+  | "ReportingEngine"
   | "NotificationEngine"
-  | "ReportingEngine";
+  | "ProjectStrategistEngine";
 
-export type CoreEngineStatus =
-  | "OK"
-  | "IDLE"
-  | "DEGRADED"
-  | "BLOCKED"
-  | "ERROR"
-  | "ACTION_REQUIRED";
+export type CoreEngineStatus = "OK" | "WARNING" | "ERROR" | "DISABLED";
 
 export interface CoreEngineState {
   engineId: CoreEngineId;
+  /** Short label for lists. */
   label: string;
   status: CoreEngineStatus;
   lastRunAt: string | null;
+  /** Internal / advanced summary. */
   summary: string;
-  importantOutput: string | null;
+  /** Plain-language line for the goal dashboard. */
+  userVisibleSummary: string;
+  requiresHumanAction: boolean;
+  actionLabel: string | null;
+  actionHref: string | null;
   /** Whether this engine should surface on the simple dashboard. */
   userVisible: boolean;
-  error: string | null;
-  createsTradeSignal: boolean;
-  requiresHumanAction: boolean;
-  detectsRiskBlocker: boolean;
-  advancedHref: string | null;
+  /** @deprecated Use userVisibleSummary */
+  importantOutput?: string | null;
+  /** @deprecated Use actionHref */
+  advancedHref?: string | null;
+  error?: string | null;
+  createsTradeSignal?: boolean;
+  detectsRiskBlocker?: boolean;
 }
 
 export interface CoreEngineRegistrySnapshot {
@@ -57,6 +59,7 @@ export interface CoreEngineRegistryInput {
     lastVerdict?: string | null;
     lastRunAt?: string | null;
     running?: boolean;
+    hasRunCycle?: boolean;
   };
   strategy?: {
     activeStrategy?: string | null;
@@ -70,32 +73,33 @@ export interface CoreEngineRegistryInput {
     blocker?: string | null;
     lastRunAt?: string | null;
   };
-  policy?: {
-    recentBlocks?: number;
+  ledger?: {
+    healthy?: boolean;
+    entryCount?: number;
     lastRunAt?: string | null;
   };
-  executionPreview?: {
-    lastPreviewAt?: string | null;
-    pendingPreview?: boolean;
+  portfolio?: {
+    dataConnected?: boolean;
+    lastRunAt?: string | null;
   };
   testnetExecution?: {
+    configured?: boolean;
+    connected?: boolean;
     enabled?: boolean;
     openPositions?: number;
     lastExecutedAt?: string | null;
     requiresDoubleConfirm?: boolean;
     failedRecently?: boolean;
   };
-  positionMonitor?: {
-    openPositions?: number;
-    lastRunAt?: string | null;
-  };
   pnl?: {
     netPnlUsd?: number;
+    affectsGoalProgress?: boolean;
     lastRunAt?: string | null;
   };
   learning?: {
     learnedCount?: number;
     pendingReview?: number;
+    minTradesForTrust?: number;
     lastRunAt?: string | null;
   };
   notification?: {
@@ -105,6 +109,15 @@ export interface CoreEngineRegistryInput {
   };
   reporting?: {
     lastReportAt?: string | null;
+  };
+  projectStrategist?: {
+    lastRunAt?: string | null;
+    pendingProposals?: number;
+  };
+  positionMonitor?: {
+    openPositions?: number;
+    affectsOpenPosition?: boolean;
+    lastRunAt?: string | null;
   };
   errors?: Partial<Record<CoreEngineId, string>>;
 }

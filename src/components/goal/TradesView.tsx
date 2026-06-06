@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import GoalShell from "./GoalShell";
 import type { GoalTradeRow } from "@/lib/goal-engine/build-trade-list";
 
@@ -54,6 +55,8 @@ export default function TradesView() {
     });
   }, [trades, env, state]);
 
+  const openCount = filtered.filter((t) => t.result === "OPEN").length;
+  const closedCount = filtered.filter((t) => t.result !== "OPEN").length;
   const wins = filtered.filter((t) => t.result === "WIN").length;
   const losses = filtered.filter((t) => t.result === "LOSS").length;
   const netPnl = filtered.reduce((s, t) => s + t.pnlUsd, 0);
@@ -79,6 +82,31 @@ export default function TradesView() {
           {error}
         </p>
       )}
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+          <p className="text-[10px] uppercase text-zinc-500">Total</p>
+          <p className="font-mono text-lg text-zinc-100">{filtered.length}</p>
+        </div>
+        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+          <p className="text-[10px] uppercase text-zinc-500">Open / Closed</p>
+          <p className="font-mono text-lg text-zinc-100">
+            {openCount} / {closedCount}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+          <p className="text-[10px] uppercase text-zinc-500">Win / Loss</p>
+          <p className="font-mono text-lg text-zinc-100">
+            {wins} / {losses}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+          <p className="text-[10px] uppercase text-zinc-500">Net PnL</p>
+          <p className={`font-mono text-lg ${netPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+            {usd(netPnl)}
+          </p>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <select
@@ -109,22 +137,21 @@ export default function TradesView() {
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
         {filtered.length === 0 ? (
-          <p className="text-xs text-zinc-500">No trades yet for this filter.</p>
+          <p className="text-xs text-zinc-500">
+            No trades recorded yet. Run your first AI cycle or connect Binance Testnet.
+          </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-xs text-zinc-300">
+            <table className="w-full min-w-[900px] text-left text-xs text-zinc-300">
               <thead>
                 <tr className="text-zinc-500">
                   <th className="pb-2 pr-3">Date</th>
-                  <th className="pb-2 pr-3">Environment</th>
+                  <th className="pb-2 pr-3">Env</th>
                   <th className="pb-2 pr-3">Symbol</th>
                   <th className="pb-2 pr-3">Side</th>
-                  <th className="pb-2 pr-3">Entry</th>
-                  <th className="pb-2 pr-3">Exit</th>
                   <th className="pb-2 pr-3">PnL</th>
                   <th className="pb-2 pr-3">Result</th>
-                  <th className="pb-2 pr-3">Source</th>
-                  <th className="pb-2">Reason</th>
+                  <th className="pb-2">Lifecycle</th>
                 </tr>
               </thead>
               <tbody>
@@ -136,14 +163,18 @@ export default function TradesView() {
                     <td className="py-2 pr-3">{t.environment}</td>
                     <td className="py-2 pr-3 text-zinc-200">{t.symbol}</td>
                     <td className="py-2 pr-3">{t.side}</td>
-                    <td className="py-2 pr-3 font-mono">{t.entry ?? "—"}</td>
-                    <td className="py-2 pr-3 font-mono">{t.exit ?? "—"}</td>
                     <td className={`py-2 pr-3 font-mono ${t.pnlUsd >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                       {usd(t.pnlUsd)}
                     </td>
                     <td className={`py-2 pr-3 ${resultClass(t.result)}`}>{t.result}</td>
-                    <td className="py-2 pr-3 text-zinc-500">{t.source}</td>
-                    <td className="py-2 text-zinc-500">{t.reason}</td>
+                    <td className="py-2">
+                      <Link
+                        href={`/trades/${t.id}`}
+                        className="text-emerald-300 hover:underline"
+                      >
+                        View full lifecycle →
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

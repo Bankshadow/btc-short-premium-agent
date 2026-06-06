@@ -1,14 +1,14 @@
-import ReportsDashboard from "@/components/trading-os/ReportsDashboard";
+import ReportsView from "@/components/goal/ReportsView";
 
 export const metadata = {
-  title: "Reports · Trading OS",
-  description: "Export desk reports — daily, weekly, scoreboard, incidents.",
+  title: "Reports · AI Profit Mission",
+  description: "Daily and weekly summaries, goal progress, PnL, and AI recommendations.",
 };
 
 export default function ReportsPage() {
   return (
-    <main className="min-h-full bg-zinc-950">
-      <ReportsDashboard />
+    <main className="desk-root min-h-screen">
+      <ReportsView />
     </main>
   );
 }

@@ -8,32 +8,32 @@ import type {
 
 const ENGINE_LABELS: Record<CoreEngineId, string> = {
   MarketDataEngine: "Market data",
-  AgentDecisionEngine: "AI decision",
+  AgentDecisionEngine: "AI decisions",
   StrategyEngine: "Strategy",
   RiskEngine: "Risk",
-  PolicyEngine: "Policy & guardrails",
-  ExecutionPreviewEngine: "Order preview",
-  TestnetExecutionEngine: "Testnet execution",
-  PositionMonitorEngine: "Position monitor",
-  PnLEngine: "PnL",
-  LearningEngine: "Learning",
-  NotificationEngine: "Alerts",
+  LedgerEngine: "Trade records",
+  PortfolioEngine: "Portfolio",
+  TestnetExecutionEngine: "Testnet trading",
+  PnLEngine: "Profit & loss",
+  LearningEngine: "AI learning",
   ReportingEngine: "Reports",
+  NotificationEngine: "Alerts",
+  ProjectStrategistEngine: "Project strategist",
 };
 
 const ADVANCED_HREF: Partial<Record<CoreEngineId, string>> = {
   MarketDataEngine: "/command-center",
-  AgentDecisionEngine: "/council",
+  AgentDecisionEngine: "/cockpit",
   StrategyEngine: "/strategies",
   RiskEngine: "/real-time-risk",
-  PolicyEngine: "/policies",
-  ExecutionPreviewEngine: "/binance-testnet",
-  TestnetExecutionEngine: "/testnet-monitor",
-  PositionMonitorEngine: "/testnet-monitor",
+  LedgerEngine: "/ledger",
+  PortfolioEngine: "/portfolio",
+  TestnetExecutionEngine: "/binance-testnet",
   PnLEngine: "/portfolio",
   LearningEngine: "/learning",
   NotificationEngine: "/notifications",
   ReportingEngine: "/reports",
+  ProjectStrategistEngine: "/project-strategist",
 };
 
 function make(
@@ -42,39 +42,55 @@ function make(
     status: CoreEngineStatus;
     lastRunAt?: string | null;
     summary: string;
-    importantOutput?: string | null;
-    createsTradeSignal?: boolean;
+    userVisibleSummary: string;
     requiresHumanAction?: boolean;
+    actionLabel?: string | null;
+    actionHref?: string | null;
+    affectsGoalProgress?: boolean;
+    affectsOpenPosition?: boolean;
+    affectsRisk?: boolean;
+    createsTradeSignal?: boolean;
     detectsRiskBlocker?: boolean;
     error?: string | null;
   },
 ): CoreEngineState {
   const error = partial.error ?? null;
-  const requiresHumanAction = partial.requiresHumanAction ?? false;
-  const createsTradeSignal = partial.createsTradeSignal ?? false;
-  const detectsRiskBlocker = partial.detectsRiskBlocker ?? false;
   const status: CoreEngineStatus = error ? "ERROR" : partial.status;
+  const requiresHumanAction = partial.requiresHumanAction ?? false;
+  const affectsGoalProgress = partial.affectsGoalProgress ?? false;
+  const affectsOpenPosition = partial.affectsOpenPosition ?? false;
+  const affectsRisk = partial.affectsRisk ?? false;
+  const actionHref = partial.actionHref ?? ADVANCED_HREF[engineId] ?? null;
+  const actionLabel = partial.actionLabel ?? null;
+
   const userVisible =
     Boolean(error) ||
-    requiresHumanAction ||
-    createsTradeSignal ||
-    detectsRiskBlocker ||
     status === "ERROR" ||
-    status === "BLOCKED" ||
-    status === "ACTION_REQUIRED";
+    requiresHumanAction ||
+    affectsGoalProgress ||
+    affectsOpenPosition ||
+    affectsRisk;
+
+  const userVisibleSummary = error
+    ? `${partial.userVisibleSummary} (${error})`
+    : partial.userVisibleSummary;
+
   return {
     engineId,
     label: ENGINE_LABELS[engineId],
     status,
     lastRunAt: partial.lastRunAt ?? null,
     summary: partial.summary,
-    importantOutput: partial.importantOutput ?? null,
-    userVisible,
-    error,
-    createsTradeSignal,
+    userVisibleSummary,
     requiresHumanAction,
-    detectsRiskBlocker,
-    advancedHref: ADVANCED_HREF[engineId] ?? null,
+    actionLabel,
+    actionHref,
+    userVisible,
+    importantOutput: userVisible ? userVisibleSummary : null,
+    advancedHref: actionHref,
+    error,
+    createsTradeSignal: partial.createsTradeSignal ?? false,
+    detectsRiskBlocker: partial.detectsRiskBlocker ?? false,
   };
 }
 
@@ -84,139 +100,215 @@ export function buildCoreEngineRegistry(
   const generatedAt = input.generatedAt ?? new Date().toISOString();
   const err = input.errors ?? {};
 
+  const ledgerCount = input.ledger?.entryCount ?? 0;
+  const ledgerHealthy = input.ledger?.healthy ?? true;
+  const dataConnected = input.portfolio?.dataConnected ?? ledgerCount > 0;
+  const testnetConfigured = input.testnetExecution?.configured ?? false;
+  const testnetConnected = input.testnetExecution?.connected ?? false;
+  const openPositions = input.positionMonitor?.openPositions ?? 0;
+  const pendingLearning = input.learning?.pendingReview ?? 0;
+  const minTrust = input.learning?.minTradesForTrust ?? 12;
+  const learnedCount = input.learning?.learnedCount ?? 0;
+
   const engines: CoreEngineState[] = [
     make("MarketDataEngine", {
-      status: input.market?.staleWarning ? "DEGRADED" : "OK",
+      status: input.market?.staleWarning ? "WARNING" : "OK",
       lastRunAt: input.market?.lastAnalysisAt ?? null,
       summary: input.market?.staleWarning
-        ? "Market data is stale — refreshing soon."
-        : "Market data is up to date.",
-      importantOutput: input.market?.staleWarning ?? null,
-      requiresHumanAction: false,
+        ? "Market data stale."
+        : "Market data up to date.",
+      userVisibleSummary: input.market?.staleWarning
+        ? "Market prices may be out of date. AI will refresh on the next cycle."
+        : "Market prices are current.",
       error: err.MarketDataEngine ?? null,
     }),
     make("AgentDecisionEngine", {
-      status: input.agents?.running ? "OK" : "IDLE",
+      status: input.agents?.running
+        ? "OK"
+        : input.agents?.hasRunCycle
+          ? "OK"
+          : "WARNING",
       lastRunAt: input.agents?.lastRunAt ?? null,
       summary: input.agents?.running
-        ? "AI is reviewing the market."
-        : "AI decision engine is idle.",
-      importantOutput: input.agents?.lastVerdict ?? null,
+        ? "AI decision engine running."
+        : input.agents?.hasRunCycle
+          ? "AI decision engine idle."
+          : "No AI cycle has run yet.",
+      userVisibleSummary: input.agents?.running
+        ? "AI is reviewing the market right now."
+        : input.agents?.hasRunCycle
+          ? "AI is idle between scheduled reviews."
+          : "AI has not run its first market review yet.",
+      requiresHumanAction: !input.agents?.hasRunCycle,
+      actionLabel: "Run first AI cycle",
+      actionHref: "/cockpit",
+      affectsGoalProgress: !input.agents?.hasRunCycle && ledgerCount === 0,
       error: err.AgentDecisionEngine ?? null,
     }),
     make("StrategyEngine", {
       status:
         (input.strategy?.pausedCount ?? 0) > 0
-          ? "ACTION_REQUIRED"
+          ? "WARNING"
           : (input.strategy?.reviewRequiredCount ?? 0) > 0
-            ? "DEGRADED"
+            ? "WARNING"
             : "OK",
       lastRunAt: input.strategy?.lastRunAt ?? null,
       summary:
         (input.strategy?.pausedCount ?? 0) > 0
-          ? `${input.strategy?.pausedCount} strategy(ies) paused for review.`
-          : "Strategies are healthy.",
-      importantOutput:
+          ? `${input.strategy?.pausedCount} strategy paused.`
+          : "Strategies healthy.",
+      userVisibleSummary:
         (input.strategy?.pausedCount ?? 0) > 0
-          ? "A strategy needs your review before it trades again."
-          : null,
+          ? "A strategy is paused and needs your review before it can trade again."
+          : "Trading strategies are healthy.",
       requiresHumanAction: (input.strategy?.pausedCount ?? 0) > 0,
+      actionLabel: "Review strategy",
+      actionHref: "/strategies",
       error: err.StrategyEngine ?? null,
     }),
     make("RiskEngine", {
-      status: input.risk?.blockNewTrades
-        ? "BLOCKED"
-        : input.risk?.status === "CAUTION"
-          ? "DEGRADED"
-          : "OK",
+      status: input.risk?.blockNewTrades ? "ERROR" : "OK",
       lastRunAt: input.risk?.lastRunAt ?? null,
       summary: input.risk?.blockNewTrades
-        ? "Risk engine has paused new trades."
-        : "Risk is within safe limits.",
-      importantOutput: input.risk?.blocker ?? null,
-      detectsRiskBlocker: Boolean(input.risk?.blockNewTrades),
+        ? "Risk engine blocked new trades."
+        : "Risk within limits.",
+      userVisibleSummary: input.risk?.blockNewTrades
+        ? input.risk?.blocker ?? "Trading is paused by the risk engine."
+        : "Risk limits are within safe bounds.",
       requiresHumanAction: Boolean(input.risk?.blockNewTrades),
+      actionLabel: "View risk status",
+      actionHref: "/ai-status",
+      affectsRisk: Boolean(input.risk?.blockNewTrades),
+      detectsRiskBlocker: Boolean(input.risk?.blockNewTrades),
       error: err.RiskEngine ?? null,
     }),
-    make("PolicyEngine", {
-      status: (input.policy?.recentBlocks ?? 0) > 0 ? "DEGRADED" : "OK",
-      lastRunAt: input.policy?.lastRunAt ?? null,
+    make("LedgerEngine", {
+      status: ledgerCount === 0 ? "WARNING" : ledgerHealthy ? "OK" : "WARNING",
+      lastRunAt: input.ledger?.lastRunAt ?? null,
       summary:
-        (input.policy?.recentBlocks ?? 0) > 0
-          ? `${input.policy?.recentBlocks} action(s) blocked by guardrails recently.`
-          : "Guardrails are passing.",
-      error: err.PolicyEngine ?? null,
+        ledgerCount === 0
+          ? "Ledger empty."
+          : ledgerHealthy
+            ? `Ledger healthy · ${ledgerCount} entries.`
+            : "Ledger needs attention.",
+      userVisibleSummary:
+        ledgerCount === 0
+          ? "No trades recorded yet."
+          : `${ledgerCount} trade record(s) stored.`,
+      affectsGoalProgress: ledgerCount === 0,
+      error: err.LedgerEngine ?? null,
     }),
-    make("ExecutionPreviewEngine", {
-      status: input.executionPreview?.pendingPreview ? "ACTION_REQUIRED" : "OK",
-      lastRunAt: input.executionPreview?.lastPreviewAt ?? null,
-      summary: input.executionPreview?.pendingPreview
-        ? "An order preview is waiting for confirmation."
-        : "No pending order previews.",
-      requiresHumanAction: Boolean(input.executionPreview?.pendingPreview),
-      error: err.ExecutionPreviewEngine ?? null,
+    make("PortfolioEngine", {
+      status: dataConnected ? "OK" : "WARNING",
+      lastRunAt: input.portfolio?.lastRunAt ?? null,
+      summary: dataConnected
+        ? "Portfolio data connected."
+        : "Portfolio data not connected.",
+      userVisibleSummary: dataConnected
+        ? "Trade data is connected."
+        : "Trade data is not connected yet. Run your first AI cycle or connect Binance Testnet.",
+      requiresHumanAction: !dataConnected,
+      actionLabel: dataConnected ? null : "Connect trade data",
+      actionHref: dataConnected ? null : "/binance-testnet",
+      affectsGoalProgress: !dataConnected,
+      error: err.PortfolioEngine ?? null,
     }),
     make("TestnetExecutionEngine", {
-      status: input.testnetExecution?.failedRecently
-        ? "ERROR"
-        : input.testnetExecution?.enabled
-          ? "OK"
-          : "IDLE",
+      status: !testnetConfigured
+        ? "DISABLED"
+        : input.testnetExecution?.failedRecently
+          ? "ERROR"
+          : testnetConnected
+            ? "OK"
+            : "WARNING",
       lastRunAt: input.testnetExecution?.lastExecutedAt ?? null,
-      summary: input.testnetExecution?.enabled
-        ? "Testnet execution is ready (double confirm required)."
-        : "Testnet execution is idle.",
-      importantOutput: input.testnetExecution?.failedRecently
-        ? "A recent testnet order failed."
-        : null,
+      summary: !testnetConfigured
+        ? "Testnet not configured."
+        : openPositions > 0
+          ? `Watching ${openPositions} open position(s).`
+          : testnetConnected
+            ? "Testnet connected."
+            : "Testnet not connected.",
+      userVisibleSummary: !testnetConfigured
+        ? "Binance Testnet is not connected yet."
+        : openPositions > 0
+          ? `Watching ${openPositions} open position(s).`
+          : testnetConnected
+            ? "Binance Testnet is connected (double confirm required for orders)."
+            : "Binance Testnet is not connected yet.",
+      requiresHumanAction: !testnetConfigured || !testnetConnected,
+      actionLabel: openPositions > 0 ? "View current trade" : "Configure Binance Testnet",
+      actionHref: openPositions > 0 ? "/trades" : "/binance-testnet",
+      affectsOpenPosition: openPositions > 0,
       error: err.TestnetExecutionEngine ?? null,
-    }),
-    make("PositionMonitorEngine", {
-      status: (input.positionMonitor?.openPositions ?? 0) > 0 ? "OK" : "IDLE",
-      lastRunAt: input.positionMonitor?.lastRunAt ?? null,
-      summary:
-        (input.positionMonitor?.openPositions ?? 0) > 0
-          ? `Watching ${input.positionMonitor?.openPositions} open position(s).`
-          : "No open positions to monitor.",
-      error: err.PositionMonitorEngine ?? null,
     }),
     make("PnLEngine", {
       status: "OK",
       lastRunAt: input.pnl?.lastRunAt ?? null,
-      summary: "PnL is being calculated correctly.",
+      summary: `Net PnL ${input.pnl?.netPnlUsd ?? 0}.`,
+      userVisibleSummary:
+        (input.pnl?.netPnlUsd ?? 0) === 0
+          ? "No profit or loss recorded yet."
+          : `Net result: ${(input.pnl?.netPnlUsd ?? 0) >= 0 ? "+" : ""}$${Math.abs(input.pnl?.netPnlUsd ?? 0).toFixed(2)}.`,
+      affectsGoalProgress: Boolean(input.pnl?.affectsGoalProgress),
       error: err.PnLEngine ?? null,
     }),
     make("LearningEngine", {
-      status: (input.learning?.pendingReview ?? 0) > 0 ? "ACTION_REQUIRED" : "OK",
+      status:
+        pendingLearning > 0
+          ? "WARNING"
+          : learnedCount < minTrust
+            ? "WARNING"
+            : "OK",
       lastRunAt: input.learning?.lastRunAt ?? null,
       summary:
-        (input.learning?.pendingReview ?? 0) > 0
-          ? `${input.learning?.pendingReview} trade(s) waiting for learning review.`
-          : "Learning loop is up to date.",
-      requiresHumanAction: (input.learning?.pendingReview ?? 0) > 0,
+        pendingLearning > 0
+          ? `${pendingLearning} trade(s) pending review.`
+          : `${learnedCount} learned · target ${minTrust}.`,
+      userVisibleSummary:
+        pendingLearning > 0
+          ? `${pendingLearning} closed trade(s) need your review so AI can learn.`
+          : learnedCount < minTrust
+            ? `AI needs ${minTrust} completed trades before its performance can be trusted.`
+            : "AI learning is up to date.",
+      requiresHumanAction: pendingLearning > 0,
+      actionLabel: pendingLearning > 0 ? "Resolve closed trade" : null,
+      actionHref: pendingLearning > 0 ? "/learning" : null,
+      affectsGoalProgress: learnedCount < minTrust,
       error: err.LearningEngine ?? null,
-    }),
-    make("NotificationEngine", {
-      status: !input.notification?.anyChannelConfigured
-        ? "ACTION_REQUIRED"
-        : (input.notification?.recentDeliveryFailures ?? 0) > 0
-          ? "DEGRADED"
-          : "OK",
-      lastRunAt: input.notification?.lastDeliveryAt ?? null,
-      summary: !input.notification?.anyChannelConfigured
-        ? "No alert channel is configured."
-        : "Alerts can be delivered.",
-      importantOutput: !input.notification?.anyChannelConfigured
-        ? "Set up an alert channel so AI can notify you."
-        : null,
-      requiresHumanAction: !input.notification?.anyChannelConfigured,
-      error: err.NotificationEngine ?? null,
     }),
     make("ReportingEngine", {
       status: "OK",
       lastRunAt: input.reporting?.lastReportAt ?? null,
-      summary: "Reports are available.",
+      summary: "Reports available.",
+      userVisibleSummary: "Daily and weekly reports are available.",
       error: err.ReportingEngine ?? null,
+    }),
+    make("NotificationEngine", {
+      status: !input.notification?.anyChannelConfigured
+        ? "WARNING"
+        : (input.notification?.recentDeliveryFailures ?? 0) > 0
+          ? "WARNING"
+          : "OK",
+      lastRunAt: input.notification?.lastDeliveryAt ?? null,
+      summary: !input.notification?.anyChannelConfigured
+        ? "No alert channel configured."
+        : "Alerts can be delivered.",
+      userVisibleSummary: !input.notification?.anyChannelConfigured
+        ? "No alert channel set up — you may miss important updates."
+        : "Alert delivery is configured.",
+      requiresHumanAction: !input.notification?.anyChannelConfigured,
+      actionLabel: "Set up alerts",
+      actionHref: "/notifications",
+      error: err.NotificationEngine ?? null,
+    }),
+    make("ProjectStrategistEngine", {
+      status:
+        (input.projectStrategist?.pendingProposals ?? 0) > 0 ? "WARNING" : "OK",
+      lastRunAt: input.projectStrategist?.lastRunAt ?? null,
+      summary: "Project strategist running in background.",
+      userVisibleSummary: "Project strategist runs in the background (advanced only).",
+      error: err.ProjectStrategistEngine ?? null,
     }),
   ];
 
@@ -230,6 +322,6 @@ export function buildCoreEngineRegistry(
     hasActionRequired: engines.some((e) => e.requiresHumanAction),
     hasRiskBlocker: engines.some((e) => e.detectsRiskBlocker),
     safetyNotice:
-      "Core engines run in the background and are read-only summaries. They cannot enable live trading.",
+      "Core engines run in the background. They cannot enable live trading or auto-execute live orders.",
   };
 }

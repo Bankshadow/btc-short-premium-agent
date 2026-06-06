@@ -11,7 +11,7 @@ export default function DataHealthPanel({ health, compact }: Props) {
   if (!health) {
     return (
       <section className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-xs text-zinc-500">
-        Data backbone not loaded.
+        Trade data is not connected yet. Run your first AI cycle or connect Binance Testnet.
       </section>
     );
   }

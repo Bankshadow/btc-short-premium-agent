@@ -15,6 +15,7 @@ import {
   type GoalEnvironmentBreakdown,
   type GoalProgressSnapshot,
   type GoalRiskSummary,
+  type PrimaryCta,
   type ProfitMission,
   type TradeStatsSnapshot,
   type UserActionItem,
@@ -35,6 +36,20 @@ interface NormalizedTrade {
 function round(n: number, digits = 2): number {
   const factor = 10 ** digits;
   return Math.round(n * factor) / factor;
+}
+
+function formatDuration(openedAt: string | null | undefined): string | null {
+  if (!openedAt) return null;
+  const ms = Date.now() - Date.parse(openedAt);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const hours = Math.floor(ms / 3_600_000);
+  const mins = Math.floor((ms % 3_600_000) / 60_000);
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
+  }
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
 
 function classify(pnl: number): "WIN" | "LOSS" | "BREAKEVEN" {
@@ -379,6 +394,8 @@ function pickCurrentPosition(
       entryPrice: testnetOpen.entryPrice,
       markPrice: testnetOpen.markPrice,
       unrealizedPnlUsd: round(testnetOpen.unrealizedPnl ?? 0),
+      openedAt: testnetOpen.openedAt,
+      durationLabel: formatDuration(testnetOpen.openedAt),
       canCloseOnTestnet: true,
     };
   }
@@ -391,10 +408,64 @@ function pickCurrentPosition(
       entryPrice: paperOpen.entryPrice,
       markPrice: null,
       unrealizedPnlUsd: round(paperOpen.unrealizedPnlUsd ?? 0),
+      openedAt: paperOpen.createdAt,
+      durationLabel: formatDuration(paperOpen.createdAt),
       canCloseOnTestnet: false,
     };
   }
   return null;
+}
+
+function buildPrimaryCta(input: {
+  entriesCount: number;
+  totalTrades: number;
+  testnetConfigured: boolean;
+  testnetConnected: boolean;
+  currentPosition: CurrentPositionSummary | null;
+  aiStatus: AIActivityStatus;
+  automationPaused?: boolean;
+  pendingLearningReview: number;
+}): PrimaryCta {
+  if (!input.testnetConfigured || !input.testnetConnected) {
+    return {
+      label: "Configure Binance Testnet",
+      href: "/binance-testnet",
+      description: "Connect Binance Testnet so AI can place practice orders.",
+    };
+  }
+  if (input.entriesCount === 0 && input.totalTrades === 0) {
+    return {
+      label: "Run First AI Cycle",
+      href: "/cockpit",
+      description: "Start the first market review to begin your $1,000 → $10,000 mission.",
+    };
+  }
+  if (input.pendingLearningReview > 0) {
+    return {
+      label: "Resolve Closed Trade",
+      href: "/learning",
+      description: `${input.pendingLearningReview} closed trade(s) need review so AI can learn.`,
+    };
+  }
+  if (input.currentPosition) {
+    return {
+      label: "View Current Trade",
+      href: "/trades",
+      description: `Open ${input.currentPosition.symbol} ${input.currentPosition.side} position.`,
+    };
+  }
+  if (input.aiStatus === "WAITING" || input.automationPaused) {
+    return {
+      label: "Start Paper/Testnet Autopilot",
+      href: "/ai-status",
+      description: "Resume AI so it can watch the market and trade on testnet.",
+    };
+  }
+  return {
+    label: "Run First AI Cycle",
+    href: "/cockpit",
+    description: "Run a fresh AI market review.",
+  };
 }
 
 export function buildGoalProgressSnapshot(
@@ -441,21 +512,59 @@ export function buildGoalProgressSnapshot(
 
   const aiActivity = buildAiActivity(input, currentPosition, blocker, generatedAt);
 
+  const testnetConfigured = input.risk?.testnetConfigured ?? false;
+  const testnetConnected = input.risk?.testnetConnected ?? false;
+  const testnetStatus = !testnetConfigured
+    ? "Binance Testnet is not connected yet."
+    : testnetConnected
+      ? "Binance Testnet connected."
+      : "Binance Testnet is not connected yet.";
+
   const risk: GoalRiskSummary = {
     dailyLossStatus: input.risk?.dailyLossStatus ?? "Within safe daily loss limit.",
+    dailyLossLimitLabel: input.risk?.dailyLossLimitLabel ?? "3% daily loss limit",
     openRiskUsd: equity.openExposureUsd,
     liveLocked: input.risk?.liveLocked ?? true,
+    testnetStatus,
     blocker,
   };
 
   const trustReady = tradeStats.totalTrades >= minTradesForTrust;
+  const dataConnected =
+    tradeStats.totalTrades > 0 ||
+    (input.entries?.length ?? 0) > 0 ||
+    testnetConnected ||
+    Boolean(input.unifiedPortfolio);
+
+  const zeroStateMessage = dataConnected
+    ? null
+    : "Trade data is not connected yet. Run your first AI cycle or connect Binance Testnet.";
+
+  const pendingLearningReview = input.learning?.pendingReview ?? 0;
+
+  const primaryCta = buildPrimaryCta({
+    entriesCount: input.entries?.length ?? 0,
+    totalTrades: tradeStats.totalTrades,
+    testnetConfigured,
+    testnetConnected,
+    currentPosition,
+    aiStatus: aiActivity.status,
+    automationPaused: input.ai?.automationPaused,
+    pendingLearningReview,
+  });
 
   const userActionRequired = buildUserActions({
     aiActivity,
     blocker,
     currentPosition,
-    liveBreakdown: byEnvironment.LIVE,
+    testnetConfigured,
+    testnetConnected,
+    dataConnected,
+    pendingLearningReview,
+    primaryCta,
   });
+
+  const lastVerdict = input.ai?.lastVerdict ?? null;
 
   return {
     generatedAt,
@@ -469,9 +578,16 @@ export function buildGoalProgressSnapshot(
     currentPosition,
     risk,
     byEnvironment,
+    environmentBreakdown: byEnvironment,
     live: byEnvironment.LIVE,
     minTradesForTrust,
     trustReady,
+    dataConnected,
+    zeroStateMessage,
+    primaryCta,
+    currentStrategy: input.ai?.commandCenterStatus ?? null,
+    lastCycleAt: input.ai?.lastRunAt ?? null,
+    lastVerdict,
   };
 }
 
@@ -479,9 +595,43 @@ function buildUserActions(input: {
   aiActivity: AIActivitySnapshot;
   blocker: string | null;
   currentPosition: CurrentPositionSummary | null;
-  liveBreakdown: GoalEnvironmentBreakdown;
+  testnetConfigured: boolean;
+  testnetConnected: boolean;
+  dataConnected: boolean;
+  pendingLearningReview: number;
+  primaryCta: PrimaryCta;
 }): UserActionRequired {
   const items: UserActionItem[] = [];
+
+  if (!input.dataConnected) {
+    items.push({
+      id: "no_data",
+      title: "Trade data is not connected yet.",
+      detail: "Run your first AI cycle or connect Binance Testnet.",
+      severity: "WARNING",
+      href: input.primaryCta.href,
+    });
+  }
+
+  if (!input.testnetConfigured || !input.testnetConnected) {
+    items.push({
+      id: "testnet_disconnected",
+      title: "Binance Testnet is not connected yet.",
+      detail: "Configure API keys and enable testnet to let AI place practice orders.",
+      severity: "WARNING",
+      href: "/binance-testnet",
+    });
+  }
+
+  if (input.pendingLearningReview > 0) {
+    items.push({
+      id: "learning_pending",
+      title: "Closed trades need review.",
+      detail: `${input.pendingLearningReview} trade(s) waiting so AI can learn from outcomes.`,
+      severity: "INFO",
+      href: "/learning",
+    });
+  }
 
   if (input.blocker) {
     items.push({

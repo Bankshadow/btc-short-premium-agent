@@ -172,14 +172,15 @@ export default function SettingsView() {
           <p className="mt-2 text-xs text-zinc-500">Checking connection…</p>
         ) : (
           <ul className="mt-2 space-y-1 text-xs text-zinc-400">
-            <li>API keys: {binance.configured ? "Configured" : "Missing"}</li>
-            <li>Testnet enabled: {binance.testnetEnabled ? "Yes" : "No"}</li>
             <li>
-              Connection:{" "}
-              <span className={binance.connected ? "text-emerald-300" : "text-rose-300"}>
-                {binance.connected ? "Connected" : "Not connected"}
+              Status:{" "}
+              <span className={binance.connected ? "text-emerald-300" : "text-amber-300"}>
+                {binance.connected
+                  ? "Binance Testnet is connected."
+                  : "Binance Testnet is not connected yet."}
               </span>
             </li>
+            <li>API keys: {binance.configured ? "Configured" : "Not configured"}</li>
             <li>Network: {binance.network ?? "—"}</li>
           </ul>
         )}
