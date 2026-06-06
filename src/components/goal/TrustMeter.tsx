@@ -2,9 +2,11 @@ import type { MissionFlowSnapshot } from "@/lib/mission-flow/types";
 
 export default function TrustMeter({
   trust,
+  trustNotionalUsd,
   compact = false,
 }: {
   trust: MissionFlowSnapshot["trust"];
+  trustNotionalUsd?: number;
   compact?: boolean;
 }) {
   const pct = Math.min(
@@ -44,6 +46,9 @@ export default function TrustMeter({
         {trust.ready
           ? "Performance can be trusted for mission decisions."
           : `${trust.minRequired - trust.completedTrades} more completed trade(s) needed.`}
+        {trustNotionalUsd != null && (
+          <> · testnet size ${trustNotionalUsd}</>
+        )}
       </p>
     </section>
   );

@@ -84,6 +84,12 @@ export interface MissionFlowLearningInsights {
   }[];
 }
 
+export interface MissionFlowSelfLearning {
+  serverEvaluated: number;
+  lastTopAgent: string | null;
+  lastEvaluatedAt: string | null;
+}
+
 export interface MissionFlowStrategyHealth {
   strategyId: string;
   label: string;
@@ -152,6 +158,8 @@ export interface MissionFlowSnapshot {
   recentActivity: MissionFlowActivityItem[];
   learningInsights: MissionFlowLearningInsights;
   strategyHealth: MissionFlowStrategyHealth | null;
+  trustNotionalUsd: number;
+  selfLearning: MissionFlowSelfLearning;
 }
 
 export interface MissionFlowBuildResult {

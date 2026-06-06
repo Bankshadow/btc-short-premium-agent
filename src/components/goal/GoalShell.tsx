@@ -125,7 +125,11 @@ export default function GoalShell({
       </header>
 
       {missionSnapshot && (
-        <TrustMeter trust={missionSnapshot.trust} compact={false} />
+        <TrustMeter
+          trust={missionSnapshot.trust}
+          trustNotionalUsd={missionSnapshot.trustNotionalUsd}
+          compact={false}
+        />
       )}
 
       {children}

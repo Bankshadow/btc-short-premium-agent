@@ -18,6 +18,8 @@ export interface GoalTradeRow {
   source: string;
   reason: string;
   decisionLogId: string | null;
+  learned?: boolean;
+  autopilot?: boolean;
 }
 
 export interface GoalTradeListInput {
@@ -39,7 +41,18 @@ function result(pnl: number, isClosed: boolean): GoalTradeRow["result"] {
   return "BREAKEVEN";
 }
 
+function isAutopilotSource(source: string, reason?: string | null): boolean {
+  const s = `${source} ${reason ?? ""}`.toLowerCase();
+  return s.includes("autonomous") || s.includes("autopilot") || s.includes("ai_signal");
+}
+
 export function buildGoalTradeList(input: GoalTradeListInput): GoalTradeRow[] {
+  const learnedDecisions = new Set(
+    (input.testnetSnapshot?.learningRecords ?? [])
+      .filter((r) => r.status === "LEARNED" && r.decisionLogId)
+      .map((r) => r.decisionLogId as string),
+  );
+
   const reasonByDecision = new Map<string, string>();
   for (const entry of input.entries ?? []) {
     const reason =
@@ -113,6 +126,8 @@ export function buildGoalTradeList(input: GoalTradeListInput): GoalTradeRow[] {
         ? reasonByDecision.get(trade.decisionLogId) ?? "Testnet execution"
         : "Testnet execution",
       decisionLogId: trade.decisionLogId,
+      learned: trade.decisionLogId ? learnedDecisions.has(trade.decisionLogId) : trade.learned,
+      autopilot: isAutopilotSource(trade.strategy ?? "testnet"),
     });
   }
   for (const pos of input.testnetSnapshot?.openPositions ?? []) {
@@ -131,6 +146,7 @@ export function buildGoalTradeList(input: GoalTradeListInput): GoalTradeRow[] {
         ? reasonByDecision.get(pos.decisionLogId) ?? "Open testnet position"
         : "Open testnet position",
       decisionLogId: pos.decisionLogId,
+      autopilot: isAutopilotSource(pos.source ?? ""),
     });
   }
 

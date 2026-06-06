@@ -28,6 +28,7 @@ export const DEFAULT_MODULE_TOGGLES: AutomationModuleToggles = {
   PROJECT_STRATEGIST_REVIEW: true,
   BINANCE_TESTNET_MONITOR: true,
   BINANCE_TESTNET_AUTOEXECUTE: true,
+  SELF_LEARNING_UPDATE: true,
 };
 
 export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
@@ -44,6 +45,7 @@ export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
   "DESK_ANALYZE",
   "BINANCE_TESTNET_MONITOR",
   "BINANCE_TESTNET_AUTOEXECUTE",
+  "SELF_LEARNING_UPDATE",
   "PAPER_MONITOR",
   "PORTFOLIO_SNAPSHOT",
   "LEARNING_UPDATE",
@@ -67,6 +69,7 @@ export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
   PROJECT_STRATEGIST_REVIEW: "Project strategist review",
   BINANCE_TESTNET_MONITOR: "Binance testnet monitor & auto-close",
   BINANCE_TESTNET_AUTOEXECUTE: "Binance testnet auto-execute",
+  SELF_LEARNING_UPDATE: "Self-learning evaluation",
 };
 
 /** Base backoff minutes by consecutive failure count (capped). */

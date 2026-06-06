@@ -380,6 +380,28 @@ export async function runAutomationJob(
         return { summary: `${auto.outcome} · ${auto.summary}` };
       });
 
+    case "SELF_LEARNING_UPDATE":
+      return runTimed(jobType, ctx, async () => {
+        const { loadLearningRecordsServer } = await import(
+          "@/lib/testnet-monitor/learning-records-server"
+        );
+        const { runTestnetLearningEvaluation } = await import(
+          "@/lib/self-learning/run-testnet-learning-evaluation"
+        );
+        const records = await loadLearningRecordsServer();
+        const result = await runTestnetLearningEvaluation({
+          records,
+          entries,
+          limit: 10,
+        });
+        return {
+          summary:
+            result.evaluated > 0
+              ? `Evaluated ${result.evaluated} testnet trade(s) · top agent ${result.topAgent ?? "—"}`
+              : `No new evaluations (${result.skipped} skipped)`,
+        };
+      });
+
     case "PROJECT_STRATEGIST_REVIEW":
       return runTimed(jobType, ctx, async () => {
         const status = await getProjectStrategistStatus(ctx.workspaceId);

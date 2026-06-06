@@ -52,6 +52,14 @@ export default function MissionModePanel({
               : "Disabled"}
           </dd>
         </div>
+        <div>
+          <dt className="text-zinc-500">Trust-scaled notional</dt>
+          <dd className="font-mono text-zinc-200">${m.trustNotionalUsd}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Daily digest cron</dt>
+          <dd>08:00 UTC → Telegram (if configured)</dd>
+        </div>
       </dl>
     </section>
   );

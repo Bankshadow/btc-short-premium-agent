@@ -9,6 +9,7 @@ import LearningInsightsPanel from "./LearningInsightsPanel";
 import LearningReviewPanel from "./LearningReviewPanel";
 import MissionActivityFeed from "./MissionActivityFeed";
 import MissionAutopilotHero from "./MissionAutopilotHero";
+import SelfLearningStatusPanel from "./SelfLearningStatusPanel";
 import StrategyHealthBanner from "./StrategyHealthBanner";
 import TestnetTradeModal from "./TestnetTradeModal";
 import { useMissionSnapshot } from "./use-mission-snapshot";
@@ -350,6 +351,8 @@ export default function GoalDashboard() {
         <MissionActivityFeed items={m.recentActivity} compact />
         <LearningInsightsPanel insights={m.learningInsights} compact />
       </div>
+
+      <SelfLearningStatusPanel selfLearning={m.selfLearning} compact />
 
       <AutopilotControls
         automation={m.automation}

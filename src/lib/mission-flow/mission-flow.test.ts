@@ -144,6 +144,8 @@ test("mission flow snapshot includes activity and learning insights extras", () 
   assert.equal(flow.recentActivity.length, 1);
   assert.equal(flow.learningInsights.learnedCount, 2);
   assert.equal(flow.strategyHealth?.tradeAllowed, true);
+  assert.equal(flow.trustNotionalUsd, 50);
+  assert.equal(flow.selfLearning.serverEvaluated, 0);
 });
 
 test("mission flow snapshot surfaces pending testnet preview", () => {

@@ -1,6 +1,10 @@
 import type { GoalDashboardServerPayload } from "@/lib/goal-engine/build-server-context";
 import type { GoalNotificationPrefs } from "@/lib/mission-notifications/goal-notification-store";
+import { GOAL_MIN_TRADES_FOR_TRUST } from "@/lib/goal-engine/types";
+import { resolveTrustScaledNotionalUsd } from "@/lib/exchange/binance/trust-scaled-notional";
+import { loadBinanceConfig } from "@/lib/exchange/binance/binance-config";
 import { resolvePrimaryStrategyHealth } from "./resolve-primary-strategy-health";
+import type { MissionFlowSelfLearning } from "./types";
 import type {
   BinanceTestnetFlowStatus,
   MissionFlowActivityItem,
@@ -110,6 +114,7 @@ export function buildMissionFlowSnapshot(
     recentActivity?: MissionFlowActivityItem[];
     learningInsights?: MissionFlowLearningInsights;
     strategyHealth?: MissionFlowStrategyHealth | null;
+    selfLearning?: MissionFlowSelfLearning;
   },
 ): MissionFlowSnapshot {
   const { goal, mission, binance, engines, automation, learningPending } = payload;
@@ -227,5 +232,15 @@ export function buildMissionFlowSnapshot(
     recentActivity: extras?.recentActivity ?? [],
     learningInsights: extras?.learningInsights ?? EMPTY_LEARNING_INSIGHTS,
     strategyHealth: extras?.strategyHealth ?? null,
+    trustNotionalUsd: resolveTrustScaledNotionalUsd({
+      completedTrades: mission.totalTrades,
+      minRequired: mission.minTradesForTrust ?? GOAL_MIN_TRADES_FOR_TRUST,
+      maxNotionalUsd: loadBinanceConfig().maxNotionalUsd,
+    }),
+    selfLearning: extras?.selfLearning ?? {
+      serverEvaluated: 0,
+      lastTopAgent: null,
+      lastEvaluatedAt: null,
+    },
   };
 }

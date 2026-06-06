@@ -18,7 +18,8 @@ export type AutomationJobType =
   | "COMMAND_CENTER_REFRESH"
   | "PROJECT_STRATEGIST_REVIEW"
   | "BINANCE_TESTNET_MONITOR"
-  | "BINANCE_TESTNET_AUTOEXECUTE";
+  | "BINANCE_TESTNET_AUTOEXECUTE"
+  | "SELF_LEARNING_UPDATE";
 
 export type AutomationJobStatus =
   | "QUEUED"
@@ -83,6 +84,7 @@ export interface AutomationModuleToggles {
   PROJECT_STRATEGIST_REVIEW: boolean;
   BINANCE_TESTNET_MONITOR: boolean;
   BINANCE_TESTNET_AUTOEXECUTE: boolean;
+  SELF_LEARNING_UPDATE: boolean;
 }
 
 export interface AutomationSettings {

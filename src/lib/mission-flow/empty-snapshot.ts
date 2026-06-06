@@ -84,5 +84,11 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
       recent: [],
     },
     strategyHealth: null,
+    trustNotionalUsd: 55,
+    selfLearning: {
+      serverEvaluated: 0,
+      lastTopAgent: null,
+      lastEvaluatedAt: null,
+    },
   };
 }

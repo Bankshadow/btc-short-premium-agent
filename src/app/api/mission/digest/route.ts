@@ -16,11 +16,16 @@ export async function GET(request: Request) {
     const send = searchParams.get("send") === "1";
     const { snapshot } = await buildMissionFlowServerSnapshot({ fresh: true });
 
+    const lastActivity = snapshot.recentActivity[0];
     const digest = [
       `Mission digest · ${new Date().toLocaleString()}`,
       `Equity: ${usd(snapshot.currentEquity)} (${snapshot.progressPct}% to $10k)`,
       `Trades: ${snapshot.closedTrades} closed · ${snapshot.openTrades} open · PnL ${usd(snapshot.netPnl)}`,
-      `Trust: ${snapshot.trust.completedTrades}/${snapshot.trust.minRequired}`,
+      `Trust: ${snapshot.trust.completedTrades}/${snapshot.trust.minRequired} · notional $${snapshot.trustNotionalUsd}`,
+      `Autopilot: ${snapshot.automation.autoExecuteEnabled ? "auto" : "semi"} · ${lastActivity?.summary ?? "no cycles yet"}`,
+      snapshot.selfLearning.serverEvaluated > 0
+        ? `Self-learning: ${snapshot.selfLearning.serverEvaluated} evals · top ${snapshot.selfLearning.lastTopAgent ?? "—"}`
+        : null,
       `AI: ${snapshot.aiStatus.state} · ${snapshot.aiStatus.nextAction}`,
       snapshot.risk.blocker ? `Blocker: ${snapshot.risk.blocker}` : null,
       snapshot.nextRecommendation,

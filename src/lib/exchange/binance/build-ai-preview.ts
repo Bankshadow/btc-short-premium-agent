@@ -1,5 +1,7 @@
 import type { AnalyzeApiResponse } from "@/lib/types/market";
+import { GOAL_MIN_TRADES_FOR_TRUST } from "@/lib/goal-engine/types";
 import { loadBinanceConfig } from "./binance-config";
+import { resolveTrustScaledNotionalUsd } from "./trust-scaled-notional";
 import type { BinanceOrderPreviewInput, BinanceOrderSide } from "./binance-types";
 
 export function inferBinanceSideFromAnalysis(
@@ -36,13 +38,22 @@ export function buildBinancePreviewInputFromAiSignal(input: {
   data: AnalyzeApiResponse | null;
   decisionLogId?: string | null;
   notionalUsd?: number;
+  completedTrades?: number;
+  minTradesForTrust?: number;
 }): BinanceOrderPreviewInput {
   const config = loadBinanceConfig();
+  const notionalUsd =
+    input.notionalUsd ??
+    resolveTrustScaledNotionalUsd({
+      completedTrades: input.completedTrades ?? 0,
+      minRequired: input.minTradesForTrust ?? GOAL_MIN_TRADES_FOR_TRUST,
+      maxNotionalUsd: config.maxNotionalUsd,
+    });
   return {
     source: "ai_signal",
     symbol: inferBinanceSymbolFromAnalysis(input.data),
     side: inferBinanceSideFromAnalysis(input.data),
-    notionalUsd: input.notionalUsd ?? config.maxNotionalUsd,
+    notionalUsd,
     reason: "AI desk signal → Binance testnet preview",
     decisionLogId: input.decisionLogId ?? null,
   };

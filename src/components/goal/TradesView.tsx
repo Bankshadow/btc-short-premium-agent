@@ -76,7 +76,7 @@ export default function TradesView() {
   const emptyNextAction =
     m.binanceTestnet.status !== "CONNECTED"
       ? "Connect Binance Testnet"
-      : "Run first AI cycle";
+      : "Autopilot will trade on the next TRADE verdict";
 
   return (
     <GoalShell
@@ -192,7 +192,7 @@ export default function TradesView() {
               </Link>
             ) : (
               <Link href="/" className="mt-2 inline-block text-emerald-300 hover:underline">
-                Run first AI cycle →
+                View autopilot on Dashboard →
               </Link>
             )}
           </div>
@@ -207,6 +207,7 @@ export default function TradesView() {
                   <th className="pb-2 pr-3">Side</th>
                   <th className="pb-2 pr-3">PnL</th>
                   <th className="pb-2 pr-3">Result</th>
+                  <th className="pb-2 pr-3">Tags</th>
                   <th className="pb-2">Lifecycle</th>
                 </tr>
               </thead>
@@ -223,6 +224,11 @@ export default function TradesView() {
                       {usd(t.pnlUsd)}
                     </td>
                     <td className={`py-2 pr-3 ${resultClass(t.result)}`}>{t.result}</td>
+                    <td className="py-2 pr-3 text-[10px] text-zinc-500">
+                      {t.autopilot && <span className="text-cyan-400/90">autopilot </span>}
+                      {t.learned && <span className="text-violet-400/90">learned</span>}
+                      {!t.autopilot && !t.learned && "—"}
+                    </td>
                     <td className="py-2">
                       <Link href={`/trades/${t.id}`} className="text-emerald-300 hover:underline">
                         View full lifecycle →

@@ -6,6 +6,7 @@ import AutopilotControls from "./AutopilotControls";
 import GoalErrorBanner from "./GoalErrorBanner";
 import GoalShell from "./GoalShell";
 import MissionModePanel from "./MissionModePanel";
+import NotificationStatusPanel from "./NotificationStatusPanel";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
 const SETTINGS_KEY = "btc-desk:goal-settings";
@@ -127,6 +128,8 @@ export default function SettingsView() {
       />
 
       <MissionModePanel snapshot={m} />
+
+      <NotificationStatusPanel snapshot={m} />
 
       <AutopilotControls
         automation={m.automation}

@@ -11,6 +11,7 @@ import { buildStrategyHealthSignal } from "@/lib/strategy-health";
 import { buildMissionActivityFromRuns } from "./build-mission-activity";
 import { buildMissionLearningInsights } from "./build-mission-learning-insights";
 import { buildMissionFlowSnapshot } from "./build-mission-flow-snapshot";
+import { loadServerEvaluationResults } from "@/lib/self-learning/evaluation-server-store";
 import { resolvePrimaryStrategyHealth } from "./resolve-primary-strategy-health";
 import { emptyMissionFlowSnapshot } from "./empty-snapshot";
 import {
@@ -89,6 +90,18 @@ export async function buildMissionFlowServerSnapshot(
       strategyHealth.healthScorePct = strategySignal.healthScorePct;
     }
 
+    const serverEvals = await loadServerEvaluationResults().catch(() => []);
+    const agentHits = new Map<string, number>();
+    for (const r of serverEvals) {
+      for (const a of r.agentEvaluations) {
+        if (a.helpingScore >= 0.5) {
+          agentHits.set(a.agentName, (agentHits.get(a.agentName) ?? 0) + 1);
+        }
+      }
+    }
+    const lastTopAgent =
+      [...agentHits.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
     const snapshot = buildMissionFlowSnapshot(
       payload,
       latestDecisionLogId,
@@ -99,6 +112,11 @@ export async function buildMissionFlowServerSnapshot(
         recentActivity: buildMissionActivityFromRuns(automationHistory),
         learningInsights: buildMissionLearningInsights(payload.learningRecords),
         strategyHealth,
+        selfLearning: {
+          serverEvaluated: serverEvals.length,
+          lastTopAgent,
+          lastEvaluatedAt: serverEvals[0]?.generatedAt ?? null,
+        },
       },
     );
 

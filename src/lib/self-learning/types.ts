@@ -8,7 +8,8 @@ export type PostTradeEvaluationSource =
   | "paper_close"
   | "manual_resolve"
   | "live_pilot_close"
-  | "paper_autopilot_resolve";
+  | "paper_autopilot_resolve"
+  | "testnet_close";
 
 export interface AgentPredictionScore {
   hitRate: number;

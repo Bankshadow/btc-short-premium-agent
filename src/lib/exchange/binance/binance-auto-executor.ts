@@ -6,9 +6,11 @@ import {
   isBinanceTestnetAutoExecuteEnabled,
   loadBinanceConfig,
 } from "./binance-config";
+import { GOAL_MIN_TRADES_FOR_TRUST } from "@/lib/goal-engine/types";
 import { resolvePrimaryStrategyHealth } from "@/lib/mission-flow/resolve-primary-strategy-health";
 import { buildStrategyHealthSummary } from "@/lib/strategy-health";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
+import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import { buildBinancePreviewInputFromAiSignal } from "./build-ai-preview";
 import { buildOrderPreview } from "./binance-order-preview";
 import { executeBinanceTestnetOrder } from "./binance-execution";
@@ -131,9 +133,14 @@ export async function runBinanceTestnetAutoExecute(input: {
       }
     }
 
+    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
+
     const previewInput = buildBinancePreviewInputFromAiSignal({
       data: input.analysis,
       decisionLogId: input.decisionLogId ?? null,
+      completedTrades,
+      minTradesForTrust: GOAL_MIN_TRADES_FOR_TRUST,
     });
     const preview = await buildOrderPreview(previewInput);
     base.previewId = preview.previewId;
