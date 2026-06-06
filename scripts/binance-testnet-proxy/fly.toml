@@ -1,0 +1,35 @@
+# Fly.io — deploy in Singapore (sin) to bypass Binance geo-block on Vercel.
+# Usage (from this directory):
+#   fly auth login
+#   fly launch --no-deploy --copy-config --name btc-binance-testnet-proxy --region sin
+#   fly secrets set BINANCE_PROXY_SECRET=<same-as-vercel>
+#   fly deploy
+
+app = "btc-binance-testnet-proxy"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  BINANCE_UPSTREAM_URL = "https://demo-fapi.binance.com"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

@@ -4,6 +4,7 @@ import {
   blockBinanceProductionOrder,
   isBinanceTestnetBaseUrl,
   loadBinanceConfig,
+  resolveBinanceEffectiveBaseUrl,
 } from "./binance-config";
 import { signBinanceQuery, buildSortedQueryString } from "./binance-signer";
 import { validateOrderAgainstRiskGate } from "./binance-risk-gate";
@@ -68,5 +69,29 @@ describe("Binance Futures Testnet", () => {
   it("picks reduce-only close side from position sign", () => {
     assert.equal(closeSideForPosition(0.5), "SELL");
     assert.equal(closeSideForPosition(-0.5), "BUY");
+  });
+
+  it("routes API calls through proxy URL when configured", () => {
+    const prevUpstream = process.env.BINANCE_FUTURES_TESTNET_BASE_URL;
+    const prevProxy = process.env.BINANCE_TESTNET_PROXY_URL;
+
+    process.env.BINANCE_FUTURES_TESTNET_BASE_URL =
+      "https://demo-fapi.binance.com";
+    delete process.env.BINANCE_TESTNET_PROXY_URL;
+    assert.equal(
+      resolveBinanceEffectiveBaseUrl(),
+      "https://demo-fapi.binance.com",
+    );
+
+    process.env.BINANCE_TESTNET_PROXY_URL = "https://proxy.example.com";
+    const config = loadBinanceConfig();
+    assert.equal(config.baseUrl, "https://proxy.example.com");
+    assert.equal(config.upstreamBaseUrl, "https://demo-fapi.binance.com");
+    assert.equal(config.proxyEnabled, true);
+    assert.equal(blockBinanceProductionOrder(), null);
+
+    process.env.BINANCE_FUTURES_TESTNET_BASE_URL = prevUpstream;
+    if (prevProxy) process.env.BINANCE_TESTNET_PROXY_URL = prevProxy;
+    else delete process.env.BINANCE_TESTNET_PROXY_URL;
   });
 });

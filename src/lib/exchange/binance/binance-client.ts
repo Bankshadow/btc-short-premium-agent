@@ -4,6 +4,19 @@ import { signBinanceParams } from "./binance-signer";
 const USER_AGENT =
   "Mozilla/5.0 (compatible; BTCShortPremiumAgent/1.0; binance-testnet-only)";
 
+function binanceRequestHeaders(
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    ...extra,
+  };
+  const proxySecret = process.env.BINANCE_PROXY_SECRET?.trim();
+  if (proxySecret) {
+    headers["X-Binance-Proxy-Secret"] = proxySecret;
+  }
+  return headers;
+}
+
 export class BinanceApiError extends Error {
   readonly status?: number;
   readonly code?: number;
@@ -39,7 +52,10 @@ export async function binancePublicGet<T>(
     response = await fetch(url.toString(), {
       method: "GET",
       cache: "no-store",
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+      headers: binanceRequestHeaders({
+        Accept: "application/json",
+        "User-Agent": USER_AGENT,
+      }),
       signal: AbortSignal.timeout(20_000),
     });
   } catch (error) {
@@ -67,11 +83,11 @@ export async function binanceSignedGet<T>(
     response = await fetch(url.toString(), {
       method: "GET",
       cache: "no-store",
-      headers: {
+      headers: binanceRequestHeaders({
         Accept: "application/json",
         "User-Agent": USER_AGENT,
         "X-MBX-APIKEY": creds.apiKey,
-      },
+      }),
       signal: AbortSignal.timeout(20_000),
     });
   } catch (error) {
@@ -98,12 +114,12 @@ export async function binanceSignedPost<T>(
     response = await fetch(url.toString(), {
       method: "POST",
       cache: "no-store",
-      headers: {
+      headers: binanceRequestHeaders({
         Accept: "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": USER_AGENT,
         "X-MBX-APIKEY": creds.apiKey,
-      },
+      }),
       body: queryString,
       signal: AbortSignal.timeout(20_000),
     });

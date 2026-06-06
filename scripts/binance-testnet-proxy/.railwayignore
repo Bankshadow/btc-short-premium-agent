@@ -1,0 +1,5 @@
+.tools/
+*.ps1
+fly.toml
+railway.toml
+.git/

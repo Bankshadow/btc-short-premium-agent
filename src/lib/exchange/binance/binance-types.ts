@@ -11,7 +11,11 @@ export interface BinanceCredentials {
 export interface BinanceConfig {
   testnetEnabled: boolean;
   liveEnabled: boolean;
+  /** Effective API base — proxy URL when set, otherwise upstream testnet URL. */
   baseUrl: string;
+  /** Logical Binance testnet host used for safety validation. */
+  upstreamBaseUrl: string;
+  proxyEnabled: boolean;
   allowedSymbols: string[];
   maxNotionalUsd: number;
   maxTradesPerDay: number;
@@ -108,6 +112,8 @@ export interface BinanceStatusResult {
   liveEnabled: boolean;
   liveBlocked: boolean;
   baseUrl: string;
+  upstreamBaseUrl: string;
+  proxyEnabled: boolean;
   allowedSymbols: string[];
   connected: boolean;
   serverTimeMs: number | null;

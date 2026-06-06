@@ -30,12 +30,31 @@ function parseSymbolList(raw: string | undefined, fallback: string[]): string[] 
     .filter(Boolean);
 }
 
+export function resolveBinanceUpstreamBaseUrl(): string {
+  return (
+    process.env.BINANCE_FUTURES_TESTNET_BASE_URL?.trim() || TESTNET_BASE_DEFAULT
+  );
+}
+
+export function resolveBinanceProxyUrl(): string | null {
+  const raw = process.env.BINANCE_TESTNET_PROXY_URL?.trim();
+  return raw || null;
+}
+
+/** API base used for HTTP calls — proxy when configured, else direct testnet. */
+export function resolveBinanceEffectiveBaseUrl(): string {
+  return resolveBinanceProxyUrl() ?? resolveBinanceUpstreamBaseUrl();
+}
+
 export function loadBinanceConfig(): BinanceConfig {
+  const upstreamBaseUrl = resolveBinanceUpstreamBaseUrl();
+  const proxyUrl = resolveBinanceProxyUrl();
   return {
     testnetEnabled: envBool("BINANCE_TESTNET_ENABLED", false),
     liveEnabled: envBool("BINANCE_LIVE_ENABLED", false),
-    baseUrl:
-      process.env.BINANCE_FUTURES_TESTNET_BASE_URL?.trim() || TESTNET_BASE_DEFAULT,
+    baseUrl: proxyUrl ?? upstreamBaseUrl,
+    upstreamBaseUrl,
+    proxyEnabled: Boolean(proxyUrl),
     allowedSymbols: parseSymbolList(
       process.env.BINANCE_ALLOWED_SYMBOLS,
       ["BTCUSDT", "SOLUSDT"],
@@ -83,7 +102,7 @@ export function blockBinanceProductionOrder(): string | null {
   if (config.liveEnabled) {
     return `${BINANCE_PRODUCTION_HARD_BLOCK} BINANCE_LIVE_ENABLED must remain false.`;
   }
-  if (!isBinanceTestnetBaseUrl(config.baseUrl)) {
+  if (!isBinanceTestnetBaseUrl(config.upstreamBaseUrl)) {
     return `${BINANCE_PRODUCTION_HARD_BLOCK} Base URL must be a testnet host.`;
   }
   return null;
@@ -104,7 +123,7 @@ export function assertBinanceTestnetOnly(): { allowed: boolean; blockers: string
   const creds = resolveBinanceCredentials();
   if (!creds) {
     blockers.push("Binance credentials not configured (BINANCE_API_KEY/SECRET).");
-  } else if (!isBinanceTestnetBaseUrl(creds.baseUrl)) {
+  } else if (!isBinanceTestnetBaseUrl(config.upstreamBaseUrl)) {
     blockers.push(BINANCE_PRODUCTION_HARD_BLOCK);
   }
 
