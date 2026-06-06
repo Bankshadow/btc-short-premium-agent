@@ -25,6 +25,7 @@ export const GOAL_ADVANCED_NAV: GoalNavLink[] = [
   { href: "/actions", label: "Actions (raw)" },
   { href: "/notifications", label: "Notifications (raw)" },
   { href: "/strategies", label: "Strategies" },
+  { href: "/strategy-lab/imports", label: "Quant Imports" },
   { href: "/validation", label: "Validation" },
   { href: "/capital", label: "Capital" },
   { href: "/ledger", label: "Ledger" },

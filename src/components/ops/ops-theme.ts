@@ -119,6 +119,7 @@ export const OPS_MODULE_LINKS = [
   { href: "/regime-brain", label: "Regime", accent: "indigo" as OpsAccent },
   { href: "/rule-discovery", label: "Rules", accent: "indigo" as OpsAccent },
   { href: "/experiments", label: "Experiments", accent: "violet" as OpsAccent },
+  { href: "/strategy-lab/imports", label: "Quant Imports", accent: "violet" as OpsAccent },
   { href: "/live-readiness", label: "Live ready", accent: "emerald" as OpsAccent },
   { href: "/live-pilot", label: "Live pilot", accent: "emerald" as OpsAccent },
   { href: "/live-scale-up", label: "Scale-up", accent: "emerald" as OpsAccent },

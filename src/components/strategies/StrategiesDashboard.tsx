@@ -111,6 +111,12 @@ export default function StrategiesDashboard() {
           >
             Strategy health
           </Link>
+          <Link
+            href="/strategy-lab/imports"
+            className="rounded-lg border border-violet-900/50 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-950/40"
+          >
+            Quant imports
+          </Link>
           <button
             type="button"
             onClick={refresh}
