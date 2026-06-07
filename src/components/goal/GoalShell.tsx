@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import TrustMeter from "./TrustMeter";
 import type { MissionFlowSnapshot } from "@/lib/mission-flow/types";
+import { useGoalShellMotion } from "@/hooks/useHomePageMotion";
 
 export interface GoalNavLink {
   href: string;
@@ -61,6 +62,7 @@ export default function GoalShell({
   activePath,
   actions,
   missionSnapshot,
+  enableMotion = false,
   children,
 }: {
   title: string;
@@ -68,13 +70,21 @@ export default function GoalShell({
   activePath: string;
   actions?: ReactNode;
   missionSnapshot?: MissionFlowSnapshot | null;
+  enableMotion?: boolean;
   children: ReactNode;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const shellRef = useGoalShellMotion(enableMotion);
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-5 px-3 py-5 sm:px-6 sm:py-6">
-      <header className="desk-panel relative overflow-hidden px-5 py-5 sm:px-6">
+    <div
+      ref={enableMotion ? shellRef : undefined}
+      className="mx-auto w-full max-w-[1200px] space-y-5 px-3 py-5 sm:px-6 sm:py-6"
+    >
+      <header
+        data-home-header-block={enableMotion ? "" : undefined}
+        className="desk-panel relative overflow-hidden px-5 py-5 sm:px-6"
+      >
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="desk-section-title text-emerald-300/90">AI Profit Mission</p>
@@ -95,6 +105,7 @@ export default function GoalShell({
               <Link
                 key={link.href}
                 href={link.href}
+                data-home-nav-link={enableMotion ? "" : undefined}
                 className={
                   active
                     ? "rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-200"
@@ -130,11 +141,13 @@ export default function GoalShell({
       </header>
 
       {missionSnapshot && (
-        <TrustMeter
-          trust={missionSnapshot.trust}
-          trustNotionalUsd={missionSnapshot.trustNotionalUsd}
-          compact={false}
-        />
+        <div data-home-panel={enableMotion ? "" : undefined}>
+          <TrustMeter
+            trust={missionSnapshot.trust}
+            trustNotionalUsd={missionSnapshot.trustNotionalUsd}
+            compact={false}
+          />
+        </div>
       )}
 
       {children}

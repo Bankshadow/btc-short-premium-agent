@@ -22,6 +22,7 @@ import { useAgentOs } from "@/hooks/useAgentOs";
 import { loadAgentOsSettings } from "@/lib/agent-os/settings-store";
 import AIStatusCard from "@/components/ai-status/AIStatusCard";
 import { useAiStatusCard } from "@/hooks/useAiStatusCard";
+import { useHomeDashboardMotion } from "@/hooks/useHomePageMotion";
 
 function usd(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -53,7 +54,7 @@ function Card({
         ? "border-emerald-900/50"
         : "border-zinc-800/80";
   return (
-    <section className={`rounded-xl border ${border} bg-zinc-950/60 p-4`}>
+    <section data-home-panel className={`rounded-xl border ${border} bg-zinc-950/60 p-4`}>
       <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
         {title}
       </h2>
@@ -64,7 +65,7 @@ function Card({
 
 function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+    <div data-home-metric className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
       <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
       <p className="mt-1 font-mono text-lg text-zinc-100">{value}</p>
       {hint && <p className="mt-0.5 text-[10px] text-zinc-600">{hint}</p>}
@@ -137,6 +138,7 @@ export default function GoalDashboard() {
 
   const aiStatus = useAiStatusCard({ pollMs: 3000 });
   const missionController = useMissionController(8000);
+  const { contentRef, progressRef } = useHomeDashboardMotion(m.progressPct);
 
   const agentOs = useAgentOs({
     observeOnly: agentOsSettings.observeOnly || m.automation.paused,
@@ -189,6 +191,7 @@ export default function GoalDashboard() {
       title="AI Profit Mission"
       subtitle="Autopilot analyzes, trades testnet, and learns — $1,000 → $10,000 mission."
       activePath="/"
+      enableMotion
       missionSnapshot={m}
       actions={
         <button
@@ -201,6 +204,7 @@ export default function GoalDashboard() {
         </button>
       }
     >
+      <div ref={contentRef} className="flex flex-col gap-5">
       <GoalErrorBanner
         error={error}
         degraded={degraded}
@@ -208,16 +212,20 @@ export default function GoalDashboard() {
         snapshot={m}
       />
 
+      <div data-home-panel>
       <OneButtonAiHero
         onNeedsConfirm={(mode) => openTestnetModal(mode)}
         onAfterRun={() => void refresh(true)}
       />
+      </div>
 
+      <div data-home-panel>
       <AIStatusCard
         card={aiStatus.card}
         busy={aiStatus.busy}
         onLoopGuardAction={() => void aiStatus.refresh()}
       />
+      </div>
 
       <PermissionPrompt
         request={
@@ -234,13 +242,16 @@ export default function GoalDashboard() {
         busy={runningCycle}
       />
 
+      <div data-home-panel>
       <MissionAutopilotHero
         snapshot={m}
         running={runningCycle}
         onRunNow={() => void runAutopilotCycle("manual")}
       />
+      </div>
 
       {missionController.controller && (
+        <div data-home-panel>
         <MissionControllerCard
           mode={missionController.controller.mode}
           reason={missionController.controller.modeReason}
@@ -250,25 +261,36 @@ export default function GoalDashboard() {
           calibrationHeadline={missionController.calibration?.headline ?? null}
           busy={missionController.busy}
         />
+        </div>
       )}
 
+      <div data-home-panel>
       <StrategyHealthBanner strategy={m.strategyHealth} />
+      </div>
 
+      <div data-home-panel>
       <LearningReviewPanel
         items={m.learningPending}
         pendingCount={m.pendingLearningReview}
         autoLearnEnabled={m.automation.autoLearnEnabled}
         onReviewed={() => void refresh(true)}
       />
+      </div>
 
       {cycleMessage && (
-        <p className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-2 text-xs text-emerald-200">
+        <p
+          data-home-panel
+          className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-2 text-xs text-emerald-200"
+        >
           {cycleMessage}
         </p>
       )}
 
       {m.pendingTestnetPreview && (
-        <section className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
+        <section
+          data-home-panel
+          className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4"
+        >
           <p className="text-xs uppercase tracking-wide text-cyan-400/80">
             Testnet preview ready
           </p>
@@ -297,7 +319,10 @@ export default function GoalDashboard() {
       )}
 
       {!hasData && (
-        <section className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
+        <section
+          data-home-panel
+          className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4"
+        >
           <p className="text-sm text-amber-100">{m.aiStatus.nextAction}</p>
         </section>
       )}
@@ -317,8 +342,9 @@ export default function GoalDashboard() {
         </div>
         <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-zinc-800">
           <div
+            ref={progressRef}
             className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
-            style={{ width: `${Math.min(100, Math.max(0, m.progressPct))}%` }}
+            style={{ width: "0%" }}
           />
         </div>
       </Card>
@@ -443,20 +469,27 @@ export default function GoalDashboard() {
         </div>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2" data-home-panel>
         <MissionActivityFeed items={m.recentActivity} compact />
         <LearningInsightsPanel insights={m.learningInsights} compact />
       </div>
 
+      <div data-home-panel>
       <SelfLearningStatusPanel selfLearning={m.selfLearning} compact />
+      </div>
 
+      <div data-home-panel>
       <AutopilotControls
         automation={m.automation}
         onChanged={() => void refresh(true)}
         compact
       />
+      </div>
 
-      <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4 text-center">
+      <section
+        data-home-panel
+        className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4 text-center"
+      >
         <p className="text-xs text-zinc-500">Recommended next step</p>
         <p className="mt-1 text-base font-semibold text-emerald-300">{m.nextRecommendation}</p>
       </section>
@@ -479,6 +512,7 @@ export default function GoalDashboard() {
           void refresh();
         }}
       />
+      </div>
     </GoalShell>
   );
 }
