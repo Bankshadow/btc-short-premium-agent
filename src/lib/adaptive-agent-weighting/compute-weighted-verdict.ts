@@ -15,6 +15,9 @@ const VOTING_AGENT_NAMES = new Set([
   "Bear Thesis Agent",
   "Spot Strategy Agent",
   "Futures Strategy Agent",
+  "Short-Chart Agent (1H)",
+  "Medium-Chart Agent (4H)",
+  "Long-Chart Agent (1D)",
   "Options Strategy Agent",
 ]);
 

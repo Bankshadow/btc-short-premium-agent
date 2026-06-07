@@ -12,6 +12,11 @@ import { runBearThesisAgent } from "./bear-thesis-agent";
 import { runBullThesisAgent } from "./bull-thesis-agent";
 import { runCommitteeAgent } from "./committee-agent";
 import { runFuturesStrategyAgent } from "./futures-agent";
+import {
+  runLongChartAgent,
+  runMediumChartAgent,
+  runShortChartAgent,
+} from "./timeframe-chart-agents";
 import { runOptionsStrategyAgent } from "./options-agent";
 import { runRiskManagerAgent } from "./risk-manager-agent";
 import { runSpotStrategyAgent } from "./spot-agent";
@@ -117,6 +122,9 @@ export function runTradingDesk(
   const spotRaw = runSpotStrategyAgent(ctx);
   const futuresRaw = runFuturesStrategyAgent(ctx);
   const optionsRaw = runOptionsStrategyAgent(ctx);
+  const shortChartRaw = runShortChartAgent(ctx);
+  const mediumChartRaw = runMediumChartAgent(ctx);
+  const longChartRaw = runLongChartAgent(ctx);
   const registryGated = applyRegistryToStrategyAgents({
     spot: spotRaw,
     futures: futuresRaw,
@@ -134,6 +142,9 @@ export function runTradingDesk(
     spot,
     futures,
     options,
+    shortChart: shortChartRaw,
+    mediumChart: mediumChartRaw,
+    longChart: longChartRaw,
     bull: bullThesis,
     bear: bearThesis,
     riskManager,
@@ -166,6 +177,9 @@ export function runTradingDesk(
     spotAdvised,
     futuresAdvised,
     optionsAdvised,
+    shortChartRaw,
+    mediumChartRaw,
+    longChartRaw,
     riskManager,
   ];
 

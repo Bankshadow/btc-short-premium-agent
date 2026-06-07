@@ -17,6 +17,9 @@ export const TRADING_DESK_AGENTS: AgentRosterEntry[] = [
   { id: "bear", name: "Bear Thesis Agent", layer: "thesis", role: "Bear case debate" },
   { id: "spot", name: "Spot Strategy Agent", layer: "strategy", role: "Spot playbook signal" },
   { id: "futures", name: "Futures Strategy Agent", layer: "strategy", role: "Perp direction bias" },
+  { id: "chart-short", name: "Short-Chart Agent (1H)", layer: "strategy", role: "Scalp / intraday chart" },
+  { id: "chart-medium", name: "Medium-Chart Agent (4H)", layer: "strategy", role: "Swing chart" },
+  { id: "chart-long", name: "Long-Chart Agent (1D)", layer: "strategy", role: "Position / daily chart" },
   { id: "options", name: "Options Strategy Agent", layer: "strategy", role: "Short premium / delta" },
   { id: "risk", name: "Risk Manager Agent", layer: "risk", role: "Veto & sizing gate" },
   { id: "committee", name: "Committee Agent", layer: "moderator", role: "Weighted verdict & consensus" },
@@ -39,5 +42,5 @@ export const AGENT_ROSTER_SUMMARY = {
   tradingDesk: TRADING_DESK_AGENTS,
   parallelReview: PARALLEL_REVIEW_AGENTS,
   note:
-    "Each automation cycle runs 12 desk agents (incl. Committee), then 6 parallel review agents (18 roles). Regime Brain, Second Brain, and adaptive weighting add advisory layers without separate votes.",
+    "Each automation cycle runs 15 desk agents (incl. 3 chart timeframes + Committee), then 6 parallel review agents (21 roles). Regime Brain, Second Brain, and adaptive weighting add advisory layers without separate votes.",
 };

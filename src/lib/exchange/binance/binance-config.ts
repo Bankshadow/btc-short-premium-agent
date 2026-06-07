@@ -46,6 +46,12 @@ export function isBinanceTestnetAutoExecuteEnabled(): boolean {
   return envBool("BINANCE_TESTNET_AUTOEXECUTE_ENABLED", false);
 }
 
+/** Multi-timeframe chart agents + higher position caps when signals align. */
+export function isMultiTimeframeAutopilotEnabled(): boolean {
+  if (envBool("BINANCE_MULT_TF_AUTOPILOT", false)) return true;
+  return isBinanceTestnetAutoExecuteEnabled();
+}
+
 /** API base used for HTTP calls — proxy when configured, else direct testnet. */
 export function resolveBinanceEffectiveBaseUrl(): string {
   return resolveBinanceProxyUrl() ?? resolveBinanceUpstreamBaseUrl();
@@ -54,6 +60,7 @@ export function resolveBinanceEffectiveBaseUrl(): string {
 export function loadBinanceConfig(): BinanceConfig {
   const upstreamBaseUrl = resolveBinanceUpstreamBaseUrl();
   const proxyUrl = resolveBinanceProxyUrl();
+  const multiTf = isMultiTimeframeAutopilotEnabled();
   return {
     testnetEnabled: envBool("BINANCE_TESTNET_ENABLED", false),
     liveEnabled: envBool("BINANCE_LIVE_ENABLED", false),
@@ -65,8 +72,14 @@ export function loadBinanceConfig(): BinanceConfig {
       ["BTCUSDT", "SOLUSDT", "ETHUSDT", "LINKUSDT", "DOGEUSDT"],
     ),
     maxNotionalUsd: envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 55),
-    maxTradesPerDay: envNumber("BINANCE_TESTNET_MAX_TRADES_PER_DAY", 15),
-    maxOpenPositions: envNumber("BINANCE_TESTNET_MAX_OPEN_POSITIONS", 3),
+    maxTradesPerDay: envNumber(
+      "BINANCE_TESTNET_MAX_TRADES_PER_DAY",
+      multiTf ? 30 : 15,
+    ),
+    maxOpenPositions: envNumber(
+      "BINANCE_TESTNET_MAX_OPEN_POSITIONS",
+      multiTf ? 6 : 3,
+    ),
     requireDoubleConfirm: envBool("BINANCE_REQUIRE_DOUBLE_CONFIRM", true),
     leverage: 1,
   };

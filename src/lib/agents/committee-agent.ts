@@ -22,6 +22,9 @@ export interface CommitteeInput {
   spot: AgentOutput;
   futures: AgentOutput;
   options: AgentOutput;
+  shortChart: AgentOutput;
+  mediumChart: AgentOutput;
+  longChart: AgentOutput;
   bull: AgentOutput;
   bear: AgentOutput;
   riskManager: AgentOutput;
@@ -47,9 +50,28 @@ export function runCommitteeAgent(input: CommitteeInput): {
   verdict: CommitteeVerdict;
   debate: AgentDebateRow[];
 } {
-  const { ctx, spot, futures, options, bull, bear, riskManager, deskMemory, research } =
-    input;
-  const strategyAgents = [spot, futures, options];
+  const {
+    ctx,
+    spot,
+    futures,
+    options,
+    shortChart,
+    mediumChart,
+    longChart,
+    bull,
+    bear,
+    riskManager,
+    deskMemory,
+    research,
+  } = input;
+  const strategyAgents = [
+    spot,
+    futures,
+    options,
+    shortChart,
+    mediumChart,
+    longChart,
+  ];
   const strategyRecs = strategyAgents.map((a) => a.recommendation);
   const majority = majorityRecommendation(strategyRecs);
   const riskVeto = Boolean(riskManager.veto);
@@ -199,7 +221,17 @@ export function runCommitteeAgent(input: CommitteeInput): {
   };
 
   const debate = buildDebateRows(
-    [bull, bear, spot, futures, options, riskManager],
+    [
+      bull,
+      bear,
+      spot,
+      futures,
+      options,
+      shortChart,
+      mediumChart,
+      longChart,
+      riskManager,
+    ],
     majority,
   );
 
