@@ -11,6 +11,7 @@ import {
   AUTOMATION_STATE_FILE,
   DEFAULT_AUTOMATION_SETTINGS,
 } from "./config";
+import { normalizeCronIntervalMinutes } from "./cron-config";
 import type {
   AutomationFailedJob,
   AutomationRun,
@@ -117,6 +118,10 @@ export async function patchAutomationSettings(
   state.settings = {
     ...state.settings,
     ...patch,
+    intervalMinutes:
+      patch.intervalMinutes !== undefined
+        ? normalizeCronIntervalMinutes(patch.intervalMinutes)
+        : state.settings.intervalMinutes,
     moduleToggles: {
       ...state.settings.moduleToggles,
       ...(patch.moduleToggles ?? {}),

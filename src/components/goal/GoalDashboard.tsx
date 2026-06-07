@@ -16,6 +16,7 @@ import SelfLearningStatusPanel from "./SelfLearningStatusPanel";
 import StrategyHealthBanner from "./StrategyHealthBanner";
 import TestnetTradeModal from "./TestnetTradeModal";
 import { useMissionSnapshot } from "./use-mission-snapshot";
+import { useServerCronTick } from "@/hooks/useServerCronTick";
 import PermissionPrompt from "@/components/agent-os/PermissionPrompt";
 import { useAgentOs } from "@/hooks/useAgentOs";
 import { loadAgentOsSettings } from "@/lib/agent-os/settings-store";
@@ -74,6 +75,12 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 export default function GoalDashboard() {
   const { snapshot: m, busy, error, degraded, warnings, refresh, setSnapshot } =
     useMissionSnapshot();
+
+  useServerCronTick({
+    enabled: m.automation.enabled,
+    paused: m.automation.paused,
+    intervalMinutes: m.automation.intervalMinutes,
+  });
   const [runningCycle, setRunningCycle] = useState(false);
   const [cycleMessage, setCycleMessage] = useState<string | null>(null);
   const bootstrapAttempted = useRef(false);

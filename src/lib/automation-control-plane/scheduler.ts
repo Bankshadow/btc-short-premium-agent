@@ -3,6 +3,7 @@ import {
   backoffMinutesForFailures,
   DEFAULT_AUTOMATION_JOBS,
 } from "./config";
+import { normalizeCronIntervalMinutes } from "./cron-config";
 import { handleAutomationJobFailure } from "./failure-actions";
 import { runAutomationJob } from "./run-job";
 import { loadAutomationServerContext } from "./server-context";
@@ -356,7 +357,7 @@ export async function runAutomationCycle(
 
   const intervalMinutes = state.settings.intervalMinutes ?? 15;
   const nextRunAt = new Date(
-    Date.now() + Math.max(intervalMinutes, 5) * 60_000,
+    Date.now() + normalizeCronIntervalMinutes(intervalMinutes) * 60_000,
   ).toISOString();
   const status = finalizeRunStatus(jobResults, blocked);
   const completedAt = new Date().toISOString();

@@ -1,13 +1,13 @@
-# Vercel Hobby only runs cron once per day — this workflow triggers the full
-# automation cycle every 15 minutes on production.
+# Calls /api/cron/tick every 5 minutes (GitHub minimum). The tick endpoint
+# respects the interval configured in /settings/cron (can be 1–120 min).
 #
-# Required GitHub repo secret: CRON_SECRET (same value as Vercel CRON_SECRET)
+# Required GitHub repo secret: CRON_SECRET
 
 name: Production automation cron
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  background-worker:
+  cron-tick:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Trigger /api/cron/background-worker
+      - name: Trigger /api/cron/tick
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: https://btc-short-premium-agent.vercel.app
@@ -30,7 +30,7 @@ jobs:
           fi
           response="$(curl -sS -w '\n%{http_code}' \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/background-worker")"
+            "${APP_URL}/api/cron/tick")"
           body="$(echo "$response" | head -n -1)"
           code="$(echo "$response" | tail -n 1)"
           echo "$body"

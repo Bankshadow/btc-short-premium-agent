@@ -392,11 +392,13 @@ export default function SettingsView() {
       </section>
 
       <p className="text-[11px] text-zinc-600">
-        Need the full workspace settings?{" "}
-        <Link href="/settings/workspace" className="text-emerald-300 hover:underline">
-          Open workspace settings
+        <Link href="/settings/cron" className="text-emerald-300 hover:underline">
+          Cron interval & AI agents
         </Link>
-        .
+        {" · "}
+        <Link href="/settings/workspace" className="text-emerald-300 hover:underline">
+          Workspace settings
+        </Link>
       </p>
     </GoalShell>
   );

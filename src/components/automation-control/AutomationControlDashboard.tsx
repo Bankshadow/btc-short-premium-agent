@@ -226,7 +226,7 @@ export default function AutomationControlDashboard() {
             Interval (min)
             <input
               type="number"
-              min={5}
+              min={1}
               max={120}
               className="ml-2 w-16 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-zinc-200"
               value={settings?.intervalMinutes ?? 15}
@@ -238,6 +238,10 @@ export default function AutomationControlDashboard() {
           </label>
           <p className="text-[10px] text-zinc-600">
             Next: {settings?.nextRunAt ? new Date(settings.nextRunAt).toLocaleString() : "—"}
+            {" · "}
+            <Link href="/settings/cron" className="text-emerald-400 hover:underline">
+              Cron config
+            </Link>
           </p>
         </div>
       </section>
