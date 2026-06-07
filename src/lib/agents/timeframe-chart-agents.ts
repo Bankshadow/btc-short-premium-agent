@@ -22,7 +22,7 @@ function runChartAgentForHorizon(
 ): AgentOutput {
   const cfg = TIMEFRAME_HORIZON_CONFIG[horizon];
   const missing = getMissingDataLabels(ctx);
-  const { score, direction, recommendationScore } =
+  const { score, direction, confidence, recommendationScore } =
     scoreTechnicalSnapshotForHorizon(snapshot, horizon);
 
   const reasons: string[] = [
