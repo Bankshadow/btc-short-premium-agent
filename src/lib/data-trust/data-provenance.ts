@@ -14,6 +14,7 @@ import {
   worstConfidence,
 } from "./data-freshness";
 import type { DataProvenanceField, DataSourceKind } from "./types";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 
 export interface BuildProvenanceInput {
   input: DecisionEngineInput;
@@ -88,12 +89,17 @@ export function buildDataProvenance(ctx: BuildProvenanceInput): DataProvenanceFi
   const manualFresh = manual
     ? evaluateManualDataFreshness(manualAge)
     : { confidence: "HIGH" as const };
-  const mockFresh = evaluateMockInProduction(liq.source === "mock", isProduction);
+  const futuresOnly = isBinanceFuturesOnlyMode();
+  const mockFresh = evaluateMockInProduction(
+    liq.source === "mock",
+    isProduction && !futuresOnly,
+  );
   const optionGaps = optionChainGaps(input.optionCandidates);
   const optionFresh = evaluateOptionChainIntegrity(
     input.optionCandidates.length,
     optionGaps,
   );
+  const marketSource: DataSourceKind = futuresOnly ? "DERIVED" : "BYBIT";
 
   const liqSrc = liquidationSource(liq, manual);
 
@@ -101,7 +107,7 @@ export function buildDataProvenance(ctx: BuildProvenanceInput): DataProvenanceFi
     field(
       "BTC price",
       market.spotPrice,
-      market.spotPrice > 0 ? "BYBIT" : "MISSING",
+      market.spotPrice > 0 ? marketSource : "MISSING",
       market.timestamp,
       marketAge,
       market.spotPrice <= 0 ? "CRITICAL" : btcFresh.confidence,
@@ -170,20 +176,27 @@ export function buildDataProvenance(ctx: BuildProvenanceInput): DataProvenanceFi
     ),
     field(
       "Option IV",
-      input.optionCandidates[0]?.impliedVolatility ?? null,
-      input.optionCandidates.length ? "BYBIT" : "MISSING",
+      futuresOnly
+        ? market.iv
+        : (input.optionCandidates[0]?.impliedVolatility ?? null),
+      futuresOnly
+        ? "DERIVED"
+        : input.optionCandidates.length
+          ? "BYBIT"
+          : "MISSING",
       market.timestamp,
       marketAge,
-      optionFresh.confidence,
-      optionFresh.issue,
+      futuresOnly ? "MEDIUM" : optionFresh.confidence,
+      futuresOnly ? "Futures mode — HV proxy IV (no options chain)" : optionFresh.issue,
     ),
     field(
       "Option delta",
-      input.optionCandidates[0]?.delta ?? null,
-      input.optionCandidates.length ? "BYBIT" : "MISSING",
+      futuresOnly ? null : (input.optionCandidates[0]?.delta ?? null),
+      futuresOnly ? "DERIVED" : input.optionCandidates.length ? "BYBIT" : "MISSING",
       market.timestamp,
       marketAge,
-      optionFresh.confidence,
+      futuresOnly ? "MEDIUM" : optionFresh.confidence,
+      futuresOnly ? "Not applicable — perp testnet path" : undefined,
     ),
     field(
       "HV 30D",

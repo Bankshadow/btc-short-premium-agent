@@ -17,3 +17,8 @@ export function marketDataKlineSource(interval: string): string {
     ? `Binance Klines (${interval})`
     : `Bybit Klines (${interval})`;
 }
+
+/** Perp testnet path — options chain not required when Binance is primary market data. */
+export function isBinanceFuturesOnlyMode(): boolean {
+  return isBinanceMarketDataPreferred();
+}

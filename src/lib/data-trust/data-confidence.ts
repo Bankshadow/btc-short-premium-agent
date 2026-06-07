@@ -4,12 +4,16 @@ import type {
   DataConfidenceResult,
   DataProvenanceField,
 } from "./types";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 
-const REQUIRED_CRITICAL_FIELDS = [
-  "BTC price",
-  "Option IV",
-  "Option delta",
-];
+const OPTIONS_CRITICAL_FIELDS = ["BTC price", "Option IV", "Option delta"];
+const FUTURES_CRITICAL_FIELDS = ["BTC price"];
+
+function requiredCriticalFields(): string[] {
+  return isBinanceFuturesOnlyMode()
+    ? FUTURES_CRITICAL_FIELDS
+    : OPTIONS_CRITICAL_FIELDS;
+}
 
 function confidenceToScore(level: DataConfidenceLevel): number {
   switch (level) {
@@ -32,7 +36,7 @@ export function computeDataConfidence(
   const criticalIssues: string[] = [];
   const warnings: string[] = [];
 
-  for (const name of REQUIRED_CRITICAL_FIELDS) {
+  for (const name of requiredCriticalFields()) {
     const row = provenance.find((p) => p.fieldName === name);
     if (!row || row.source === "MISSING" || row.confidence === "CRITICAL") {
       criticalIssues.push(
@@ -73,7 +77,7 @@ export function computeDataConfidence(
   const tradeAllowed =
     criticalIssues.length === 0 &&
     grade !== "CRITICAL" &&
-    grade !== "LOW";
+    (isBinanceFuturesOnlyMode() || grade !== "LOW");
 
   return {
     score,

@@ -1,6 +1,7 @@
-import { fetchMarketSnapshot, fetchOptionCandidates } from "@/lib/bybit/market";
+import { fetchMarketSnapshot, fetchOptionCandidates, fetchEthSpotQuote } from "@/lib/bybit/market";
 import { getBtcKlines } from "@/lib/bybit/klines";
 import {
+  isBinanceFuturesOnlyMode,
   marketDataKlineSource,
   marketDataTickerSource,
 } from "@/lib/market-data/provider";
@@ -359,7 +360,14 @@ export async function runAnalysisEngine(
   overrides: Partial<DecisionEngineInput> & AnalysisInput = {},
 ): Promise<AnalyzeApiResponse> {
   const deskMemory = overrides.deskMemory;
-  const ethQuote = overrides.ethQuote ?? null;
+  let ethQuote = overrides.ethQuote ?? null;
+  if (!ethQuote && isBinanceFuturesOnlyMode()) {
+    try {
+      ethQuote = await fetchEthSpotQuote();
+    } catch {
+      ethQuote = null;
+    }
+  }
   const strategyRegistry = overrides.strategyRegistry ?? null;
   const governance = overrides.governance ?? null;
   const adaptiveWeighting = overrides.adaptiveWeighting ?? null;

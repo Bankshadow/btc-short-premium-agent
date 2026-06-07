@@ -2,6 +2,7 @@ import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
 import type { AgentRecommendation } from "@/lib/agents/types";
@@ -41,10 +42,18 @@ export function evaluateHardRuleLocks(input: {
       }
     }
     if (
-      data.sourceErrors?.length > 0 ||
-      data.dataSourceIssues?.some((e) =>
-        /bybit|ticker|option/i.test(e.source),
-      )
+      data.sourceErrors?.some((e) => {
+        if (isBinanceFuturesOnlyMode() && /bybit options|option chain/i.test(e.source)) {
+          return false;
+        }
+        return true;
+      }) ||
+      data.dataSourceIssues?.some((e) => {
+        if (isBinanceFuturesOnlyMode() && /bybit options|option chain/i.test(e.source)) {
+          return false;
+        }
+        return /bybit|ticker|option/i.test(e.source);
+      })
     ) {
       if (!activeRules.includes("stale_market_data")) {
         activeRules.push("stale_market_data");
@@ -55,11 +64,11 @@ export function evaluateHardRuleLocks(input: {
     const missing = data.step5_verdict?.missingData ?? [];
     const liq = data.liquidation?.liquidation24h;
     const spot = data.step1_marketSnapshot?.spotPrice ?? 0;
+    const futuresOnly = isBinanceFuturesOnlyMode();
     if (
       missing.length > 0 ||
       spot <= 0 ||
-      liq == null ||
-      data.step1_marketSnapshot?.ivHvRatio <= 0
+      (!futuresOnly && (liq == null || data.step1_marketSnapshot?.ivHvRatio <= 0))
     ) {
       activeRules.push("missing_required_risk_data");
       messages.push(

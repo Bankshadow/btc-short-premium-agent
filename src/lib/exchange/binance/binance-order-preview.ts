@@ -176,7 +176,11 @@ export async function buildOrderPreview(
     generatedAt,
   };
 
-  const gate = validateOrderAgainstRiskGate({ preview: draft });
+  const gate = validateOrderAgainstRiskGate({
+    preview: draft,
+    // Double confirm is enforced at execute time, not when building a preview.
+    doubleConfirm: true,
+  });
   const preview: BinanceOrderPreview = {
     ...draft,
     riskChecks: gate.riskChecks,

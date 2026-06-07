@@ -3,6 +3,7 @@ import { runMultiAssetScan } from "@/lib/multi-asset/multi-asset-scanner";
 import { SUPPORTED_PERP_ASSETS } from "@/lib/multi-asset/asset-config";
 import type { PerpDirection } from "@/lib/multi-asset/types";
 import { isAggressiveDeskRisk } from "@/lib/desk/desk-risk-policy";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 import { loadBinanceConfig } from "./binance-config";
 import {
   inferBinanceSideFromAnalysis,
@@ -22,11 +23,16 @@ export interface AutopilotTradeCandidate {
 }
 
 function resolveCommitteeVerdict(data: AnalyzeApiResponse | null): string {
-  const verdict =
+  const finalVerdict = data?.tradingDesk?.committee?.finalVerdict;
+  const weighted =
     data?.tradingDesk?.weightedCommittee?.weightedVerdict ??
     data?.step5_verdict?.recommendation ??
     "WAIT";
-  return String(verdict).toUpperCase();
+  const normalized = String(weighted).toUpperCase();
+  if (isBinanceFuturesOnlyMode() && finalVerdict) {
+    return String(finalVerdict).toUpperCase();
+  }
+  return normalized;
 }
 
 function resolveCommitteeConfidence(data: AnalyzeApiResponse | null): number {
@@ -66,8 +72,13 @@ export async function pickAutopilotTradeCandidates(input: {
   const allowed = new Set(config.allowedSymbols.map((s) => s.toUpperCase()));
   const openSet = new Set(input.openSymbols.map((s) => s.toUpperCase()));
   const verdict = resolveCommitteeVerdict(input.analysis);
+  const futuresOnly = isBinanceFuturesOnlyMode();
 
-  if (!isTradeCycleAllowed(input.analysis, verdict)) {
+  if (futuresOnly) {
+    if (input.analysis?.dataTrust?.grade === "CRITICAL") {
+      return [];
+    }
+  } else if (!isTradeCycleAllowed(input.analysis, verdict)) {
     return [];
   }
 

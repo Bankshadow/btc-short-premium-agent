@@ -6,6 +6,7 @@ import type {
   OptionCandidate,
   TradeRecommendation,
 } from "@/lib/types/market";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 import {
   evaluateCombinationRead,
   isLiquidationCaution,
@@ -61,7 +62,9 @@ function detectMissingRequiredData(input: DecisionEngineInput): string[] {
   if (input.market.hv30 <= 0) missing.push("market.hv30");
   if (input.market.iv <= 0) missing.push("market.iv");
   if (input.market.ivHvRatio <= 0) missing.push("market.ivHvRatio");
-  if (input.optionCandidates.length === 0) missing.push("optionCandidates");
+  if (!isBinanceFuturesOnlyMode() && input.optionCandidates.length === 0) {
+    missing.push("optionCandidates");
+  }
 
   return missing;
 }
