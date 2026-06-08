@@ -3,6 +3,7 @@ import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import {
   blockBinanceProductionOrder,
+  isBinanceForceMaxAutopilotEnabled,
   isBinanceTestnetAutoExecuteEnabled,
   loadBinanceConfig,
 } from "./binance-config";
@@ -96,6 +97,7 @@ export async function runBinanceTestnetAutoExecute(input: {
   }
 
   const config = loadBinanceConfig();
+  const forceMax = isBinanceForceMaxAutopilotEnabled();
   if (!config.testnetEnabled) {
     return {
       ...base,
@@ -116,7 +118,7 @@ export async function runBinanceTestnetAutoExecute(input: {
       };
     }
 
-    if (input.entries && input.orders) {
+    if (input.entries && input.orders && !forceMax) {
       const strategySummary = buildStrategyHealthSummary({
         entries: input.entries,
         orders: input.orders,
@@ -136,14 +138,30 @@ export async function runBinanceTestnetAutoExecute(input: {
     const openSymbols = positions
       .filter((p) => Math.abs(Number(p.positionAmt)) > 0)
       .map((p) => p.symbol);
-    const slots = Math.max(0, config.maxOpenPositions - openSymbols.length);
+
+    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const tradesToday = journal.filter(
+      (j) =>
+        new Date(j.createdAt).getTime() >= todayStart.getTime() &&
+        j.status !== "BLOCKED" &&
+        j.status !== "PREVIEWED",
+    ).length;
+    const dailyRemaining = Math.max(0, config.maxTradesPerDay - tradesToday);
+    const positionSlots = Math.max(0, config.maxOpenPositions - openSymbols.length);
+    const slots = Math.min(positionSlots, dailyRemaining);
 
     if (slots === 0) {
+      const reason =
+        dailyRemaining === 0
+          ? `Daily limit ${config.maxTradesPerDay} reached (${tradesToday} today).`
+          : `All ${config.maxOpenPositions} position slots filled.`;
       return {
         ...base,
         outcome: "PREVIEW_BLOCKED",
-        blockReasons: [`Max ${config.maxOpenPositions} open positions`],
-        summary: `All ${config.maxOpenPositions} position slots filled.`,
+        blockReasons: [reason],
+        summary: reason,
       };
     }
 
@@ -161,17 +179,18 @@ export async function runBinanceTestnetAutoExecute(input: {
       return {
         ...base,
         outcome: "NO_TRADE_SIGNAL",
-        summary: `No trade candidates · committee ${verdict}.`,
+        summary: forceMax
+          ? `Force-max enabled but no empty symbol slots · committee ${verdict}.`
+          : `No trade candidates · committee ${verdict}.`,
       };
     }
 
-    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
     const submittedPreviewIds = journal
       .filter((j) =>
         ["SUBMITTED", "FILLED", "CLOSING", "CLOSED"].includes(j.status),
       )
       .map((j) => j.previewId);
-    const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
     const executedSymbols: string[] = [];
     const blockReasons: string[] = [];
     const recentPreviewFingerprints: string[] = [];
@@ -204,6 +223,7 @@ export async function runBinanceTestnetAutoExecute(input: {
         symbol: candidate.symbol,
         side: candidate.side,
         reason: candidate.reason,
+        notionalUsd: forceMax ? config.maxNotionalUsd : undefined,
       });
       const preview = await buildOrderPreview(previewInput);
       lastPreviewId = preview.previewId;

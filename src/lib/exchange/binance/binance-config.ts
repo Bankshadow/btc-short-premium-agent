@@ -52,6 +52,17 @@ export function isMultiTimeframeAutopilotEnabled(): boolean {
   return isBinanceTestnetAutoExecuteEnabled();
 }
 
+/**
+ * Fill every open slot each cycle — bypass committee/data-trust gates and use
+ * fallback candidates for symbols without strong scanner signals. Testnet-only.
+ */
+export function isBinanceForceMaxAutopilotEnabled(): boolean {
+  const raw = process.env.BINANCE_TESTNET_FORCE_MAX_TRADES?.trim().toLowerCase();
+  if (raw === "false" || raw === "0" || raw === "no") return false;
+  if (raw === "true" || raw === "1" || raw === "yes") return true;
+  return isBinanceTestnetAutoExecuteEnabled();
+}
+
 /** API base used for HTTP calls — proxy when configured, else direct testnet. */
 export function resolveBinanceEffectiveBaseUrl(): string {
   return resolveBinanceProxyUrl() ?? resolveBinanceUpstreamBaseUrl();
