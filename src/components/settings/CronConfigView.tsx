@@ -16,6 +16,10 @@ interface CronConfig {
   githubCronMinMinutes: number;
   lastRunAt: string | null;
   nextDueInMs: number;
+  primaryMode?: string;
+  testnetPrimary?: boolean;
+  spineJobs?: string[] | null;
+  journalPersistenceConfigured?: boolean;
   scheduleNotes: {
     githubActionsNote: string;
     clientPollNote: string;
@@ -238,6 +242,18 @@ export default function CronConfigView() {
                 </dd>
               </div>
               <div>
+                <dt className="text-xs text-zinc-500">Primary loop</dt>
+                <dd className="text-zinc-200">
+                  {config?.testnetPrimary ? "Testnet perp spine" : config?.primaryMode ?? "Full desk"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500">Journal persist</dt>
+                <dd className={config?.journalPersistenceConfigured ? "text-emerald-300" : "text-amber-300"}>
+                  {config?.journalPersistenceConfigured ? "Configured" : "Ephemeral (Vercel)"}
+                </dd>
+              </div>
+              <div>
                 <dt className="text-xs text-zinc-500">Autopilot</dt>
                 <dd className="text-zinc-200">
                   {config?.paused
@@ -252,6 +268,11 @@ export default function CronConfigView() {
                 <dd className="font-mono text-xs text-zinc-300">GET /api/cron/tick</dd>
               </div>
             </dl>
+            {config?.spineJobs && config.spineJobs.length > 0 && (
+              <p className="mt-3 text-xs text-zinc-500">
+                Spine: {config.spineJobs.join(" → ")}
+              </p>
+            )}
             {config?.scheduleNotes && (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-xs">
                 <li>{config.scheduleNotes.githubActionsNote}</li>

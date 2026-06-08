@@ -8,8 +8,6 @@ import {
   loadBinanceConfig,
 } from "./binance-config";
 import { GOAL_MIN_TRADES_FOR_TRUST } from "@/lib/goal-engine/types";
-import { resolvePrimaryStrategyHealth } from "@/lib/mission-flow/resolve-primary-strategy-health";
-import { buildStrategyHealthSummary } from "@/lib/strategy-health";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import { buildBinancePreviewInputFromAiSignal } from "./build-ai-preview";
@@ -18,6 +16,7 @@ import { executeBinanceTestnetOrder } from "./binance-execution";
 import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
 import { pickAutopilotTradeCandidates } from "./pick-autopilot-symbols";
 import { recordAutopilotCycleOutcome } from "./symbol-rotation-store";
+import { evaluateUnifiedTestnetTradeGate } from "./unified-testnet-trade-gate";
 
 export type BinanceAutoExecuteOutcome =
   | "DISABLED"
@@ -118,20 +117,19 @@ export async function runBinanceTestnetAutoExecute(input: {
       };
     }
 
-    if (input.entries && input.orders && !forceMax) {
-      const strategySummary = buildStrategyHealthSummary({
-        entries: input.entries,
-        orders: input.orders,
-      });
-      const strategy = resolvePrimaryStrategyHealth(strategySummary);
-      if (strategy && !strategy.tradeAllowed) {
-        return {
-          ...base,
-          outcome: "STRATEGY_BLOCKED",
-          blockReasons: [strategy.blockReason ?? "Strategy health blocked new trades."],
-          summary: strategy.blockReason ?? "Strategy health blocked new trades.",
-        };
-      }
+    const tradeGate = evaluateUnifiedTestnetTradeGate({
+      analysis: input.analysis,
+      commandCenterStatus: input.commandCenterStatus ?? null,
+      entries: input.entries,
+      orders: input.orders,
+    });
+    if (!tradeGate.allowed) {
+      return {
+        ...base,
+        outcome: "STRATEGY_BLOCKED",
+        blockReasons: tradeGate.blockReasons,
+        summary: tradeGate.blockReasons[0] ?? "Unified trade gate blocked new entries.",
+      };
     }
 
     const positions = await getPositions();

@@ -72,25 +72,31 @@ export function loadBinanceConfig(): BinanceConfig {
   const upstreamBaseUrl = resolveBinanceUpstreamBaseUrl();
   const proxyUrl = resolveBinanceProxyUrl();
   const multiTf = isMultiTimeframeAutopilotEnabled();
+  const allowedSymbols = parseSymbolList(
+    process.env.BINANCE_ALLOWED_SYMBOLS,
+    ["BTCUSDT", "SOLUSDT", "ETHUSDT", "LINKUSDT", "DOGEUSDT"],
+  );
+  const symbolSlotCap = allowedSymbols.length;
+  const configuredMaxOpen = envNumber("BINANCE_TESTNET_MAX_OPEN_POSITIONS", 0);
+  const maxOpenPositions =
+    configuredMaxOpen > 0
+      ? configuredMaxOpen
+      : multiTf
+        ? Math.max(symbolSlotCap, 6)
+        : Math.min(symbolSlotCap, 3);
   return {
     testnetEnabled: envBool("BINANCE_TESTNET_ENABLED", false),
     liveEnabled: envBool("BINANCE_LIVE_ENABLED", false),
     baseUrl: proxyUrl ?? upstreamBaseUrl,
     upstreamBaseUrl,
     proxyEnabled: Boolean(proxyUrl),
-    allowedSymbols: parseSymbolList(
-      process.env.BINANCE_ALLOWED_SYMBOLS,
-      ["BTCUSDT", "SOLUSDT", "ETHUSDT", "LINKUSDT", "DOGEUSDT"],
-    ),
+    allowedSymbols,
     maxNotionalUsd: envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 55),
     maxTradesPerDay: envNumber(
       "BINANCE_TESTNET_MAX_TRADES_PER_DAY",
       multiTf ? 30 : 15,
     ),
-    maxOpenPositions: envNumber(
-      "BINANCE_TESTNET_MAX_OPEN_POSITIONS",
-      multiTf ? 30 : 3,
-    ),
+    maxOpenPositions,
     requireDoubleConfirm: envBool("BINANCE_REQUIRE_DOUBLE_CONFIRM", true),
     leverage: 1,
   };

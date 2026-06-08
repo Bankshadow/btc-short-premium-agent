@@ -38,4 +38,26 @@ describe("P-MVP 4 Automation Control Plane", () => {
     assert.equal(action.priority, "HIGH");
     assert.ok(action.title.includes("DESK_ANALYZE"));
   });
+
+  it("defaults to testnet perp spine when autoexec enabled", async () => {
+    const prev = process.env.BINANCE_TESTNET_AUTOEXECUTE_ENABLED;
+    const prevMode = process.env.AUTOMATION_PRIMARY_MODE;
+    process.env.BINANCE_TESTNET_AUTOEXECUTE_ENABLED = "true";
+    delete process.env.AUTOMATION_PRIMARY_MODE;
+    const { resolveDefaultAutomationJobs, isTestnetPrimaryAutomation } =
+      await import("./primary-mode");
+    assert.equal(isTestnetPrimaryAutomation(), true);
+    assert.deepEqual(resolveDefaultAutomationJobs(), [
+      "DESK_ANALYZE",
+      "COMMAND_CENTER_REFRESH",
+      "BINANCE_TESTNET_MONITOR",
+      "BINANCE_TESTNET_AUTOEXECUTE",
+      "LEARNING_UPDATE",
+      "SELF_LEARNING_UPDATE",
+    ]);
+    if (prev === undefined) delete process.env.BINANCE_TESTNET_AUTOEXECUTE_ENABLED;
+    else process.env.BINANCE_TESTNET_AUTOEXECUTE_ENABLED = prev;
+    if (prevMode === undefined) delete process.env.AUTOMATION_PRIMARY_MODE;
+    else process.env.AUTOMATION_PRIMARY_MODE = prevMode;
+  });
 });

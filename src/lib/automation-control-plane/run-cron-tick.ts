@@ -10,6 +10,12 @@ import {
   normalizeCronIntervalMinutes,
   resolveLastAutomationRunAt,
 } from "./cron-config";
+import { isJournalPersistenceConfigured } from "@/lib/cron/journal-persistence";
+import {
+  isTestnetPrimaryAutomation,
+  resolveAutomationPrimaryMode,
+  TESTNET_PRIMARY_AUTOMATION_JOBS,
+} from "./primary-mode";
 import { runAutomationCycle } from "./scheduler";
 import { loadAutomationState } from "./state-store";
 import type { AutomationRun } from "./types";
@@ -90,6 +96,10 @@ export async function loadCronConfigSnapshot(workspaceId = "server-default") {
     automationEnabled: state.settings.automationEnabled,
     paused: state.settings.paused,
     intervalMinutes,
+    primaryMode: resolveAutomationPrimaryMode(),
+    testnetPrimary: isTestnetPrimaryAutomation(),
+    spineJobs: isTestnetPrimaryAutomation() ? [...TESTNET_PRIMARY_AUTOMATION_JOBS] : null,
+    journalPersistenceConfigured: isJournalPersistenceConfigured(),
     presets: [...CRON_INTERVAL_PRESETS],
     minIntervalMinutes: MIN_CRON_INTERVAL_MINUTES,
     maxIntervalMinutes: MAX_CRON_INTERVAL_MINUTES,

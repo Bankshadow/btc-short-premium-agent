@@ -61,28 +61,51 @@ export function computeDataConfidence(
   }
 
   const grades = provenance.map((p) => p.confidence);
-  const grade = worstConfidence(grades);
+  const futuresOnly = isBinanceFuturesOnlyMode();
+  const scoringFields = futuresOnly
+    ? provenance.filter((p) =>
+        ["BTC price", "Funding rate", "Open interest", "HV 30D", "Liquidation 24h"].includes(
+          p.fieldName,
+        ),
+      )
+    : provenance;
+
+  const grade = worstConfidence(
+    (scoringFields.length > 0 ? scoringFields : provenance).map((p) => p.confidence),
+  );
 
   const avg =
-    provenance.length > 0
-      ? provenance.reduce((s, p) => s + confidenceToScore(p.confidence), 0) /
-        provenance.length
-      : 0;
+    scoringFields.length > 0
+      ? scoringFields.reduce((s, p) => s + confidenceToScore(p.confidence), 0) /
+        scoringFields.length
+      : provenance.length > 0
+        ? provenance.reduce((s, p) => s + confidenceToScore(p.confidence), 0) /
+          provenance.length
+        : 0;
 
   let score = Math.round(avg);
-  if (criticalIssues.length > 0) score = Math.min(score, 25);
-  if (grade === "CRITICAL") score = Math.min(score, 20);
-  if (grade === "LOW") score = Math.min(score, 50);
+  const btcCritical = criticalIssues.some((issue) => /btc/i.test(issue));
+  if (futuresOnly) {
+    if (btcCritical) score = Math.min(score, 25);
+    else if (grade === "CRITICAL") score = Math.max(score, 45);
+  } else {
+    if (criticalIssues.length > 0) score = Math.min(score, 25);
+    if (grade === "CRITICAL") score = Math.min(score, 20);
+    if (grade === "LOW") score = Math.min(score, 50);
+  }
 
-  const tradeAllowed =
-    criticalIssues.length === 0 &&
-    grade !== "CRITICAL" &&
-    (isBinanceFuturesOnlyMode() || grade !== "LOW");
+  const futuresCritical = futuresOnly
+    ? criticalIssues.filter((issue) => /btc/i.test(issue))
+    : criticalIssues;
+
+  const tradeAllowed = futuresOnly
+    ? !btcCritical && grade !== "CRITICAL"
+    : criticalIssues.length === 0 && grade !== "CRITICAL" && grade !== "LOW";
 
   return {
     score,
-    grade,
-    criticalIssues: [...new Set(criticalIssues)],
+    grade: futuresOnly && !btcCritical && grade === "CRITICAL" ? "LOW" : grade,
+    criticalIssues: [...new Set(futuresCritical)],
     warnings: [...new Set(warnings)].slice(0, 12),
     tradeAllowed,
   };

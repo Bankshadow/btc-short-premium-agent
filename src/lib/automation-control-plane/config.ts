@@ -1,4 +1,9 @@
 import type { AutomationJobType, AutomationModuleToggles, AutomationSettings } from "./types";
+import {
+  isTestnetPrimaryAutomation,
+  resolveDefaultAutomationJobs,
+  resolveTestnetPrimaryModuleToggles,
+} from "./primary-mode";
 
 export const AUTOMATION_STATE_FILE = "automation-control-state.json";
 export const AUTOMATION_HISTORY_FILE = "automation-control-history.json";
@@ -44,31 +49,20 @@ export const DEFAULT_AUTOMATION_SETTINGS: AutomationSettings = {
   intervalMinutes: 15,
   lastRunAt: null,
   nextRunAt: null,
-  moduleToggles: { ...DEFAULT_MODULE_TOGGLES },
+  moduleToggles: resolveEffectiveModuleToggles(),
 };
 
-export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] = [
-  "MARKET_SNAPSHOT",
-  "PARALLEL_AGENT_REVIEW",
-  "DESK_ANALYZE",
-  "BINANCE_TESTNET_MONITOR",
-  "BINANCE_TESTNET_AUTOEXECUTE",
-  "SELF_LEARNING_UPDATE",
-  "PAPER_MONITOR",
-  "PORTFOLIO_SNAPSHOT",
-  "LEARNING_UPDATE",
-  "RISK_CHECK",
-  "ACTION_QUEUE_REFRESH",
-  "COMMAND_CENTER_REFRESH",
-  "NOTIFICATION_DIGEST",
-  "PROJECT_STRATEGIST_REVIEW",
-  "SECOND_BRAIN_CONSOLIDATE",
-  "DAILY_SELF_REVIEW",
-  "CONFIDENCE_CALIBRATION_UPDATE",
-  "TRADE_QUALITY_SCORE_UPDATE",
-  "TRADE_BLACK_BOX_CAPTURE",
-  "CONTINUOUS_IMPROVEMENT_DETECT",
-];
+export const DEFAULT_AUTOMATION_JOBS: AutomationJobType[] =
+  resolveDefaultAutomationJobs();
+
+export function resolveEffectiveModuleToggles(
+  overrides?: Partial<AutomationModuleToggles>,
+): AutomationModuleToggles {
+  const base = { ...DEFAULT_MODULE_TOGGLES, ...overrides };
+  return isTestnetPrimaryAutomation()
+    ? resolveTestnetPrimaryModuleToggles(base)
+    : base;
+}
 
 export const AUTOMATION_JOB_LABELS: Record<AutomationJobType, string> = {
   MARKET_SNAPSHOT: "Market snapshot",

@@ -1,9 +1,13 @@
 import {
   AUTOMATION_SAFETY_NOTICE,
   backoffMinutesForFailures,
-  DEFAULT_AUTOMATION_JOBS,
 } from "./config";
 import { normalizeCronIntervalMinutes } from "./cron-config";
+import {
+  isTestnetPrimaryAutomation,
+  resolveDefaultAutomationJobs,
+  resolveTestnetPrimaryModuleToggles,
+} from "./primary-mode";
 import { handleAutomationJobFailure } from "./failure-actions";
 import { runAutomationJob } from "./run-job";
 import { loadAutomationServerContext } from "./server-context";
@@ -50,8 +54,13 @@ function resolveJobs(
   input: AutomationRunInput,
   toggles: Record<AutomationJobType, boolean>,
 ): AutomationJobType[] {
-  const requested = input.jobs?.length ? input.jobs : DEFAULT_AUTOMATION_JOBS;
-  return requested.filter((j) => toggles[j] !== false);
+  const effectiveToggles = isTestnetPrimaryAutomation()
+    ? resolveTestnetPrimaryModuleToggles(toggles)
+    : toggles;
+  const requested = input.jobs?.length
+    ? input.jobs
+    : resolveDefaultAutomationJobs();
+  return requested.filter((j) => effectiveToggles[j] !== false);
 }
 
 function finalizeRunStatus(
@@ -258,7 +267,15 @@ export async function runAutomationCycle(
     analyze: null as AutomationRun["analyze"],
     autopilotResult: null as AutomationRun["autopilotResult"],
     backboneHealth: null,
+    commandCenterStatus: null as string | null,
   };
+
+  const persistenceWarning = (
+    await import("@/lib/cron/journal-persistence")
+  ).resolveJournalPersistenceWarning();
+  if (persistenceWarning) {
+    errors.push(persistenceWarning);
+  }
 
   try {
     for (const jobType of jobsToRun) {

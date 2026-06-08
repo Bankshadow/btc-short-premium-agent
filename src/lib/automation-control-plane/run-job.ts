@@ -37,6 +37,7 @@ import {
   buildMarketContextHash,
 } from "@/lib/autopilot-loop-guard/fingerprints";
 import { recordLoopGuardAction } from "@/lib/autopilot-loop-guard/record-action";
+import { isTestnetPrimaryAutomation } from "./primary-mode";
 
 export type AutomationJobContext = {
   runId: string;
@@ -46,6 +47,7 @@ export type AutomationJobContext = {
   analyze: AnalyzeApiResponse | null;
   autopilotResult: AutopilotRunResult | null;
   backboneHealth: DeskBackboneHealth | null;
+  commandCenterStatus: string | null;
 };
 
 function jobId(jobType: AutomationJobType, runId: string): string {
@@ -272,6 +274,9 @@ export async function runAutomationJob(
           settings: {
             ...DEFAULT_AUTOPILOT_SETTINGS,
             autopilotEnabled: true,
+            paperAutopilotEnabled: false,
+            shadowModeEnabled: false,
+            mode: isTestnetPrimaryAutomation() ? "ANALYSIS_ONLY" : DEFAULT_AUTOPILOT_SETTINGS.mode,
             liveAutopilotEnabled: false,
             requireHumanApprovalForLive: true,
           },
@@ -439,6 +444,7 @@ export async function runAutomationJob(
           latestAnalysis: ctx.analyze,
           serverContext,
         });
+        ctx.commandCenterStatus = report.status;
         return {
           summary: `Desk ${report.status} · ${report.blockers.length} blocker(s)`,
         };
@@ -479,6 +485,19 @@ export async function runAutomationJob(
         const monitor = await runBinanceTestnetAutoMonitor({
           analysis: ctx.analyze,
         });
+        if (monitor.closedCount > 0 && isBinanceTestnetAutoExecuteEnabled()) {
+          const { autoMarkPendingLearningRecordsServer } = await import(
+            "@/lib/testnet-monitor/learning-records-server"
+          );
+          const learned = await autoMarkPendingLearningRecordsServer();
+          if (learned.marked > 0) {
+            await emitAiStatusEvent({
+              type: "LEARNING_UPDATED",
+              runId: ctx.runId,
+              detail: `Ingested ${learned.marked} closed testnet trade(s) after monitor.`,
+            });
+          }
+        }
         if (monitor.outcome === "CLOSED") {
           await emitAiStatusEvent({
             type: "TRADE_CLOSED",
@@ -501,7 +520,7 @@ export async function runAutomationJob(
           analysis: ctx.analyze,
           entries,
           orders,
-          commandCenterStatus: null,
+          commandCenterStatus: ctx.commandCenterStatus,
           runId: ctx.runId,
         });
         const executed = auto.outcome === "EXECUTED";
