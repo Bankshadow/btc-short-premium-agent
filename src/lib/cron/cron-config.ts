@@ -16,14 +16,13 @@ import type {
 } from "@/lib/types/market";
 import fs from "fs/promises";
 import path from "path";
+import { getActiveJournalDataDir } from "./ensure-journal-dir";
 
 const SETTINGS_FILENAME = "cron-settings.json";
 const OVERRIDES_FILENAME = "derivatives-overrides.json";
 
 export function getCronDataDir(): string {
-  const base = process.env.JOURNAL_DATA_DIR;
-  if (base) return base;
-  return path.join(/* turbopackIgnore: true */ process.cwd(), "data");
+  return getActiveJournalDataDir();
 }
 
 async function readJsonFile(filename: string): Promise<unknown | null> {

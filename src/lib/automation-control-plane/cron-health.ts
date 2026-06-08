@@ -47,6 +47,10 @@ export async function buildCronHealthSnapshot(
   }
   if (!journalProbe.ok) {
     issues.push(journalProbe.error ?? "Journal directory not writable.");
+  } else if (journalProbe.usingFallback) {
+    issues.push(
+      `JOURNAL_DATA_DIR (${process.env.JOURNAL_DATA_DIR}) not writable — using fallback ${journalProbe.path}. Mount Vercel Blob at /mnt/data for durable state.`,
+    );
   } else if (!isJournalPersistenceConfigured() && process.env.VERCEL) {
     issues.push(
       "JOURNAL_DATA_DIR unset on Vercel — mount Blob at /mnt/data for durable state.",
