@@ -1,37 +1,24 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { TestnetMonitorJournalEvent } from "./types";
 
 const MONITOR_JOURNAL_FILE = "testnet-monitor-journal.json";
 const MAX_EVENTS = 500;
 
-function journalPath(): string {
-  return path.join(getCronDataDir(), MONITOR_JOURNAL_FILE);
-}
-
 export async function loadMonitorJournalEvents(): Promise<
   TestnetMonitorJournalEvent[]
 > {
-  try {
-    const raw = await fs.readFile(journalPath(), "utf8");
-    const parsed = JSON.parse(raw) as TestnetMonitorJournalEvent[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = await readCronJsonFile(MONITOR_JOURNAL_FILE, [] as TestnetMonitorJournalEvent[]);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 export async function appendMonitorJournalEvent(
   event: TestnetMonitorJournalEvent,
 ): Promise<TestnetMonitorJournalEvent[]> {
-  const filePath = journalPath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
   const next = [event, ...(await loadMonitorJournalEvents())].slice(
     0,
     MAX_EVENTS,
   );
-  await fs.writeFile(filePath, JSON.stringify(next, null, 2), "utf8");
+  await writeCronJsonFile(MONITOR_JOURNAL_FILE, next);
   return next;
 }
 

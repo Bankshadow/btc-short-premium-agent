@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 
 const STATE_FILE = "symbol-rotation-state.json";
 const ROTATE_OUT_AFTER_SKIPS = 3;
@@ -10,27 +8,20 @@ interface SymbolRotationState {
   lastUpdated: string;
 }
 
-function statePath(): string {
-  return path.join(getCronDataDir(), STATE_FILE);
+function defaultState(): SymbolRotationState {
+  return { skipStreaks: {}, lastUpdated: new Date().toISOString() };
 }
 
 async function loadState(): Promise<SymbolRotationState> {
-  try {
-    const raw = await fs.readFile(statePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<SymbolRotationState>;
-    return {
-      skipStreaks: parsed.skipStreaks ?? {},
-      lastUpdated: parsed.lastUpdated ?? new Date().toISOString(),
-    };
-  } catch {
-    return { skipStreaks: {}, lastUpdated: new Date().toISOString() };
-  }
+  const parsed = await readCronJsonFile(STATE_FILE, defaultState());
+  return {
+    skipStreaks: parsed.skipStreaks ?? {},
+    lastUpdated: parsed.lastUpdated ?? new Date().toISOString(),
+  };
 }
 
 async function saveState(state: SymbolRotationState): Promise<void> {
-  const filePath = statePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+  await writeCronJsonFile(STATE_FILE, state);
 }
 
 export async function shouldRotateOutSymbol(symbol: string): Promise<boolean> {

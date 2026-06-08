@@ -1,4 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { OperatorAction } from "@/lib/operator-action-queue/types";
 import {
   AUTOMATION_ACTIONS_FILE,
@@ -18,28 +18,6 @@ import type {
   AutomationSettings,
   AutomationState,
 } from "./types";
-import fs from "fs/promises";
-import path from "path";
-
-function dataPath(filename: string): string {
-  return path.join(getCronDataDir(), filename);
-}
-
-async function readJson<T>(filename: string, fallback: T): Promise<T> {
-  try {
-    const raw = await fs.readFile(dataPath(filename), "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJson<T>(filename: string, value: T): Promise<void> {
-  const { ensureJournalDataDir } = await import("@/lib/cron/ensure-journal-dir");
-  await ensureJournalDataDir();
-  const filePath = dataPath(filename);
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
 
 export function defaultAutomationState(workspaceId = "server-default"): AutomationState {
   return {
@@ -58,7 +36,7 @@ export function defaultAutomationState(workspaceId = "server-default"): Automati
 export async function loadAutomationState(
   workspaceId = "server-default",
 ): Promise<AutomationState> {
-  const state = await readJson(AUTOMATION_STATE_FILE, defaultAutomationState(workspaceId));
+  const state = await readCronJsonFile(AUTOMATION_STATE_FILE, defaultAutomationState(workspaceId));
   if (!state.settings) state.settings = { ...DEFAULT_AUTOMATION_SETTINGS };
   if (!state.settings.moduleToggles) {
     state.settings.moduleToggles = { ...DEFAULT_AUTOMATION_SETTINGS.moduleToggles };
@@ -73,11 +51,11 @@ export async function loadAutomationState(
 }
 
 export async function saveAutomationState(state: AutomationState): Promise<void> {
-  await writeJson(AUTOMATION_STATE_FILE, state);
+  await writeCronJsonFile(AUTOMATION_STATE_FILE, state);
 }
 
 export async function loadAutomationHistory(): Promise<AutomationRun[]> {
-  return readJson(AUTOMATION_HISTORY_FILE, []);
+  return readCronJsonFile(AUTOMATION_HISTORY_FILE, []);
 }
 
 export async function appendAutomationHistory(run: AutomationRun): Promise<void> {
@@ -86,11 +64,11 @@ export async function appendAutomationHistory(run: AutomationRun): Promise<void>
     0,
     AUTOMATION_MAX_HISTORY,
   );
-  await writeJson(AUTOMATION_HISTORY_FILE, next);
+  await writeCronJsonFile(AUTOMATION_HISTORY_FILE, next);
 }
 
 export async function loadFailedAutomationJobs(): Promise<AutomationFailedJob[]> {
-  return readJson(AUTOMATION_FAILED_FILE, []);
+  return readCronJsonFile(AUTOMATION_FAILED_FILE, []);
 }
 
 export async function appendFailedAutomationJob(
@@ -98,14 +76,14 @@ export async function appendFailedAutomationJob(
 ): Promise<void> {
   const failed = await loadFailedAutomationJobs();
   const next = [job, ...failed].slice(0, AUTOMATION_MAX_FAILED);
-  await writeJson(AUTOMATION_FAILED_FILE, next);
+  await writeCronJsonFile(AUTOMATION_FAILED_FILE, next);
 }
 
 export async function removeFailedAutomationJob(
   failedJobId: string,
 ): Promise<void> {
   const failed = await loadFailedAutomationJobs();
-  await writeJson(
+  await writeCronJsonFile(
     AUTOMATION_FAILED_FILE,
     failed.filter((f) => f.failedJobId !== failedJobId),
   );
@@ -133,23 +111,23 @@ export async function patchAutomationSettings(
 }
 
 export async function loadRecentIdempotencyKeys(): Promise<string[]> {
-  return readJson(AUTOMATION_IDEMPOTENCY_FILE, []);
+  return readCronJsonFile(AUTOMATION_IDEMPOTENCY_FILE, []);
 }
 
 export async function recordIdempotencyKey(key: string): Promise<void> {
   const keys = await loadRecentIdempotencyKeys();
   const next = [key, ...keys.filter((k) => k !== key)].slice(0, 200);
-  await writeJson(AUTOMATION_IDEMPOTENCY_FILE, next);
+  await writeCronJsonFile(AUTOMATION_IDEMPOTENCY_FILE, next);
 }
 
 export async function loadServerPendingOperatorActions(): Promise<OperatorAction[]> {
-  return readJson(AUTOMATION_ACTIONS_FILE, []);
+  return readCronJsonFile(AUTOMATION_ACTIONS_FILE, []);
 }
 
 export async function saveServerPendingOperatorActions(
   actions: OperatorAction[],
 ): Promise<void> {
-  await writeJson(AUTOMATION_ACTIONS_FILE, actions.slice(0, AUTOMATION_MAX_ACTIONS));
+  await writeCronJsonFile(AUTOMATION_ACTIONS_FILE, actions.slice(0, AUTOMATION_MAX_ACTIONS));
 }
 
 export async function mergeServerPendingOperatorActions(

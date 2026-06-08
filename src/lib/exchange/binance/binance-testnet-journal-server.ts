@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type {
   BinanceExecuteResult,
   BinanceOrderPreview,
@@ -10,32 +8,21 @@ import type {
 const SERVER_JOURNAL_FILE = "binance-testnet-journal.json";
 const MAX_ENTRIES = 200;
 
-function serverJournalPath(): string {
-  return path.join(getCronDataDir(), SERVER_JOURNAL_FILE);
-}
-
 export async function loadServerBinanceTestnetJournal(): Promise<
   BinanceTestnetJournalEntry[]
 > {
-  try {
-    const raw = await fs.readFile(serverJournalPath(), "utf8");
-    const parsed = JSON.parse(raw) as BinanceTestnetJournalEntry[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = await readCronJsonFile(SERVER_JOURNAL_FILE, [] as BinanceTestnetJournalEntry[]);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 export async function appendServerBinanceTestnetJournal(
   entry: BinanceTestnetJournalEntry,
 ): Promise<BinanceTestnetJournalEntry[]> {
-  const filePath = serverJournalPath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
   const next = [entry, ...(await loadServerBinanceTestnetJournal())].slice(
     0,
     MAX_ENTRIES,
   );
-  await fs.writeFile(filePath, JSON.stringify(next, null, 2), "utf8");
+  await writeCronJsonFile(SERVER_JOURNAL_FILE, next);
   return next;
 }
 

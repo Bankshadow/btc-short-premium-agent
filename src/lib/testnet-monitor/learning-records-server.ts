@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import type {
@@ -14,8 +12,14 @@ import type {
 
 const LEARNING_RECORDS_FILE = "testnet-learning-records.json";
 
-function recordsPath(): string {
-  return path.join(getCronDataDir(), LEARNING_RECORDS_FILE);
+async function writeRecords(records: TestnetLearningRecord[]): Promise<void> {
+  await writeCronJsonFile(LEARNING_RECORDS_FILE, records);
+}
+
+export async function loadLearningRecordsServer(): Promise<TestnetLearningRecord[]> {
+  const parsed = await readCronJsonFile(LEARNING_RECORDS_FILE, [] as TestnetLearningRecord[]);
+  if (!Array.isArray(parsed)) return [];
+  return parsed;
 }
 
 function newLearningRecordId(): string {
@@ -54,23 +58,6 @@ function deriveExcursions(grossPnl: number): {
     mfe: Number(Math.max(grossPnl, 0).toFixed(4)),
     mae: Number(Math.min(grossPnl, 0).toFixed(4)),
   };
-}
-
-async function writeRecords(records: TestnetLearningRecord[]): Promise<void> {
-  const filePath = recordsPath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(records, null, 2), "utf8");
-}
-
-export async function loadLearningRecordsServer(): Promise<TestnetLearningRecord[]> {
-  try {
-    const raw = await fs.readFile(recordsPath(), "utf8");
-    const parsed = JSON.parse(raw) as TestnetLearningRecord[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
 }
 
 function buildLearningRecord(input: {

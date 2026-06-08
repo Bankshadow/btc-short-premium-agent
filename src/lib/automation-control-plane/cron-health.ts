@@ -1,6 +1,7 @@
 import { isCronSecretConfigured, isTestAutomationAllowed } from "@/lib/cron/cron-auth";
 import { probeJournalWritable } from "@/lib/cron/ensure-journal-dir";
 import { isJournalPersistenceConfigured } from "@/lib/cron/journal-persistence";
+import { isBlobJournalEnabled } from "@/lib/cron/journal-storage";
 import {
   isTestnetPrimaryAutomation,
   resolveAutomationPrimaryMode,
@@ -47,13 +48,15 @@ export async function buildCronHealthSnapshot(
   }
   if (!journalProbe.ok) {
     issues.push(journalProbe.error ?? "Journal directory not writable.");
+  } else if (isBlobJournalEnabled()) {
+    // Durable blob storage — no warning.
   } else if (journalProbe.usingFallback) {
     issues.push(
-      `JOURNAL_DATA_DIR (${process.env.JOURNAL_DATA_DIR}) not writable — using fallback ${journalProbe.path}. Mount Vercel Blob at /mnt/data for durable state.`,
+      `JOURNAL_DATA_DIR (${process.env.JOURNAL_DATA_DIR}) not writable — using fallback ${journalProbe.path}. Connect Vercel Blob for durable journal storage.`,
     );
   } else if (!isJournalPersistenceConfigured() && process.env.VERCEL) {
     issues.push(
-      "JOURNAL_DATA_DIR unset on Vercel — mount Blob at /mnt/data for durable state.",
+      "Journal persistence unset on Vercel — connect a Blob store (Storage tab) for durable automation state.",
     );
   }
 

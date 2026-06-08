@@ -1,6 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import fs from "fs/promises";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import {
   PROJECT_STRATEGIST_DAILY_REVIEW_HOURS,
   PROJECT_STRATEGIST_MAX_MVPS,
@@ -20,25 +18,6 @@ import type {
   SkillCardStatus,
   StrategistExternalSource,
 } from "./types";
-
-function dataPath(filename: string): string {
-  return path.join(getCronDataDir(), filename);
-}
-
-async function readJson<T>(filename: string, fallback: T): Promise<T> {
-  try {
-    const raw = await fs.readFile(dataPath(filename), "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJson<T>(filename: string, value: T): Promise<void> {
-  const filePath = dataPath(filename);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
-}
 
 export function defaultProjectStrategistState(
   workspaceId = "server-default",
@@ -64,7 +43,7 @@ export function defaultProjectStrategistState(
 export async function loadProjectStrategistState(
   workspaceId = "server-default",
 ): Promise<ProjectStrategistState> {
-  const state = await readJson(
+  const state = await readCronJsonFile(
     PROJECT_STRATEGIST_STATE_FILE,
     defaultProjectStrategistState(workspaceId),
   );
@@ -83,7 +62,7 @@ export async function loadProjectStrategistState(
 export async function saveProjectStrategistState(
   state: ProjectStrategistState,
 ): Promise<void> {
-  await writeJson(PROJECT_STRATEGIST_STATE_FILE, state);
+  await writeCronJsonFile(PROJECT_STRATEGIST_STATE_FILE, state);
 }
 
 function upsertByKey<T, K>(

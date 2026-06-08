@@ -14,9 +14,17 @@ import type {
   DecisionEngineInput,
   MacroView,
 } from "@/lib/types/market";
-import fs from "fs/promises";
-import path from "path";
 import { getActiveJournalDataDir } from "./ensure-journal-dir";
+import {
+  readJournalJson,
+} from "./journal-storage";
+
+export {
+  readJournalJson as readCronJsonFile,
+  writeJournalJson as writeCronJsonFile,
+  readJournalText as readCronTextFile,
+  writeJournalText as writeCronTextFile,
+} from "./journal-storage";
 
 const SETTINGS_FILENAME = "cron-settings.json";
 const OVERRIDES_FILENAME = "derivatives-overrides.json";
@@ -26,13 +34,7 @@ export function getCronDataDir(): string {
 }
 
 async function readJsonFile(filename: string): Promise<unknown | null> {
-  try {
-    const filePath = path.join(getCronDataDir(), filename);
-    const raw = await fs.readFile(filePath, "utf8");
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
+  return readJournalJson(filename, null);
 }
 
 function loadOverridesFromEnv() {
