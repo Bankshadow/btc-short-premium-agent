@@ -1,7 +1,8 @@
 # Calls /api/cron/tick every 5 minutes (GitHub minimum). The tick endpoint
 # respects the interval configured in /settings/cron (can be 1–120 min).
 #
-# Required GitHub repo secret: CRON_SECRET
+# Required: Repository secret CRON_SECRET (Settings -> Secrets -> Actions -> Repository secrets).
+# Environment secrets are NOT used unless this job declares `environment:`.
 
 name: Production automation cron
 
@@ -9,6 +10,10 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/automation-cron.yml"
 
 concurrency:
   group: production-automation-cron
@@ -25,7 +30,8 @@ jobs:
           APP_URL: https://btc-short-premium-agent.vercel.app
         run: |
           if [ -z "$CRON_SECRET" ]; then
-            echo "CRON_SECRET GitHub secret is not set — skipping."
+            echo "CRON_SECRET repository secret is missing."
+            echo "Add it under Settings -> Secrets and variables -> Actions -> Repository secrets (not Environment secrets)."
             exit 1
           fi
           response="$(curl -sS -w '\n%{http_code}' \
@@ -36,5 +42,8 @@ jobs:
           echo "$body"
           if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
             echo "HTTP $code"
+            if [ "$code" = "401" ]; then
+              echo "Hint: CRON_SECRET must match the Vercel CRON_SECRET exactly."
+            fi
             exit 1
           fi
