@@ -22,6 +22,9 @@ concurrency:
 jobs:
   cron-tick:
     runs-on: ubuntu-latest
+    # Picks up secrets from the "CRON_SECRET" GitHub Environment (if used).
+    # Repository secret CRON_SECRET also works when set under Actions -> Repository secrets.
+    environment: CRON_SECRET
     timeout-minutes: 5
     steps:
       - name: Trigger /api/cron/tick
@@ -34,6 +37,7 @@ jobs:
             echo "Add it under Settings -> Secrets and variables -> Actions -> Repository secrets (not Environment secrets)."
             exit 1
           fi
+          echo "CRON_SECRET length: ${#CRON_SECRET}"
           response="$(curl -sS -w '\n%{http_code}' \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             "${APP_URL}/api/cron/tick")"
