@@ -53,7 +53,8 @@
     "test:live-evidence": "npx --yes tsx --test src/lib/live-evidence/live-evidence.test.ts",
     "test:execution-quality": "npx --yes tsx --test src/lib/execution-quality/execution-quality.test.ts",
     "test:goal-engine": "npx --yes tsx --test src/lib/goal-engine/goal-engine.test.ts",
-    "test:mission-flow": "npx --yes tsx --test src/lib/mission-flow/mission-flow.test.ts"
+    "test:mission-flow": "npx --yes tsx --test src/lib/mission-flow/mission-flow.test.ts",
+    "test:prediction-market-arbitrage": "npx --yes tsx --test src/lib/prediction-market-arbitrage/prediction-market-arbitrage.test.ts"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",

@@ -25,6 +25,13 @@ export const TRADING_DESK_AGENTS: AgentRosterEntry[] = [
   { id: "committee", name: "Committee Agent", layer: "moderator", role: "Weighted verdict & consensus" },
 ];
 
+export const PREDICTION_ARB_AGENTS: AgentRosterEntry[] = [
+  { id: "parb-scanner", name: "Prediction Arb Scanner Agent", layer: "strategy", role: "Mispricing detection (MVP 79)" },
+  { id: "parb-risk", name: "Prediction Arb Risk Agent", layer: "risk", role: "Resolution & settlement risk" },
+  { id: "parb-execution", name: "Prediction Arb Execution Agent", layer: "strategy", role: "Order book fill quality" },
+  { id: "parb-portfolio", name: "Prediction Arb Portfolio Agent", layer: "strategy", role: "Paper capital allocation" },
+];
+
 export const PARALLEL_REVIEW_AGENTS: AgentRosterEntry[] = [
   { id: "parallel-strategy", name: "Strategy Agent", layer: "parallel", role: "Strategy health review" },
   { id: "parallel-risk", name: "Risk Agent", layer: "parallel", role: "Risk & loop guard review" },

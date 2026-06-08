@@ -101,6 +101,7 @@ export const OPS_MODULE_LINKS = [
   { href: "/desk-manager", label: "Desk Mgr", accent: "cyan" as OpsAccent },
   { href: "/portfolio", label: "Portfolio", accent: "teal" as OpsAccent },
   { href: "/assets", label: "Assets", accent: "emerald" as OpsAccent },
+  { href: "/prediction-markets", label: "Pred Arb", accent: "violet" as OpsAccent },
   { href: "/council", label: "Council", accent: "amber" as OpsAccent },
   { href: "/mortem", label: "Mortem", accent: "emerald" as OpsAccent },
   { href: "/simulation", label: "Simulation", accent: "violet" as OpsAccent },
