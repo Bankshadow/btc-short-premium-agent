@@ -78,7 +78,7 @@ export function loadBinanceConfig(): BinanceConfig {
     ),
     maxOpenPositions: envNumber(
       "BINANCE_TESTNET_MAX_OPEN_POSITIONS",
-      multiTf ? 6 : 3,
+      multiTf ? 30 : 3,
     ),
     requireDoubleConfirm: envBool("BINANCE_REQUIRE_DOUBLE_CONFIRM", true),
     leverage: 1,
