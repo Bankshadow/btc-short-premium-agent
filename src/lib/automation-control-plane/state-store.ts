@@ -35,8 +35,9 @@ async function readJson<T>(filename: string, fallback: T): Promise<T> {
 }
 
 async function writeJson<T>(filename: string, value: T): Promise<void> {
+  const { ensureJournalDataDir } = await import("@/lib/cron/ensure-journal-dir");
+  await ensureJournalDataDir();
   const filePath = dataPath(filename);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(value, null, 2), "utf8");
 }
 

@@ -1,4 +1,5 @@
 import { AGENT_ROSTER_SUMMARY } from "@/lib/agents/agent-roster";
+import { buildCronHealthSnapshot } from "@/lib/automation-control-plane/cron-health";
 import {
   loadCronConfigSnapshot,
   runCronTick,
@@ -17,9 +18,11 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const config = await loadCronConfigSnapshot();
+    const health = await buildCronHealthSnapshot();
     return NextResponse.json({
       ok: true,
       config,
+      health,
       agents: AGENT_ROSTER_SUMMARY,
     });
   } catch (error) {

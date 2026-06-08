@@ -192,10 +192,45 @@ export default function CommandCenterDashboard() {
       <DataHealthPanel health={backboneHealth} />
 
       {report && (
-        <div
-          className={`rounded-xl border px-4 py-3 text-sm font-semibold ${statusClass(report.status)}`}
-        >
-          {report.status} — {report.statusLabel}
+        <div className="grid gap-3 md:grid-cols-2">
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm font-semibold ${statusClass(
+              report.operationalStatus ?? report.status,
+            )}`}
+          >
+            <p className="text-xs font-normal uppercase tracking-wide opacity-80">
+              Testnet operations
+            </p>
+            {report.operationalStatus ?? report.status} —{" "}
+            {report.operationalStatusLabel ?? report.statusLabel}
+            {report.testnetPerp && (
+              <p className="mt-2 text-xs font-normal opacity-90">
+                {report.testnetPerp.openPositionCount}/{report.testnetPerp.maxOpenPositions}{" "}
+                positions ·{" "}
+                {report.testnetPerp.connected ? "Binance connected" : "Binance offline"}
+                {report.testnetPerp.lastAutomationRunAt
+                  ? ` · last cycle ${new Date(report.testnetPerp.lastAutomationRunAt).toLocaleString()}`
+                  : " · no automation cycle logged"}
+              </p>
+            )}
+          </div>
+          <div
+            className={`rounded-xl border px-4 py-3 text-sm font-semibold ${statusClass(
+              report.liveScalingStatus ?? report.status,
+            )}`}
+          >
+            <p className="text-xs font-normal uppercase tracking-wide opacity-80">
+              Live / paper scaling
+            </p>
+            {report.liveScalingStatus ?? report.status} —{" "}
+            {report.liveScalingStatusLabel ?? report.statusLabel}
+            {(report.liveScalingBlockers?.length ?? report.blockers.length) > 0 && (
+              <p className="mt-2 text-xs font-normal opacity-90">
+                {(report.liveScalingBlockers ?? []).length} live-readiness blocker(s) — does not
+                stop testnet autoexec.
+              </p>
+            )}
+          </div>
         </div>
       )}
 

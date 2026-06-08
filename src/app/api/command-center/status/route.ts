@@ -1,4 +1,6 @@
 import { buildCommandCenterReport } from "@/lib/command-center/evaluate-status";
+import { buildTestnetPerpDeskPanel } from "@/lib/command-center/build-testnet-perp-panel";
+import { applyTestnetPrimaryCommandCenterView } from "@/lib/command-center/apply-testnet-primary-view";
 import { buildCommandCenterServerContext } from "@/lib/command-center/server-context";
 import { buildObservabilitySnapshot } from "@/lib/observability";
 import { runAnomalyDetectionSnapshot } from "@/lib/anomaly-detection";
@@ -24,13 +26,15 @@ export async function GET() {
       persist: true,
       useCache: true,
     });
-    const report = buildCommandCenterReport({
+    const baseReport = buildCommandCenterReport({
       entries: [],
       orders: [],
       riskProfile: "balanced",
       serverContext,
       observabilityReport,
     });
+    const testnetPerp = await buildTestnetPerpDeskPanel();
+    const report = applyTestnetPrimaryCommandCenterView(baseReport, testnetPerp);
 
     return NextResponse.json({
       ok: true,
@@ -65,7 +69,7 @@ export async function POST(request: Request) {
       persist: true,
       useCache: true,
     });
-    const report = buildCommandCenterReport({
+    const baseReport = buildCommandCenterReport({
       entries: body.entries ?? [],
       orders: body.orders ?? [],
       perpPositions: body.perpPositions,
@@ -86,6 +90,8 @@ export async function POST(request: Request) {
       serverContext,
       observabilityReport,
     });
+    const testnetPerp = await buildTestnetPerpDeskPanel();
+    const report = applyTestnetPrimaryCommandCenterView(baseReport, testnetPerp);
 
     return NextResponse.json({
       ok: true,

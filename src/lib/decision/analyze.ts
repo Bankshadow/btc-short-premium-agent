@@ -146,21 +146,26 @@ async function buildEngineInput(
   }
 
   let candidates = overrides.optionCandidates;
+  const futuresOnly = isBinanceFuturesOnlyMode();
   if (!candidates) {
-    try {
-      candidates = await fetchOptionCandidates();
-      if (candidates.length === 0) {
+    if (futuresOnly) {
+      candidates = [];
+    } else {
+      try {
+        candidates = await fetchOptionCandidates();
+        if (candidates.length === 0) {
+          sourceErrors.push({
+            source: "Bybit Options",
+            message: "No option candidates returned from chain.",
+          });
+        }
+      } catch (error) {
         sourceErrors.push({
           source: "Bybit Options",
-          message: "No option candidates returned from chain.",
+          message: errorMessage(error),
         });
+        candidates = [];
       }
-    } catch (error) {
-      sourceErrors.push({
-        source: "Bybit Options",
-        message: errorMessage(error),
-      });
-      candidates = [];
     }
   }
 
@@ -229,6 +234,7 @@ function collectDerivativesSourceErrors(
   liquidation: LiquidationData,
   derivativesOverrides?: DerivativesOverrides,
 ): DataSourceError[] {
+  const futuresOnly = isBinanceFuturesOnlyMode();
   const sourceErrors: DataSourceError[] = [];
   const overrides = derivativesOverrides ?? {};
   const hasManualDerivatives = hasAnyOverride(overrides);
@@ -238,6 +244,10 @@ function collectDerivativesSourceErrors(
       source: "Manual Overrides",
       message: MANUAL_DERIVATIVES_MESSAGE,
     });
+  }
+
+  if (futuresOnly) {
+    return sourceErrors;
   }
 
   if (
@@ -303,7 +313,7 @@ export function runDecisionEngineFromInput(
     resolvedOverrides,
   );
 
-  if (engineInput.optionCandidates.length === 0) {
+  if (!isBinanceFuturesOnlyMode() && engineInput.optionCandidates.length === 0) {
     sourceErrors.push({
       source: "Bybit Options",
       message: "No option candidates returned from chain.",
@@ -312,7 +322,7 @@ export function runDecisionEngineFromInput(
 
   if (engineInput.market.spotPrice <= 0) {
     sourceErrors.push({
-      source: "Bybit Ticker",
+      source: marketDataTickerSource(),
       message: "BTC spot price unavailable or zero.",
     });
   }

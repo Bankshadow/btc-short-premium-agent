@@ -63,8 +63,18 @@ function layerTone(layer: AgentRosterEntry["layer"]): string {
   }
 }
 
+interface CronHealth {
+  ready: boolean;
+  cronSecretConfigured: boolean;
+  journalWritable: boolean;
+  journalPath: string;
+  lastRunAt: string | null;
+  issues: string[];
+}
+
 export default function CronConfigView() {
   const [config, setConfig] = useState<CronConfig | null>(null);
+  const [health, setHealth] = useState<CronHealth | null>(null);
   const [agents, setAgents] = useState<AgentsSummary | null>(null);
   const [selectedMinutes, setSelectedMinutes] = useState(15);
   const [busy, setBusy] = useState(false);
@@ -78,6 +88,7 @@ export default function CronConfigView() {
       const json = await res.json();
       if (!json.ok) throw new Error(json.error ?? "Load failed");
       setConfig(json.config);
+      setHealth(json.health ?? null);
       setAgents(json.agents);
       setSelectedMinutes(json.config.intervalMinutes);
     } catch (e) {
@@ -272,6 +283,37 @@ export default function CronConfigView() {
               <p className="mt-3 text-xs text-zinc-500">
                 Spine: {config.spineJobs.join(" → ")}
               </p>
+            )}
+            {health && (
+              <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs">
+                <p
+                  className={
+                    health.ready ? "font-medium text-emerald-300" : "font-medium text-amber-300"
+                  }
+                >
+                  Cron health: {health.ready ? "Ready" : "Needs attention"}
+                </p>
+                <ul className="mt-2 list-disc space-y-1 pl-4 text-zinc-500">
+                  <li>CRON_SECRET: {health.cronSecretConfigured ? "set" : "missing"}</li>
+                  <li>
+                    Journal ({health.journalPath}):{" "}
+                    {health.journalWritable ? "writable" : "not writable"}
+                  </li>
+                  <li>
+                    Last cycle:{" "}
+                    {health.lastRunAt
+                      ? new Date(health.lastRunAt).toLocaleString()
+                      : "never"}
+                  </li>
+                </ul>
+                {health.issues.length > 0 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-amber-200/90">
+                    {health.issues.map((issue) => (
+                      <li key={issue}>{issue}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
             {config?.scheduleNotes && (
               <ul className="mt-3 list-disc space-y-1 pl-5 text-xs">

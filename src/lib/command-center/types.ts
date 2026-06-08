@@ -215,6 +215,15 @@ export interface CommandCenterReport {
   generatedAt: string;
   status: CommandCenterStatus;
   statusLabel: string;
+  /** Testnet perp loop health when autoexec enabled. */
+  testnetPerp?: import("./build-testnet-perp-panel").TestnetPerpDeskPanel;
+  /** Primary operational posture (testnet loop when testnet_perp mode). */
+  operationalStatus?: CommandCenterStatus;
+  operationalStatusLabel?: string;
+  /** Live / paper scaling readiness — separate from testnet execution. */
+  liveScalingStatus?: CommandCenterStatus;
+  liveScalingStatusLabel?: string;
+  liveScalingBlockers?: CommandCenterBlocker[];
   blockers: CommandCenterBlocker[];
   cautions: string[];
   recommendedActions: string[];

@@ -34,6 +34,9 @@ export async function runCronTick(input: {
   workspaceId?: string;
   force?: boolean;
 } = {}): Promise<CronTickResult> {
+  const { ensureJournalDataDir } = await import("@/lib/cron/ensure-journal-dir");
+  await ensureJournalDataDir().catch(() => undefined);
+
   const workspaceId = input.workspaceId ?? "server-default";
   const state = await loadAutomationState(workspaceId);
   const intervalMinutes = normalizeCronIntervalMinutes(state.settings.intervalMinutes);

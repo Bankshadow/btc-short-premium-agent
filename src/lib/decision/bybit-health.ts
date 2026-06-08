@@ -5,7 +5,7 @@ export const BYBIT_API_FAILED_MESSAGE = "Bybit API failed. Please retry.";
 export const MANUAL_DERIVATIVES_MESSAGE =
   "Liquidation / OI data is manually provided.";
 
-/** True when live BTC ticker could not be loaded from Bybit. */
+/** True when live BTC ticker could not be loaded from the configured market data source. */
 export function isBybitCriticalFailure(
   market: MarketSnapshot,
   sourceErrors: DataSourceError[],
@@ -15,7 +15,9 @@ export function isBybitCriticalFailure(
   return sourceErrors.some(
     (error) =>
       error.source === "Bybit Ticker" ||
-      error.source.startsWith("Bybit Klines"),
+      error.source === "Binance Ticker" ||
+      error.source.startsWith("Bybit Klines") ||
+      error.source.startsWith("Binance Klines"),
   );
 }
 
