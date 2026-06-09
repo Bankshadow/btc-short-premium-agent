@@ -39,6 +39,7 @@ import {
   buildMarketContextHash,
 } from "@/lib/autopilot-loop-guard/fingerprints";
 import { recordLoopGuardAction } from "@/lib/autopilot-loop-guard/record-action";
+import { shouldBlockDeskAnalyzeOnBackbone } from "./analyze-backbone-gate";
 import { isTestnetPrimaryAutomation } from "./primary-mode";
 
 export type AutomationJobContext = {
@@ -173,13 +174,15 @@ export async function runAutomationJob(
         const eval_ = await evaluateServerBackboneHealth();
         ctx.backboneHealth = eval_.health;
         if (
-          eval_.health &&
-          !eval_.healthy &&
-          !ctx.input.force
+          shouldBlockDeskAnalyzeOnBackbone({
+            healthy: eval_.healthy,
+            health: eval_.health,
+            force: ctx.input.force,
+          })
         ) {
           throw new Error(
-            eval_.health.writeBlockers[0] ??
-              eval_.health.staleWarning ??
+            eval_.health!.writeBlockers[0] ??
+              eval_.health!.staleWarning ??
               "Backbone unhealthy — analyze blocked.",
           );
         }

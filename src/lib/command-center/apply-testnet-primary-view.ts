@@ -1,9 +1,12 @@
 import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
+import { buildCommandCenterReport } from "./evaluate-status";
+import { buildTestnetPerpDeskPanel } from "./build-testnet-perp-panel";
 import type {
   CommandCenterBlocker,
   CommandCenterBlockerId,
   CommandCenterReport,
   CommandCenterStatus,
+  CommandCenterInput,
 } from "./types";
 import type { TestnetPerpDeskPanel } from "./build-testnet-perp-panel";
 
@@ -124,4 +127,12 @@ export function applyTestnetPrimaryCommandCenterView(
     liveScalingStatusLabel: liveScaling.label,
     liveScalingBlockers,
   };
+}
+
+export async function buildTestnetPrimaryCommandCenterReport(
+  input: CommandCenterInput,
+): Promise<CommandCenterReport> {
+  const baseReport = buildCommandCenterReport(input);
+  const testnetPerp = await buildTestnetPerpDeskPanel();
+  return applyTestnetPrimaryCommandCenterView(baseReport, testnetPerp);
 }

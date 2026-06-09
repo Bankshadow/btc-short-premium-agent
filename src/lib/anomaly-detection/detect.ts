@@ -1,3 +1,4 @@
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
 import { loadFailedAutomationJobs } from "@/lib/automation-control-plane";
 import { loadServerBackboneRecord } from "@/lib/background-worker/server-backbone";
 import {
@@ -13,6 +14,7 @@ import { loadMonitorJournalEvents } from "@/lib/testnet-monitor/monitor-journal-
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import type { TestnetMonitorSnapshot } from "@/lib/testnet-monitor/types";
 import { isIncidentOpen, loadAnomalyIncidents, upsertAnomalyFindings } from "./store";
+import { filterBlockingCriticalIncidents } from "./testnet-gate";
 import type { AnomalyDetectionSummary, AnomalyFinding } from "./types";
 
 let cachedSummary: AnomalyDetectionSummary | null = null;
@@ -289,9 +291,16 @@ function detectAlertDeliveryFailure(
   anyChannelConfigured: boolean,
 ) {
   if (failureCount <= 0) return;
+  const testnetPrimary = isTestnetPrimaryAutomation();
+  const severity =
+    testnetPrimary && !anyChannelConfigured
+      ? "WARNING"
+      : failureCount >= 3 || !anyChannelConfigured
+        ? "CRITICAL"
+        : "WARNING";
   add(findings, {
     anomalyType: "alert_delivery_failed",
-    severity: failureCount >= 3 || !anyChannelConfigured ? "CRITICAL" : "WARNING",
+    severity,
     title: "Alert delivery failed",
     evidence: { failureCount, anyChannelConfigured },
     impactedModules: ["Notifications", "Worker", "Command Center"],
@@ -588,7 +597,8 @@ export async function runAnomalyDetectionSnapshot(options?: {
 
   const open = incidents.filter((item) => isIncidentOpen(item.status));
   const warningOpenCount = open.filter((item) => item.severity === "WARNING").length;
-  const criticalOpenCount = open.filter((item) => item.severity === "CRITICAL").length;
+  const criticalOpen = open.filter((item) => item.severity === "CRITICAL");
+  const blockingCriticalOpen = filterBlockingCriticalIncidents(criticalOpen);
 
   const summary: AnomalyDetectionSummary = {
     generatedAt: new Date().toISOString(),
@@ -596,8 +606,8 @@ export async function runAnomalyDetectionSnapshot(options?: {
     incidents,
     openCount: open.length,
     warningOpenCount,
-    criticalOpenCount,
-    blocksRiskyActions: criticalOpenCount > 0,
+    criticalOpenCount: criticalOpen.length,
+    blocksRiskyActions: blockingCriticalOpen.length > 0,
   };
 
   cachedSummary = summary;

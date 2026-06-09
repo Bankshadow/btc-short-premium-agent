@@ -8,6 +8,7 @@ import {
   resolveDefaultAutomationJobs,
   resolveTestnetPrimaryModuleToggles,
 } from "./primary-mode";
+import { isLiveScalingAnalyzeFailureError } from "./analyze-backbone-gate";
 import { handleAutomationJobFailure } from "./failure-actions";
 import { runAutomationJob } from "./run-job";
 import { loadAutomationServerContext } from "./server-context";
@@ -119,6 +120,14 @@ function isJobInBackoff(
   if (count <= 0) return false;
   const latest = failedJobs.find((f) => f.jobType === jobType);
   if (!latest?.backoffUntil) return false;
+  if (
+    jobType === "DESK_ANALYZE" &&
+    isTestnetPrimaryAutomation() &&
+    latest.error &&
+    isLiveScalingAnalyzeFailureError(latest.error)
+  ) {
+    return false;
+  }
   return new Date(latest.backoffUntil).getTime() > Date.now();
 }
 

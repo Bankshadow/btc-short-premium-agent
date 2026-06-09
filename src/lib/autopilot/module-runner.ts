@@ -1,4 +1,6 @@
 import { buildCommandCenterReport } from "@/lib/command-center/evaluate-status";
+import { buildTestnetPrimaryCommandCenterReport } from "@/lib/command-center/apply-testnet-primary-view";
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
 import { buildValidationReport } from "@/lib/validation/build-validation-report";
 import { buildStrategyRegistry } from "@/lib/strategy-registry/build-strategy-registry";
@@ -236,19 +238,29 @@ export async function runAutopilotModules(input: {
     if (id === "command_center") {
       results.push(
         await runTimed(id, async () => {
-          const report = buildCommandCenterReport({
-            entries,
-            orders,
-            perpPositions: input.runInput.perpPositions,
-            riskProfile,
-            latestAnalysis,
-            serverContext,
-          });
+          const report = isTestnetPrimaryAutomation()
+            ? await buildTestnetPrimaryCommandCenterReport({
+                entries,
+                orders,
+                perpPositions: input.runInput.perpPositions,
+                riskProfile,
+                latestAnalysis,
+                serverContext,
+              })
+            : buildCommandCenterReport({
+                entries,
+                orders,
+                perpPositions: input.runInput.perpPositions,
+                riskProfile,
+                latestAnalysis,
+                serverContext,
+              });
           return {
-            summary: `${report.status} — ${report.statusLabel}`,
+            summary: `${report.operationalStatus ?? report.status} — ${report.operationalStatusLabel ?? report.statusLabel}`,
             details: report.blockers.slice(0, 2).map((b) => b.detail).join("; "),
             display:
-              report.status === "BLOCKED" || report.status === "EMERGENCY",
+              (report.operationalStatus ?? report.status) === "BLOCKED" ||
+              (report.operationalStatus ?? report.status) === "EMERGENCY",
           };
         }),
       );
@@ -281,14 +293,23 @@ export async function runAutopilotModules(input: {
     riskProfile,
     latestAnalysis,
   });
-  const commandReport = buildCommandCenterReport({
-    entries,
-    orders,
-    perpPositions: input.runInput.perpPositions,
-    riskProfile,
-    latestAnalysis,
-    serverContext,
-  });
+  const commandReport = isTestnetPrimaryAutomation()
+    ? await buildTestnetPrimaryCommandCenterReport({
+        entries,
+        orders,
+        perpPositions: input.runInput.perpPositions,
+        riskProfile,
+        latestAnalysis,
+        serverContext,
+      })
+    : buildCommandCenterReport({
+        entries,
+        orders,
+        perpPositions: input.runInput.perpPositions,
+        riskProfile,
+        latestAnalysis,
+        serverContext,
+      });
   const actions = buildOperatorActionQueue({
     entries,
     orders,
@@ -311,7 +332,7 @@ export async function runAutopilotModules(input: {
         .reduce((s, o) => s + o.notionalUsd, 0),
     },
     learningStatus,
-    deskStatus: commandReport.status,
+    deskStatus: commandReport.operationalStatus ?? commandReport.status,
     blockers: commandReport.blockers.map((b) => b.detail),
     actions,
   };
