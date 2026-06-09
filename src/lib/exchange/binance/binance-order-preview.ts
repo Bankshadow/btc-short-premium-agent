@@ -9,6 +9,7 @@ import type {
 } from "./binance-types";
 
 const PREVIEW_TTL_MS = 5 * 60 * 1000;
+const AUTOMATION_PREVIEW_TTL_MS = 15 * 60 * 1000;
 const PREVIEW_CACHE_FILE = "binance-preview-cache.json";
 
 async function loadPreviewCache(): Promise<Record<string, BinanceOrderPreview>> {
@@ -145,7 +146,9 @@ export async function buildOrderPreview(
   }
 
   const previewId = newPreviewId();
-  const expiresAt = new Date(Date.now() + PREVIEW_TTL_MS).toISOString();
+  const ttlMs =
+    input.source === "ai_signal" ? AUTOMATION_PREVIEW_TTL_MS : PREVIEW_TTL_MS;
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
   const generatedAt = new Date().toISOString();
 
   const draft: BinanceOrderPreview = {

@@ -277,6 +277,7 @@ export async function runAutomationCycle(
     autopilotResult: null as AutomationRun["autopilotResult"],
     backboneHealth: null,
     commandCenterStatus: null as string | null,
+    decisionLogId: null as string | null,
   };
 
   const persistenceWarning = (

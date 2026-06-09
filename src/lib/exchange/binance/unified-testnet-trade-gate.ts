@@ -76,7 +76,7 @@ export function evaluateUnifiedTestnetTradeGate(
         orders: input.orders,
       }),
     );
-    if (strategy && !strategy.tradeAllowed) {
+    if (strategy && !strategy.tradeAllowed && !testnetPrimary) {
       blockReasons.push(strategy.blockReason ?? "Strategy health blocked new trades.");
     }
   }

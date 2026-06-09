@@ -16,6 +16,10 @@ import {
   inferBinanceSideFromAnalysis,
   inferBinanceSymbolFromAnalysis,
 } from "./build-ai-preview";
+import {
+  isTestnetTradeCycleAllowed,
+  resolveTestnetExecutionVerdict,
+} from "./resolve-testnet-execution-verdict";
 import { shouldRotateOutSymbol } from "./symbol-rotation-store";
 import type { BinanceOrderSide } from "./binance-types";
 
@@ -32,25 +36,16 @@ export interface AutopilotTradeCandidate {
   timeframe?: string;
 }
 
-function resolveCommitteeVerdict(data: AnalyzeApiResponse | null): string {
-  const finalVerdict = data?.tradingDesk?.committee?.finalVerdict;
-  const weighted =
-    data?.tradingDesk?.weightedCommittee?.weightedVerdict ??
-    data?.step5_verdict?.recommendation ??
-    "WAIT";
-  const normalized = String(weighted).toUpperCase();
-  if (isBinanceFuturesOnlyMode() && finalVerdict) {
-    return String(finalVerdict).toUpperCase();
-  }
-  return normalized;
+
+function isTradeCycleAllowed(
+  analysis: AnalyzeApiResponse | null,
+  verdict: string,
+): boolean {
+  return isTestnetTradeCycleAllowed(analysis, verdict);
 }
 
-function resolveCommitteeConfidence(data: AnalyzeApiResponse | null): number {
-  return (
-    data?.tradingDesk?.weightedCommittee?.tradeScore ??
-    data?.step5_verdict?.confidence ??
-    0
-  );
+function resolveCommitteeVerdict(data: AnalyzeApiResponse | null): string {
+  return resolveTestnetExecutionVerdict(data);
 }
 
 function perpDirectionToSide(direction: PerpDirection): BinanceOrderSide | null {
@@ -63,16 +58,6 @@ function scoreToSide(score: number, fallback: BinanceOrderSide): BinanceOrderSid
   if (score > 0) return "BUY";
   if (score < 0) return "SELL";
   return fallback;
-}
-
-function isTradeCycleAllowed(
-  analysis: AnalyzeApiResponse | null,
-  verdict: string,
-): boolean {
-  if (verdict === "TRADE") return true;
-  if (!isAggressiveDeskRisk()) return false;
-  const confidence = resolveCommitteeConfidence(analysis);
-  return verdict === "WAIT" && confidence >= 52;
 }
 
 function isSignalActionable(

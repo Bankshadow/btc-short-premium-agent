@@ -4,6 +4,7 @@ import {
   resolveEffectiveMode,
 } from "./config";
 import { runAutopilotModules } from "./module-runner";
+import { resolveTestnetExecutionVerdict } from "@/lib/exchange/binance/resolve-testnet-execution-verdict";
 import type {
   AutopilotModuleId,
   AutopilotRunInput,
@@ -18,9 +19,7 @@ function newRunId(): string {
 function verdictFromAnalysis(
   input: AutopilotRunInput,
 ): AutopilotRunResult["finalVerdict"] {
-  const v =
-    input.latestAnalysis?.tradingDesk?.weightedCommittee?.weightedVerdict ??
-    input.latestAnalysis?.step5_verdict?.recommendation;
+  const v = resolveTestnetExecutionVerdict(input.latestAnalysis ?? null);
   if (v === "TRADE") return "TRADE";
   if (v === "SKIP") return "SKIP";
   if (v === "WAIT") return "WAIT";

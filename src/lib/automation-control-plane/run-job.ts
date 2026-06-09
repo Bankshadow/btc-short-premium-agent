@@ -55,6 +55,7 @@ export type AutomationJobContext = {
   autopilotResult: AutopilotRunResult | null;
   backboneHealth: DeskBackboneHealth | null;
   commandCenterStatus: string | null;
+  decisionLogId: string | null;
 };
 
 function jobId(jobType: AutomationJobType, runId: string): string {
@@ -274,6 +275,7 @@ export async function runAutomationJob(
         });
         const saved = await appendServerAnalysisFromResponse(analysis);
         ctx.analyze = analysis;
+        ctx.decisionLogId = saved.entry.id;
 
         const autopilot = await runAutopilotCycle({
           entries: [...entries.filter((e) => e.id !== saved.entry.id), saved.entry],
@@ -515,6 +517,9 @@ export async function runAutomationJob(
           analysis: ctx.analyze,
         });
         if (monitor.closedCount > 0 && isBinanceTestnetAutoExecuteEnabled()) {
+          await (
+            await import("@/lib/testnet-monitor/build-testnet-monitor-snapshot")
+          ).buildTestnetMonitorSnapshot();
           const { autoMarkPendingLearningRecordsServer } = await import(
             "@/lib/testnet-monitor/learning-records-server"
           );
@@ -547,6 +552,7 @@ export async function runAutomationJob(
       return runTimed(jobType, ctx, async () => {
         const auto = await runBinanceTestnetAutoExecute({
           analysis: ctx.analyze,
+          decisionLogId: ctx.decisionLogId,
           entries,
           orders,
           commandCenterStatus: ctx.commandCenterStatus,

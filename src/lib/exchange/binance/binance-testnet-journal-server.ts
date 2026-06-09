@@ -39,6 +39,19 @@ export async function recordTestnetTradeJournal(
   return entry;
 }
 
+export async function upsertServerBinanceTestnetJournalEntry(
+  tradeId: string,
+  patch: Partial<BinanceTestnetJournalEntry>,
+): Promise<BinanceTestnetJournalEntry | null> {
+  const journal = await loadServerBinanceTestnetJournal();
+  const index = journal.findIndex((j) => j.binanceTestnetTradeId === tradeId);
+  if (index < 0) return null;
+  const updated = { ...journal[index], ...patch };
+  journal[index] = updated;
+  await saveServerBinanceTestnetJournal(journal);
+  return updated;
+}
+
 export function buildJournalEntryFromPreview(
   preview: BinanceOrderPreview,
   patch?: Partial<BinanceTestnetJournalEntry>,

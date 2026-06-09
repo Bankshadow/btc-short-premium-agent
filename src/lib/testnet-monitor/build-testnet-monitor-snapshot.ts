@@ -8,6 +8,7 @@ import type { BinanceOpenOrder, BinancePosition } from "@/lib/exchange/binance/b
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import { loadServerBinanceTestnetJournal, saveServerBinanceTestnetJournal } from "@/lib/exchange/binance/binance-testnet-journal-server";
 import { backfillOrphanBinanceJournalEntries } from "@/lib/exchange/binance/binance-journal-backfill";
+import { reconcileBinanceJournalStatuses } from "@/lib/exchange/binance/binance-journal-reconcile";
 import { reconcileBinancePositions } from "@/lib/exchange/binance/binance-position-monitor";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { mapBinanceSource } from "./decision-linkage";
@@ -158,37 +159,6 @@ function buildClosedTrades(
   return closed;
 }
 
-function reconcileJournalStatuses(
-  journal: BinanceTestnetJournalEntry[],
-  positions: BinancePosition[],
-): BinanceTestnetJournalEntry[] {
-  const openSymbols = new Set(
-    positions
-      .filter((p) => Math.abs(Number(p.positionAmt)) > 0)
-      .map((p) => p.symbol),
-  );
-  return journal.map((entry) => {
-    if (entry.status === "CLOSING" && !openSymbols.has(entry.symbol)) {
-      const pnl =
-        entry.realizedPnl ??
-        (entry.notionalUsd ? entry.notionalUsd * 0.001 : 0);
-      return {
-        ...entry,
-        status: "CLOSED" as const,
-        closedAt: entry.closedAt ?? new Date().toISOString(),
-        realizedPnl: pnl,
-      };
-    }
-    if (
-      (entry.status === "SUBMITTED" || entry.status === "FILLED") &&
-      openSymbols.has(entry.symbol)
-    ) {
-      return { ...entry, status: "FILLED" as const };
-    }
-    return entry;
-  });
-}
-
 function resolveRiskStatus(input: {
   liveBlock: string | null;
   connected: boolean;
@@ -257,7 +227,11 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
   }
 
   let journal = await loadServerBinanceTestnetJournal();
-  journal = reconcileJournalStatuses(journal, positions);
+  const journalBeforeReconcile = journal;
+  journal = reconcileBinanceJournalStatuses(journal, positions);
+  if (JSON.stringify(journal) !== JSON.stringify(journalBeforeReconcile)) {
+    await saveServerBinanceTestnetJournal(journal);
+  }
   const backfill = backfillOrphanBinanceJournalEntries({ positions, journal });
   if (backfill.backfilledSymbols.length > 0) {
     journal = backfill.journal;

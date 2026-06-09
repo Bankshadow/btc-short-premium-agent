@@ -5,10 +5,15 @@ import {
   loadBinanceConfig,
 } from "./binance-config";
 import { executeBinanceTestnetClose } from "./binance-execution";
+import {
+  findOpenJournalEntryForSymbol,
+  persistReconciledBinanceJournal,
+} from "./binance-journal-reconcile";
 import { loadServerBinanceTestnetJournal, saveServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import { backfillOrphanBinanceJournalEntries } from "./binance-journal-backfill";
 import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
+import { resolveTestnetExecutionVerdict } from "./resolve-testnet-execution-verdict";
 
 export const TESTNET_AUTO_MONITOR_DEFAULTS = {
   stopLossPct: -2,
@@ -33,14 +38,6 @@ export interface BinanceAutoMonitorResult {
   closeReason: string | null;
   monitoredCount: number;
   closedCount: number;
-}
-
-function committeeVerdict(data: AnalyzeApiResponse | null): string {
-  const verdict =
-    data?.tradingDesk?.weightedCommittee?.weightedVerdict ??
-    data?.step5_verdict?.recommendation ??
-    "WAIT";
-  return String(verdict).toUpperCase();
 }
 
 function unrealizedPct(entryPrice: number, markPrice: number, positionAmt: number): number {
@@ -139,7 +136,7 @@ export async function runBinanceTestnetAutoMonitor(input: {
       await saveServerBinanceTestnetJournal(journal);
     }
 
-    const verdict = committeeVerdict(input.analysis);
+    const verdict = resolveTestnetExecutionVerdict(input.analysis);
     const summaries: string[] = [];
     let closedCount = 0;
     let lastCloseReason: string | null = null;
@@ -150,11 +147,7 @@ export async function runBinanceTestnetAutoMonitor(input: {
       const entry = Number(pos.entryPrice);
       const amt = Number(pos.positionAmt);
       const uPnLPct = unrealizedPct(entry, mark, amt);
-      const openTrade = journal.find(
-        (j) =>
-          j.symbol === pos.symbol &&
-          ["SUBMITTED", "FILLED", "CLOSING"].includes(j.status),
-      );
+      const openTrade = findOpenJournalEntryForSymbol(journal, pos.symbol);
       const openedAt = openTrade?.executedAt ?? openTrade?.createdAt ?? null;
       const openedHours = openedAt
         ? (Date.now() - Date.parse(openedAt)) / 3_600_000
@@ -206,6 +199,12 @@ export async function runBinanceTestnetAutoMonitor(input: {
     }
 
     if (closedCount > 0) {
+      const refreshedPositions = await getPositions().catch(() => []);
+      journal = await persistReconciledBinanceJournal({
+        journal: await loadServerBinanceTestnetJournal().catch(() => journal),
+        positions: refreshedPositions,
+      });
+
       return {
         symbol: lastClosedSymbol,
         closeReason: lastCloseReason,

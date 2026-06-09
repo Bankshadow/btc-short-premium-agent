@@ -197,6 +197,8 @@ export interface BinanceExecuteInput {
   operatorNote?: string;
   /** Loop guard blocks blind retries without operator review. */
   blindRetry?: boolean;
+  /** In-process preview — avoids Blob cache race within the same automation tick. */
+  embeddedPreview?: BinanceOrderPreview;
 }
 
 export interface BinanceExecuteResult {

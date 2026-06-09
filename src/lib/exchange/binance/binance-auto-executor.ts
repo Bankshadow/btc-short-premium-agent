@@ -17,6 +17,7 @@ import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
 import { pickAutopilotTradeCandidates } from "./pick-autopilot-symbols";
 import { recordAutopilotCycleOutcome } from "./symbol-rotation-store";
 import { evaluateUnifiedTestnetTradeGate } from "./unified-testnet-trade-gate";
+import { resolveTestnetExecutionVerdict } from "./resolve-testnet-execution-verdict";
 
 export type BinanceAutoExecuteOutcome =
   | "DISABLED"
@@ -44,13 +45,6 @@ export interface BinanceAutoExecuteResult {
   liveBlocked: true;
 }
 
-function resolveCommitteeVerdict(data: AnalyzeApiResponse | null): string {
-  const verdict =
-    data?.tradingDesk?.weightedCommittee?.weightedVerdict ??
-    data?.step5_verdict?.recommendation ??
-    "WAIT";
-  return String(verdict).toUpperCase();
-}
 
 /**
  * Autonomous Binance USD-M Futures **testnet** executor.
@@ -105,7 +99,7 @@ export async function runBinanceTestnetAutoExecute(input: {
     };
   }
 
-  const verdict = resolveCommitteeVerdict(input.analysis);
+  const verdict = resolveTestnetExecutionVerdict(input.analysis);
 
   try {
     const status = await getBinanceStatus();
@@ -270,6 +264,7 @@ export async function runBinanceTestnetAutoExecute(input: {
       const result = await executeBinanceTestnetOrder({
         execute: {
           previewId: preview.previewId,
+          embeddedPreview: preview,
           doubleConfirm: true,
           operatorNote: `Autopilot ${candidate.source} · ${candidate.reason}`,
         },

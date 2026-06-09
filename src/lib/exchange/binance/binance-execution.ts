@@ -9,10 +9,15 @@ import { getStoredPreview } from "./binance-order-preview";
 import { closeSideForPosition } from "./binance-position-monitor";
 import { validateOrderAgainstRiskGate } from "./binance-risk-gate";
 import {
+  computeCloseRealizedPnl,
+  findOpenJournalEntryForSymbol,
+} from "./binance-journal-reconcile";
+import {
   buildBlockedExecuteResult,
   buildJournalEntryFromPreview,
   loadServerBinanceTestnetJournal,
   recordTestnetTradeJournal,
+  upsertServerBinanceTestnetJournalEntry,
 } from "./binance-testnet-journal-server";
 import type {
   BinanceCloseInput,
@@ -115,7 +120,9 @@ export async function executeBinanceTestnetOrder(input: {
     };
   }
 
-  const preview = await getStoredPreview(input.execute.previewId);
+  const preview =
+    input.execute.embeddedPreview ??
+    (await getStoredPreview(input.execute.previewId));
 
   if (!preview) {
     const stub = buildJournalEntryFromPreview(
@@ -323,32 +330,32 @@ export async function executeBinanceTestnetClose(input: {
     });
 
     const journal = await loadServerBinanceTestnetJournal();
-    const openTrade = journal.find(
-      (j) =>
-        j.symbol === input.close.symbol &&
-        ["SUBMITTED", "FILLED"].includes(j.status),
-    );
+    const openTrade = findOpenJournalEntryForSymbol(journal, input.close.symbol);
+    const entryPrice = Number(pos.entryPrice);
+    const exitPrice = markAtSubmit ?? Number(pos.markPrice);
+    const estimatedPnl =
+      entryPrice > 0 && exitPrice > 0
+        ? computeCloseRealizedPnl({
+            side: openTrade?.side ?? (Number(pos.positionAmt) > 0 ? "BUY" : "SELL"),
+            quantity: String(amt),
+            entryPrice,
+            exitPrice,
+          })
+        : null;
 
     const journalEntry = openTrade
-      ? {
-          ...openTrade,
-          status: "CLOSING" as const,
+      ? await upsertServerBinanceTestnetJournalEntry(openTrade.binanceTestnetTradeId, {
+          status: "CLOSING",
           exchangeOrderId: String(order.orderId),
-          operatorNote: input.close.operatorNote ?? null,
+          operatorNote: input.close.operatorNote ?? openTrade.operatorNote,
           closeAttempt: true,
           closeFailed: false,
-          markPriceAtSubmit: markAtSubmit,
+          markPriceAtSubmit: exitPrice,
+          fillPrice: openTrade.fillPrice ?? entryPrice,
+          realizedPnl: estimatedPnl,
           latencyMs: Date.now() - closeStartedAt,
-        }
+        })
       : null;
-
-    if (journalEntry) {
-      await recordTestnetTradeJournal({
-        ...journalEntry,
-        createdAt: new Date().toISOString(),
-        binanceTestnetTradeId: `${openTrade!.binanceTestnetTradeId}-close`,
-      });
-    }
 
     void emitMissionAlert({
       kind: "trade_closed",
@@ -366,20 +373,12 @@ export async function executeBinanceTestnetClose(input: {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Close failed";
     const journal = await loadServerBinanceTestnetJournal().catch(() => []);
-    const openTrade = journal.find(
-      (j) =>
-        j.symbol === input.close.symbol &&
-        ["SUBMITTED", "FILLED"].includes(j.status),
-    );
+    const openTrade = findOpenJournalEntryForSymbol(journal, input.close.symbol);
     if (openTrade) {
-      await recordTestnetTradeJournal({
-        ...openTrade,
-        binanceTestnetTradeId: `${openTrade.binanceTestnetTradeId}-close-failed-${Date.now()}`,
-        status: "FAILED",
+      await upsertServerBinanceTestnetJournalEntry(openTrade.binanceTestnetTradeId, {
         closeAttempt: true,
         closeFailed: true,
         blockReasons: [message],
-        createdAt: new Date().toISOString(),
       });
     }
 
