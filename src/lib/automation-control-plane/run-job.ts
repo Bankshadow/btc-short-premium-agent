@@ -22,7 +22,8 @@ import {
   evaluateServerBackboneHealth,
   writeServerBackboneRecord,
 } from "@/lib/background-worker/server-backbone";
-import { mergeServerPendingOperatorActions } from "./state-store";
+import { dismissOperatorActionsMatching, mergeServerPendingOperatorActions } from "./state-store";
+import { operatorActionDedupeKey } from "@/lib/operator-action-queue/dedupe-key";
 import { assertAutomationJobSafety } from "./safety";
 import { buildPolicyInput, evaluatePolicy } from "@/lib/policy-engine";
 import { getProjectStrategistStatus, runProjectStrategist } from "@/lib/project-strategist";
@@ -318,6 +319,14 @@ export async function runAutomationJob(
           marketContextHash: buildMarketContextHash(analysis),
           runId: ctx.runId,
           summary: `Analyze ${saved.entry.finalVerdict}`,
+        });
+
+        await dismissOperatorActionsMatching((action) => {
+          const key = operatorActionDedupeKey(action);
+          return (
+            key === "acp-fail:DESK_ANALYZE" ||
+            key === "RUN_ANALYSIS:autopilot:Run first desk cycle"
+          );
         });
 
         return {

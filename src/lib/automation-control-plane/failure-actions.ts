@@ -18,7 +18,7 @@ export function buildAutomationFailureAction(
 ): OperatorAction {
   const ts = new Date().toISOString();
   return {
-    actionId: `acp-fail-${jobType}-${runId}`,
+    actionId: `acp-fail-${jobType}`,
     type: "REVIEW_RISK_BLOCKER",
     priority: "HIGH",
     title: `Automation job failed: ${jobType}`,

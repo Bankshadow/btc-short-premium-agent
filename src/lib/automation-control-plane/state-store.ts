@@ -1,5 +1,6 @@
 import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { OperatorAction } from "@/lib/operator-action-queue/types";
+import { operatorActionDedupeKey } from "@/lib/operator-action-queue/dedupe-key";
 import {
   AUTOMATION_ACTIONS_FILE,
   AUTOMATION_FAILED_FILE,
@@ -134,13 +135,36 @@ export async function mergeServerPendingOperatorActions(
   incoming: OperatorAction[],
 ): Promise<OperatorAction[]> {
   const existing = await loadServerPendingOperatorActions();
-  const byId = new Map(existing.map((a) => [a.actionId, a]));
-  for (const a of incoming) {
-    if (a.status === "OPEN") byId.set(a.actionId, a);
+  const byKey = new Map<string, OperatorAction>();
+  for (const a of existing) {
+    if (a.status === "OPEN") byKey.set(operatorActionDedupeKey(a), a);
   }
-  const merged = [...byId.values()].sort(
+  for (const a of incoming) {
+    if (a.status !== "OPEN") continue;
+    const key = operatorActionDedupeKey(a);
+    const prev = byKey.get(key);
+    byKey.set(key, {
+      ...a,
+      actionId: prev?.actionId ?? a.actionId,
+      createdAt: prev?.createdAt ?? a.createdAt,
+    });
+  }
+  const archived = existing.filter((a) => a.status !== "OPEN").slice(0, 50);
+  const merged = [...byKey.values(), ...archived].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   await saveServerPendingOperatorActions(merged);
   return merged;
+}
+
+export async function dismissOperatorActionsMatching(
+  predicate: (action: OperatorAction) => boolean,
+): Promise<void> {
+  const existing = await loadServerPendingOperatorActions();
+  const next = existing.map((a) =>
+    a.status === "OPEN" && predicate(a)
+      ? { ...a, status: "DONE" as const }
+      : a,
+  );
+  await saveServerPendingOperatorActions(next);
 }

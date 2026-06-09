@@ -5,7 +5,8 @@ import {
   loadBinanceConfig,
 } from "./binance-config";
 import { executeBinanceTestnetClose } from "./binance-execution";
-import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
+import { loadServerBinanceTestnetJournal, saveServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
+import { backfillOrphanBinanceJournalEntries } from "./binance-journal-backfill";
 import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 
@@ -128,8 +129,17 @@ export async function runBinanceTestnetAutoMonitor(input: {
       };
     }
 
+    let journal = await loadServerBinanceTestnetJournal().catch(() => []);
+    const backfill = backfillOrphanBinanceJournalEntries({
+      positions: open,
+      journal,
+    });
+    if (backfill.backfilledSymbols.length > 0) {
+      journal = backfill.journal;
+      await saveServerBinanceTestnetJournal(journal);
+    }
+
     const verdict = committeeVerdict(input.analysis);
-    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
     const summaries: string[] = [];
     let closedCount = 0;
     let lastCloseReason: string | null = null;

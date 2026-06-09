@@ -26,7 +26,6 @@ export function buildOperatorActionQueue(input: {
   commandBlockers?: string[];
 }): OperatorAction[] {
   const actions: OperatorAction[] = [];
-  const ts = new Date().toISOString();
   const resolved = input.entries.filter((e) => e.outcomeStatus === "RESOLVED");
   const pending = input.entries.filter((e) => e.outcomeStatus === "PENDING");
   const openPaper = input.orders.filter((o) => o.status === "OPEN");
@@ -35,7 +34,7 @@ export function buildOperatorActionQueue(input: {
   if (input.entries.length === 0 || !input.latestAnalysis) {
     actions.push(
       action({
-        actionId: `oa-run-analysis-${ts}`,
+        actionId: "oa-run-analysis",
         type: "RUN_ANALYSIS",
         priority: "HIGH",
         title: "Run first desk cycle",
@@ -71,7 +70,7 @@ export function buildOperatorActionQueue(input: {
   if (resolved.length === 0 && input.entries.length > 0) {
     actions.push(
       action({
-        actionId: `oa-resolve-any-${ts}`,
+        actionId: "oa-resolve-any",
         type: "RESOLVE_OUTCOME",
         priority: "CRITICAL",
         title: "Start resolving outcomes",
@@ -106,7 +105,7 @@ export function buildOperatorActionQueue(input: {
   if (server && !server.supabaseConfigured) {
     actions.push(
       action({
-        actionId: `oa-enable-sync-${ts}`,
+        actionId: "oa-enable-sync",
         type: "ENABLE_SYNC",
         priority: "HIGH",
         title: "Enable cloud sync",
@@ -129,7 +128,7 @@ export function buildOperatorActionQueue(input: {
   if (server && !anyAlert) {
     actions.push(
       action({
-        actionId: `oa-configure-alerts-${ts}`,
+        actionId: "oa-configure-alerts",
         type: "CONFIGURE_ALERTS",
         priority: "HIGH",
         title: "Configure alerts",
@@ -153,7 +152,7 @@ export function buildOperatorActionQueue(input: {
   if (!capital.scalePermission.allowed) {
     actions.push(
       action({
-        actionId: `oa-capital-blocked-${ts}`,
+        actionId: "oa-capital-blocked",
         type: "REVIEW_RISK_BLOCKER",
         priority: "MEDIUM",
         title: "Capital scaling blocked",
@@ -173,7 +172,7 @@ export function buildOperatorActionQueue(input: {
   if (totalResolved < VALIDATION_THRESHOLDS.minSignalsForActive) {
     actions.push(
       action({
-        actionId: `oa-sample-size-${ts}`,
+        actionId: "oa-sample-size",
         type: "REVIEW_STRATEGY",
         priority: "MEDIUM",
         title: `Need ${VALIDATION_THRESHOLDS.minSignalsForActive} resolved samples`,
@@ -190,7 +189,7 @@ export function buildOperatorActionQueue(input: {
   if (server && !server.exchangeStatus.configured) {
     actions.push(
       action({
-        actionId: `oa-check-exchange-${ts}`,
+        actionId: "oa-check-exchange",
         type: "CHECK_EXCHANGE",
         priority: "LOW",
         title: "Check exchange connectivity",
@@ -205,9 +204,10 @@ export function buildOperatorActionQueue(input: {
   }
 
   for (const blocker of (input.commandBlockers ?? []).slice(0, 2)) {
+    const slug = blocker.slice(0, 48).replace(/\W+/g, "-");
     actions.push(
       action({
-        actionId: `oa-blocker-${actions.length}-${ts}`,
+        actionId: `oa-blocker-${slug}`,
         type: "REVIEW_RISK_BLOCKER",
         priority: "HIGH",
         title: "Review production blocker",
@@ -224,7 +224,7 @@ export function buildOperatorActionQueue(input: {
   if (actions.length === 0) {
     actions.push(
       action({
-        actionId: `oa-no-action-${ts}`,
+        actionId: "oa-no-action",
         type: "NO_ACTION",
         priority: "LOW",
         title: "No urgent operator actions",

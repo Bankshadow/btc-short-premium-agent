@@ -6,7 +6,8 @@ import {
 import { loadBinanceConfig, blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
 import type { BinanceOpenOrder, BinancePosition } from "@/lib/exchange/binance/binance-types";
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
-import { loadServerBinanceTestnetJournal } from "@/lib/exchange/binance/binance-testnet-journal-server";
+import { loadServerBinanceTestnetJournal, saveServerBinanceTestnetJournal } from "@/lib/exchange/binance/binance-testnet-journal-server";
+import { backfillOrphanBinanceJournalEntries } from "@/lib/exchange/binance/binance-journal-backfill";
 import { reconcileBinancePositions } from "@/lib/exchange/binance/binance-position-monitor";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { mapBinanceSource } from "./decision-linkage";
@@ -257,6 +258,11 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
 
   let journal = await loadServerBinanceTestnetJournal();
   journal = reconcileJournalStatuses(journal, positions);
+  const backfill = backfillOrphanBinanceJournalEntries({ positions, journal });
+  if (backfill.backfilledSymbols.length > 0) {
+    journal = backfill.journal;
+    await saveServerBinanceTestnetJournal(journal);
+  }
   const reconcile = reconcileBinancePositions({ positions, journal });
   mismatches = reconcile.mismatches;
 

@@ -26,6 +26,12 @@ export async function appendServerBinanceTestnetJournal(
   return next;
 }
 
+export async function saveServerBinanceTestnetJournal(
+  entries: BinanceTestnetJournalEntry[],
+): Promise<void> {
+  await writeCronJsonFile(SERVER_JOURNAL_FILE, entries.slice(0, MAX_ENTRIES));
+}
+
 export async function recordTestnetTradeJournal(
   entry: BinanceTestnetJournalEntry,
 ): Promise<BinanceTestnetJournalEntry> {
