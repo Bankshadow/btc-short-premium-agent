@@ -106,6 +106,19 @@ describe("P-MVP 4 Automation Control Plane", () => {
       }),
       false,
     );
+    assert.equal(
+      shouldBlockDeskAnalyzeOnBackbone({
+        healthy: false,
+        health: {
+          healthy: false,
+          writeBlockers: ["Exchange not configured — live connectivity unknown."],
+          staleWarning: null,
+          lastWriteAt: null,
+          source: "hybrid",
+        },
+      }),
+      false,
+    );
     if (prevMode === undefined) delete process.env.AUTOMATION_PRIMARY_MODE;
     else process.env.AUTOMATION_PRIMARY_MODE = prevMode;
   });

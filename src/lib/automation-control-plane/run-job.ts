@@ -465,6 +465,15 @@ export async function runAutomationJob(
         const testnetPerp = await buildTestnetPerpDeskPanel();
         const report = applyTestnetPrimaryCommandCenterView(baseReport, testnetPerp);
         ctx.commandCenterStatus = report.operationalStatus ?? report.status;
+        const queueActions = buildOperatorActionQueue({
+          entries,
+          orders,
+          riskProfile,
+          latestAnalysis: ctx.analyze,
+          serverContext,
+          commandBlockers: report.blockers.map((b) => b.detail),
+        }).filter((a) => a.type !== "NO_ACTION");
+        await mergeServerPendingOperatorActions(queueActions);
         return {
           summary: `Desk ${report.operationalStatus ?? report.status} · ${report.blockers.length} blocker(s)`,
         };

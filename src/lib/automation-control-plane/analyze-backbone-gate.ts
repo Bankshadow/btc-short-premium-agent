@@ -18,6 +18,8 @@ const LIVE_SCALING_BACKBONE_PATTERNS = [
   /partial derivatives/i,
   /combination read/i,
   /derivatives data/i,
+  /exchange not configured/i,
+  /live connectivity unknown/i,
 ];
 
 export function isLiveScalingBackboneBlocker(message: string): boolean {
