@@ -6,10 +6,11 @@ const PROBE_FILE = ".journal-write-probe";
 const DEFAULT_BLOB_PREFIX = "btc-desk-journal/";
 
 function hasBlobCredentials(): boolean {
-  return Boolean(
-    process.env.BLOB_READ_WRITE_TOKEN?.trim() ||
-      (process.env.BLOB_STORE_ID?.trim() && process.env.VERCEL_OIDC_TOKEN?.trim()),
-  );
+  if (process.env.BLOB_READ_WRITE_TOKEN?.trim()) return true;
+  if (!process.env.BLOB_STORE_ID?.trim()) return false;
+  // OIDC token is injected at runtime on Vercel (not always visible in env ls).
+  if (process.env.VERCEL === "1" || process.env.VERCEL_ENV) return true;
+  return Boolean(process.env.VERCEL_OIDC_TOKEN?.trim());
 }
 
 /** Use Vercel Blob for journal JSON when credentials are available (auto on Vercel). */
