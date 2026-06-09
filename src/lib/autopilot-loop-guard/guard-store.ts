@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { LoopGuardActionRecord, LoopGuardState } from "./types";
 import { LOOP_GUARD_MAX_RECORDS, LOOP_GUARD_STORE_FILE } from "./config";
 
@@ -7,10 +6,6 @@ const memoryState: LoopGuardState = defaultLoopGuardState();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), LOOP_GUARD_STORE_FILE);
 }
 
 export function defaultLoopGuardState(workspaceId = "server-default"): LoopGuardState {
@@ -35,22 +30,16 @@ export function defaultLoopGuardState(workspaceId = "server-default"): LoopGuard
 
 async function readServerState(): Promise<LoopGuardState> {
   if (!isServer()) return memoryState;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as LoopGuardState;
-    return {
-      ...defaultLoopGuardState(parsed.workspaceId),
-      ...parsed,
-      records: Array.isArray(parsed.records) ? parsed.records : [],
-      blocker: {
-        ...defaultLoopGuardState().blocker,
-        ...(parsed.blocker ?? {}),
-      },
-    };
-  } catch {
-    return defaultLoopGuardState();
-  }
+  const parsed = await readCronJsonFile<LoopGuardState>(LOOP_GUARD_STORE_FILE, defaultLoopGuardState());
+  return {
+    ...defaultLoopGuardState(parsed.workspaceId),
+    ...parsed,
+    records: Array.isArray(parsed.records) ? parsed.records : [],
+    blocker: {
+      ...defaultLoopGuardState().blocker,
+      ...(parsed.blocker ?? {}),
+    },
+  };
 }
 
 async function writeServerState(state: LoopGuardState): Promise<void> {
@@ -61,10 +50,7 @@ async function writeServerState(state: LoopGuardState): Promise<void> {
     return;
   }
   try {
-    const fs = await import("fs/promises");
-    const filePath = storePath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+    await writeCronJsonFile(LOOP_GUARD_STORE_FILE, state);
   } catch {
     Object.assign(memoryState, state);
   }

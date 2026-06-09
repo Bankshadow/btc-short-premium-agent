@@ -1,6 +1,7 @@
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
 import { getDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 import { resolvePrimaryStrategyHealth } from "@/lib/mission-flow/resolve-primary-strategy-health";
@@ -40,7 +41,12 @@ export function evaluateUnifiedTestnetTradeGate(
   const blockReasons: string[] = [];
 
   const cc = input.commandCenterStatus?.toUpperCase() ?? null;
-  if ((cc === "BLOCKED" || cc === "EMERGENCY") && !forceMax) {
+  const testnetPrimary = isTestnetPrimaryAutomation();
+  if (
+    (cc === "BLOCKED" || cc === "EMERGENCY") &&
+    !forceMax &&
+    !testnetPrimary
+  ) {
     blockReasons.push(`Command center ${cc} — testnet entries paused.`);
   }
 

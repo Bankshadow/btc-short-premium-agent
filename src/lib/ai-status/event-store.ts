@@ -1,7 +1,7 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { AiStatusEvent, EmitAiStatusInput } from "./types";
+
 import { AI_STATUS_EVENT_LABELS } from "./labels";
-import path from "path";
 
 const STORE_FILE = "ai-status-events.json";
 const MAX_EVENTS = 200;
@@ -9,33 +9,20 @@ const MAX_EVENTS = 200;
 const memoryEvents: AiStatusEvent[] = [];
 let activeRunId: string | null = null;
 
-function storePath(): string {
-  return path.join(getCronDataDir(), STORE_FILE);
-}
-
 function isServer(): boolean {
   return typeof window === "undefined";
 }
 
 async function readStore(): Promise<AiStatusEvent[]> {
   if (!isServer()) return [...memoryEvents];
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as AiStatusEvent[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [...memoryEvents];
-  }
+  const parsed = await readCronJsonFile<AiStatusEvent[]>(STORE_FILE, []);
+  return Array.isArray(parsed) ? parsed : [...memoryEvents];
 }
 
 async function writeStore(events: AiStatusEvent[]): Promise<void> {
   if (!isServer()) return;
   try {
-    const fs = await import("fs/promises");
-    const filePath = storePath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(events, null, 2), "utf8");
+    await writeCronJsonFile(STORE_FILE, events);
   } catch {
     // memory fallback
   }

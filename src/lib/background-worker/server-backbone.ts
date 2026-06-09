@@ -1,32 +1,18 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import { buildRecordFromCycle } from "@/lib/data-backbone/build-record";
-import { evaluateBackboneHealth } from "@/lib/data-backbone/health";
 import type { DeskBackboneHealth, DeskBackboneRecord } from "@/lib/data-backbone/types";
 import { WORKER_BACKBONE_FILE } from "./config";
 import type { WorkerRunInput } from "./types";
 import type { AutopilotRunResult } from "@/lib/autopilot/types";
-import fs from "fs/promises";
-import path from "path";
-
-function backbonePath(): string {
-  return path.join(getCronDataDir(), WORKER_BACKBONE_FILE);
-}
 
 export async function loadServerBackboneRecord(): Promise<DeskBackboneRecord | null> {
-  try {
-    const raw = await fs.readFile(backbonePath(), "utf8");
-    return JSON.parse(raw) as DeskBackboneRecord;
-  } catch {
-    return null;
-  }
+  return readCronJsonFile(WORKER_BACKBONE_FILE, null);
 }
 
 export async function writeServerBackboneRecord(
   record: DeskBackboneRecord,
 ): Promise<void> {
-  const filePath = backbonePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(record, null, 2), "utf8");
+  await writeCronJsonFile(WORKER_BACKBONE_FILE, record);
 }
 
 export function buildServerBackboneFromInput(input: {

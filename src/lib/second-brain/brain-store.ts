@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { SecondBrainCycleSnapshot, SecondBrainMemory, SecondBrainState } from "./types";
 import { SECOND_BRAIN_MAX_MEMORIES, SECOND_BRAIN_STORE_FILE } from "./config";
 
@@ -7,10 +6,6 @@ const memoryState: SecondBrainState = defaultSecondBrainState();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), SECOND_BRAIN_STORE_FILE);
 }
 
 export function defaultSecondBrainState(workspaceId = "server-default"): SecondBrainState {
@@ -30,18 +25,15 @@ export function defaultSecondBrainState(workspaceId = "server-default"): SecondB
 
 async function readState(): Promise<SecondBrainState> {
   if (!isServer()) return memoryState;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as SecondBrainState;
-    return {
-      ...defaultSecondBrainState(parsed.workspaceId),
-      ...parsed,
-      memories: Array.isArray(parsed.memories) ? parsed.memories : [],
-    };
-  } catch {
-    return defaultSecondBrainState();
-  }
+  const parsed = await readCronJsonFile<SecondBrainState>(
+    SECOND_BRAIN_STORE_FILE,
+    defaultSecondBrainState(),
+  );
+  return {
+    ...defaultSecondBrainState(parsed.workspaceId),
+    ...parsed,
+    memories: Array.isArray(parsed.memories) ? parsed.memories : [],
+  };
 }
 
 async function writeState(state: SecondBrainState): Promise<void> {
@@ -55,10 +47,7 @@ async function writeState(state: SecondBrainState): Promise<void> {
     return;
   }
   try {
-    const fs = await import("fs/promises");
-    const filePath = storePath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+    await writeCronJsonFile(SECOND_BRAIN_STORE_FILE, state);
   } catch {
     Object.assign(memoryState, state);
   }

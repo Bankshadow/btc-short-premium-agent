@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { ParallelTaskRunnerState, ParallelTaskRunResult } from "./types";
 import { PARALLEL_RUNNER_STORE_FILE } from "./config";
 
@@ -7,10 +6,6 @@ const memory: ParallelTaskRunnerState = defaultParallelTaskRunnerState();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), PARALLEL_RUNNER_STORE_FILE);
 }
 
 export function defaultParallelTaskRunnerState(
@@ -26,14 +21,11 @@ export function defaultParallelTaskRunnerState(
 
 async function readState(): Promise<ParallelTaskRunnerState> {
   if (!isServer()) return memory;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as ParallelTaskRunnerState;
-    return { ...defaultParallelTaskRunnerState(parsed.workspaceId), ...parsed };
-  } catch {
-    return defaultParallelTaskRunnerState();
-  }
+  const parsed = await readCronJsonFile<ParallelTaskRunnerState>(
+    PARALLEL_RUNNER_STORE_FILE,
+    defaultParallelTaskRunnerState(),
+  );
+  return { ...defaultParallelTaskRunnerState(parsed.workspaceId), ...parsed };
 }
 
 async function writeState(state: ParallelTaskRunnerState): Promise<void> {
@@ -43,10 +35,7 @@ async function writeState(state: ParallelTaskRunnerState): Promise<void> {
     return;
   }
   try {
-    const fs = await import("fs/promises");
-    const filePath = storePath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+    await writeCronJsonFile(PARALLEL_RUNNER_STORE_FILE, state);
   } catch {
     Object.assign(memory, state);
   }

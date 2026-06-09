@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import {
   DAILY_SELF_REVIEW_INTERVAL_HOURS,
   DAILY_SELF_REVIEW_MAX_RECORDS,
@@ -11,10 +10,6 @@ const memoryStore: DailySelfReviewStore = defaultDailySelfReviewStore();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), DAILY_SELF_REVIEW_STORE_FILE);
 }
 
 export function defaultDailySelfReviewStore(
@@ -34,18 +29,15 @@ export function defaultDailySelfReviewStore(
 
 async function readStore(): Promise<DailySelfReviewStore> {
   if (!isServer()) return memoryStore;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<DailySelfReviewStore>;
-    return {
-      ...defaultDailySelfReviewStore(parsed.workspaceId),
-      ...parsed,
-      reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
-    };
-  } catch {
-    return defaultDailySelfReviewStore();
-  }
+  const parsed = await readCronJsonFile<Partial<DailySelfReviewStore>>(
+    DAILY_SELF_REVIEW_STORE_FILE,
+    {},
+  );
+  return {
+    ...defaultDailySelfReviewStore(parsed.workspaceId),
+    ...parsed,
+    reviews: Array.isArray(parsed.reviews) ? parsed.reviews : [],
+  };
 }
 
 async function writeStore(store: DailySelfReviewStore): Promise<void> {
@@ -56,10 +48,7 @@ async function writeStore(store: DailySelfReviewStore): Promise<void> {
     memoryStore.reviews = [...store.reviews];
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(DAILY_SELF_REVIEW_STORE_FILE, store);
 }
 
 export async function loadDailySelfReviewStore(

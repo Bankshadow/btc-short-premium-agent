@@ -2,11 +2,13 @@ import type { CommandCenterStatus } from "@/lib/command-center/types";
 import type { GovernanceDeskState } from "@/lib/governance/governance-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
 import { getDeskRiskProfile } from "@/lib/desk/desk-risk-policy";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import {
   assertBinanceTestnetOnly,
   blockBinanceProductionOrder,
+  isBinanceForceMaxAutopilotEnabled,
   loadBinanceConfig,
 } from "./binance-config";
 import type {
@@ -191,7 +193,13 @@ export function validateOrderAgainstRiskGate(
   if (!killOk) blockReasons.push(kill.messages[0] ?? "Kill switch active");
 
   const cc = ctx.commandCenterStatus;
-  if (cc && (cc === "BLOCKED" || cc === "EMERGENCY")) {
+  const skipCommandCenterBlock =
+    isBinanceForceMaxAutopilotEnabled() || isTestnetPrimaryAutomation();
+  if (
+    cc &&
+    (cc === "BLOCKED" || cc === "EMERGENCY") &&
+    !skipCommandCenterBlock
+  ) {
     const msg = `Command center ${cc} — testnet execution blocked`;
     checks.push(check("command_center", "Command center", false, msg));
     blockReasons.push(msg);

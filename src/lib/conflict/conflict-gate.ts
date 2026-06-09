@@ -1,5 +1,7 @@
 import type { AgentOutput, AgentRecommendation, CommitteeVerdict } from "@/lib/agents/types";
 import { agentRecToTrade } from "@/lib/agents/types";
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 import type { DataConfidenceResult } from "@/lib/data-trust/types";
 import type {
   ConflictGateResult,
@@ -50,9 +52,12 @@ export function applyConflictGate(input: ApplyConflictGateInput): {
     pushReason("RISK_VETO", input.riskManager.vetoReasons?.[0] ?? "Risk veto");
   }
 
+  const testnetFuturesBypass =
+    isTestnetPrimaryAutomation() && isBinanceFuturesOnlyMode();
+
   if (
-    !input.dataTrust.tradeAllowed ||
-    input.dataTrust.grade === "CRITICAL"
+    !testnetFuturesBypass &&
+    (!input.dataTrust.tradeAllowed || input.dataTrust.grade === "CRITICAL")
   ) {
     if (originalVerdict === "TRADE" || gatedVerdict === "TRADE") {
       gatedVerdict = input.dataTrust.criticalIssues.length > 2 ? "SKIP" : "WAIT";
@@ -61,10 +66,18 @@ export function applyConflictGate(input: ApplyConflictGateInput): {
         input.dataTrust.criticalIssues[0] ?? "Critical data trust failure",
       );
     }
-  } else if (input.dataTrust.grade === "LOW" && gatedVerdict === "TRADE") {
+  } else if (
+    !testnetFuturesBypass &&
+    input.dataTrust.grade === "LOW" &&
+    gatedVerdict === "TRADE"
+  ) {
     gatedVerdict = "WAIT";
     pushReason("DATA_TRUST", "Data trust LOW — only WAIT or SKIP permitted");
-  } else if (input.dataTrust.grade === "MEDIUM" && gatedVerdict === "TRADE") {
+  } else if (
+    !testnetFuturesBypass &&
+    input.dataTrust.grade === "MEDIUM" &&
+    gatedVerdict === "TRADE"
+  ) {
     gatedVerdict = "WAIT";
     paperOnlyRecommended = true;
     pushReason(

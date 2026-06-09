@@ -1,6 +1,5 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { AgentOsAction, AgentOsMode, PermissionApprovalScope, PermissionAuditEvent } from "./types";
-import path from "path";
 
 const AUDIT_FILE = "agent-os-permission-audit.json";
 const MAX_AUDIT = 500;
@@ -11,29 +10,16 @@ function isServer(): boolean {
   return typeof window === "undefined";
 }
 
-function auditPath(): string {
-  return path.join(getCronDataDir(), AUDIT_FILE);
-}
-
 async function readServerAudit(): Promise<PermissionAuditEvent[]> {
   if (!isServer()) return [];
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(auditPath(), "utf8");
-    const parsed = JSON.parse(raw) as PermissionAuditEvent[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = await readCronJsonFile<PermissionAuditEvent[]>(AUDIT_FILE, []);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 async function writeServerAudit(records: PermissionAuditEvent[]): Promise<void> {
   if (!isServer()) return;
   try {
-    const fs = await import("fs/promises");
-    const filePath = auditPath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(records, null, 2), "utf8");
+    await writeCronJsonFile(AUDIT_FILE, records);
   } catch {
     // memory fallback
   }

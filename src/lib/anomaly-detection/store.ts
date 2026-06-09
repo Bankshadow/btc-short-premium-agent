@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type {
   AnomalyFinding,
   AnomalyIncident,
@@ -10,10 +8,6 @@ import type {
 
 const INCIDENTS_FILE = "anomaly-incidents-v2.json";
 const MAX_INCIDENTS = 500;
-
-function incidentsPath(): string {
-  return path.join(getCronDataDir(), INCIDENTS_FILE);
-}
 
 function newIncidentId(): string {
   return `anm-inc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -26,23 +20,15 @@ function severityRank(value: AnomalyIncident["severity"]): number {
 }
 
 async function saveIncidents(incidents: AnomalyIncident[]): Promise<void> {
-  const filePath = incidentsPath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(
-    filePath,
-    JSON.stringify(incidents.slice(0, MAX_INCIDENTS), null, 2),
-    "utf8",
+  await writeCronJsonFile(
+    INCIDENTS_FILE,
+    incidents.slice(0, MAX_INCIDENTS),
   );
 }
 
 export async function loadAnomalyIncidents(): Promise<AnomalyIncident[]> {
-  try {
-    const raw = await fs.readFile(incidentsPath(), "utf8");
-    const parsed = JSON.parse(raw) as AnomalyIncident[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const parsed = await readCronJsonFile<AnomalyIncident[]>(INCIDENTS_FILE, []);
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 export async function upsertAnomalyFindings(

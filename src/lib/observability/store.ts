@@ -1,10 +1,10 @@
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type {
   ObservabilityErrorRecord,
   ObservabilityIncident,
   ObservabilityIncidentLink,
   ObservabilityUsageRecord,
 } from "./types";
-import path from "path";
 
 const ERRORS_FILE = "observability-errors.json";
 const INCIDENTS_FILE = "observability-incidents.json";
@@ -14,32 +14,6 @@ const METRICS_FILE = "observability-metrics.json";
 const MAX_ERRORS = 200;
 const MAX_INCIDENTS = 100;
 const MAX_USAGE = 500;
-
-function dataDir(): string {
-  const base = process.env.JOURNAL_DATA_DIR;
-  return base ?? path.join(/* turbopackIgnore: true */ process.cwd(), "data");
-}
-
-function filePath(name: string): string {
-  return path.join(dataDir(), name);
-}
-
-async function readJson<T>(name: string, fallback: T): Promise<T> {
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(filePath(name), "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJson<T>(name: string, value: T): Promise<void> {
-  const fs = await import("fs/promises");
-  const fp = filePath(name);
-  await fs.mkdir(path.dirname(fp), { recursive: true });
-  await fs.writeFile(fp, JSON.stringify(value, null, 2), "utf8");
-}
 
 export type ObservabilityMetrics = {
   analysisLatencyMs: number | null;
@@ -52,7 +26,7 @@ export type ObservabilityMetrics = {
 };
 
 export async function loadObservabilityMetrics(): Promise<ObservabilityMetrics> {
-  return readJson(METRICS_FILE, {
+  return readCronJsonFile(METRICS_FILE, {
     analysisLatencyMs: null,
     lastAnalysisAt: null,
     alertDeliveryFailures: 0,
@@ -68,7 +42,7 @@ export async function saveObservabilityMetrics(
 ): Promise<ObservabilityMetrics> {
   const current = await loadObservabilityMetrics();
   const next = { ...current, ...patch };
-  await writeJson(METRICS_FILE, next);
+  await writeCronJsonFile(METRICS_FILE, next);
   return next;
 }
 
@@ -83,7 +57,7 @@ export async function appendObservabilityError(
     occurredAt: record.occurredAt ?? new Date().toISOString(),
     ...record,
   };
-  await writeJson(ERRORS_FILE, [entry, ...errors].slice(0, MAX_ERRORS));
+  await writeCronJsonFile(ERRORS_FILE, [entry, ...errors].slice(0, MAX_ERRORS));
   const metrics = await loadObservabilityMetrics();
   await saveObservabilityMetrics({
     errorCount1h: metrics.errorCount1h + 1,
@@ -92,7 +66,7 @@ export async function appendObservabilityError(
 }
 
 export async function loadObservabilityErrors(): Promise<ObservabilityErrorRecord[]> {
-  return readJson(ERRORS_FILE, []);
+  return readCronJsonFile(ERRORS_FILE, []);
 }
 
 export async function appendObservabilityUsage(
@@ -104,16 +78,16 @@ export async function appendObservabilityUsage(
     occurredAt: new Date().toISOString(),
     ...record,
   };
-  await writeJson(USAGE_FILE, [entry, ...usage].slice(0, MAX_USAGE));
+  await writeCronJsonFile(USAGE_FILE, [entry, ...usage].slice(0, MAX_USAGE));
   return entry;
 }
 
 export async function loadObservabilityUsage(): Promise<ObservabilityUsageRecord[]> {
-  return readJson(USAGE_FILE, []);
+  return readCronJsonFile(USAGE_FILE, []);
 }
 
 export async function loadObservabilityIncidents(): Promise<ObservabilityIncident[]> {
-  return readJson(INCIDENTS_FILE, []);
+  return readCronJsonFile(INCIDENTS_FILE, []);
 }
 
 export async function createObservabilityIncident(input: {
@@ -143,7 +117,10 @@ export async function createObservabilityIncident(input: {
     autoCreated: input.autoCreated ?? false,
     links: input.links ?? {},
   };
-  await writeJson(INCIDENTS_FILE, [incident, ...incidents].slice(0, MAX_INCIDENTS));
+  await writeCronJsonFile(
+    INCIDENTS_FILE,
+    [incident, ...incidents].slice(0, MAX_INCIDENTS),
+  );
   return incident;
 }
 
@@ -164,7 +141,7 @@ export async function updateObservabilityIncident(
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  await writeJson(
+  await writeCronJsonFile(
     INCIDENTS_FILE,
     incidents.map((i) => (i.id === id ? updated : i)),
   );

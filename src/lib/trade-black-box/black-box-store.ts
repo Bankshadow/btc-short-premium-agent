@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import { TRADE_BLACK_BOX_MAX_RECORDS, TRADE_BLACK_BOX_STORE_FILE } from "./config";
 import type { TradeBlackBoxRecord, TradeBlackBoxStore } from "./types";
 
@@ -7,10 +6,6 @@ const memoryStore: TradeBlackBoxStore = defaultTradeBlackBoxStore();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), TRADE_BLACK_BOX_STORE_FILE);
 }
 
 export function defaultTradeBlackBoxStore(workspaceId = "server-default"): TradeBlackBoxStore {
@@ -24,18 +19,15 @@ export function defaultTradeBlackBoxStore(workspaceId = "server-default"): Trade
 
 async function readStore(): Promise<TradeBlackBoxStore> {
   if (!isServer()) return memoryStore;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<TradeBlackBoxStore>;
-    return {
-      ...defaultTradeBlackBoxStore(parsed.workspaceId),
-      ...parsed,
-      records: Array.isArray(parsed.records) ? parsed.records : [],
-    };
-  } catch {
-    return defaultTradeBlackBoxStore();
-  }
+  const parsed = await readCronJsonFile<Partial<TradeBlackBoxStore>>(
+    TRADE_BLACK_BOX_STORE_FILE,
+    {},
+  );
+  return {
+    ...defaultTradeBlackBoxStore(parsed.workspaceId),
+    ...parsed,
+    records: Array.isArray(parsed.records) ? parsed.records : [],
+  };
 }
 
 async function writeStore(store: TradeBlackBoxStore): Promise<void> {
@@ -46,10 +38,7 @@ async function writeStore(store: TradeBlackBoxStore): Promise<void> {
     memoryStore.records = [...store.records];
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(TRADE_BLACK_BOX_STORE_FILE, store);
 }
 
 export async function loadTradeBlackBoxStore(

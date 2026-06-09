@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type {
   GarageBacktestSummary,
   GarageCustomStrategy,
@@ -26,24 +25,17 @@ function isServer(): boolean {
   return typeof window === "undefined";
 }
 
-function storePath(file: string): string {
-  return path.join(getCronDataDir(), file);
-}
-
 async function readGarageStore(): Promise<GarageStore> {
   if (!isServer()) return memoryStore;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(STRATEGY_GARAGE_STORE_FILE), "utf8");
-    const parsed = JSON.parse(raw) as Partial<GarageStore>;
-    return {
-      customStrategies: parsed.customStrategies ?? [],
-      records: parsed.records ?? [],
-      updatedAt: parsed.updatedAt ?? new Date().toISOString(),
-    };
-  } catch {
-    return { customStrategies: [], records: [], updatedAt: new Date().toISOString() };
-  }
+  const parsed = await readCronJsonFile<Partial<GarageStore>>(
+    STRATEGY_GARAGE_STORE_FILE,
+    {},
+  );
+  return {
+    customStrategies: parsed.customStrategies ?? [],
+    records: parsed.records ?? [],
+    updatedAt: parsed.updatedAt ?? new Date().toISOString(),
+  };
 }
 
 async function writeGarageStore(store: GarageStore): Promise<void> {
@@ -52,22 +44,19 @@ async function writeGarageStore(store: GarageStore): Promise<void> {
     Object.assign(memoryStore, store);
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath(STRATEGY_GARAGE_STORE_FILE);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(STRATEGY_GARAGE_STORE_FILE, store);
 }
 
 async function readBacktestStore(): Promise<BacktestStore> {
   if (!isServer()) return memoryBacktests;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(STRATEGY_GARAGE_BACKTEST_FILE), "utf8");
-    const parsed = JSON.parse(raw) as Partial<BacktestStore>;
-    return { runs: parsed.runs ?? {}, updatedAt: parsed.updatedAt ?? new Date().toISOString() };
-  } catch {
-    return { runs: {}, updatedAt: new Date().toISOString() };
-  }
+  const parsed = await readCronJsonFile<Partial<BacktestStore>>(
+    STRATEGY_GARAGE_BACKTEST_FILE,
+    {},
+  );
+  return {
+    runs: parsed.runs ?? {},
+    updatedAt: parsed.updatedAt ?? new Date().toISOString(),
+  };
 }
 
 async function writeBacktestStore(store: BacktestStore): Promise<void> {
@@ -76,10 +65,7 @@ async function writeBacktestStore(store: BacktestStore): Promise<void> {
     Object.assign(memoryBacktests, store);
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath(STRATEGY_GARAGE_BACKTEST_FILE);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(STRATEGY_GARAGE_BACKTEST_FILE, store);
 }
 
 export async function loadCustomStrategies(): Promise<GarageCustomStrategy[]> {

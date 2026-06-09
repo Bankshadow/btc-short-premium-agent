@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { StrategyShadowTrade } from "./types";
 
 const STORE_FILE = "strategy-shadow-trades.json";
@@ -10,27 +8,16 @@ interface ShadowTradeStore {
   updatedAt: string;
 }
 
-function storePath(): string {
-  return path.join(getCronDataDir(), STORE_FILE);
-}
-
 async function loadStore(): Promise<ShadowTradeStore> {
-  try {
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<ShadowTradeStore>;
-    return {
-      trades: parsed.trades ?? [],
-      updatedAt: parsed.updatedAt ?? new Date().toISOString(),
-    };
-  } catch {
-    return { trades: [], updatedAt: new Date().toISOString() };
-  }
+  const parsed = await readCronJsonFile<Partial<ShadowTradeStore>>(STORE_FILE, {});
+  return {
+    trades: parsed.trades ?? [],
+    updatedAt: parsed.updatedAt ?? new Date().toISOString(),
+  };
 }
 
 async function saveStore(store: ShadowTradeStore): Promise<void> {
-  const filePath = storePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(STORE_FILE, store);
 }
 
 export async function loadShadowTrades(): Promise<StrategyShadowTrade[]> {

@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import { loadBinanceConfig } from "./binance-config";
 import { getExchangeInfo, getMarkPrice } from "./binance-futures-testnet";
 import { validateOrderAgainstRiskGate } from "./binance-risk-gate";
@@ -13,8 +11,23 @@ import type {
 const PREVIEW_TTL_MS = 5 * 60 * 1000;
 const PREVIEW_CACHE_FILE = "binance-preview-cache.json";
 
-function previewFilePath(): string {
-  return path.join(getCronDataDir(), PREVIEW_CACHE_FILE);
+async function loadPreviewCache(): Promise<Record<string, BinanceOrderPreview>> {
+  const parsed = await readCronJsonFile<Record<string, BinanceOrderPreview>>(
+    PREVIEW_CACHE_FILE,
+    {},
+  );
+  return parsed && typeof parsed === "object" ? parsed : {};
+}
+
+async function savePreviewCache(
+  cache: Record<string, BinanceOrderPreview>,
+): Promise<void> {
+  const pruned = Object.fromEntries(
+    Object.entries(cache).filter(
+      ([, p]) => Date.now() <= Date.parse(p.expiresAt),
+    ),
+  );
+  await writeCronJsonFile(PREVIEW_CACHE_FILE, pruned);
 }
 
 function newPreviewId(): string {
@@ -51,29 +64,6 @@ export function resolveEstimatedQty(
   }
 
   return estimated;
-}
-
-async function loadPreviewCache(): Promise<Record<string, BinanceOrderPreview>> {
-  try {
-    const raw = await fs.readFile(previewFilePath(), "utf8");
-    const parsed = JSON.parse(raw) as Record<string, BinanceOrderPreview>;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-async function savePreviewCache(
-  cache: Record<string, BinanceOrderPreview>,
-): Promise<void> {
-  const filePath = previewFilePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const pruned = Object.fromEntries(
-    Object.entries(cache).filter(
-      ([, p]) => Date.now() <= Date.parse(p.expiresAt),
-    ),
-  );
-  await fs.writeFile(filePath, JSON.stringify(pruned, null, 2), "utf8");
 }
 
 export async function getStoredPreview(

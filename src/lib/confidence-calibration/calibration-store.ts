@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import {
   CONFIDENCE_CALIBRATION_MAX_SAMPLES,
   CONFIDENCE_CALIBRATION_STORE_FILE,
@@ -19,10 +18,6 @@ function isServer(): boolean {
   return typeof window === "undefined";
 }
 
-function storePath(): string {
-  return path.join(getCronDataDir(), CONFIDENCE_CALIBRATION_STORE_FILE);
-}
-
 export function defaultCalibrationStore(workspaceId = "server-default"): ConfidenceCalibrationStore {
   return {
     workspaceId,
@@ -37,19 +32,16 @@ export { getCachedCalibrationProfile } from "./calibration-cache";
 
 async function readStore(): Promise<ConfidenceCalibrationStore> {
   if (!isServer()) return memoryStore;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<ConfidenceCalibrationStore>;
-    return {
-      ...defaultCalibrationStore(parsed.workspaceId),
-      ...parsed,
-      samples: Array.isArray(parsed.samples) ? parsed.samples : [],
-      profile: parsed.profile ?? null,
-    };
-  } catch {
-    return defaultCalibrationStore();
-  }
+  const parsed = await readCronJsonFile<Partial<ConfidenceCalibrationStore>>(
+    CONFIDENCE_CALIBRATION_STORE_FILE,
+    {},
+  );
+  return {
+    ...defaultCalibrationStore(parsed.workspaceId),
+    ...parsed,
+    samples: Array.isArray(parsed.samples) ? parsed.samples : [],
+    profile: parsed.profile ?? null,
+  };
 }
 
 async function writeStore(store: ConfidenceCalibrationStore): Promise<void> {
@@ -61,10 +53,7 @@ async function writeStore(store: ConfidenceCalibrationStore): Promise<void> {
     memoryStore.samples = [...store.samples];
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(CONFIDENCE_CALIBRATION_STORE_FILE, store);
 }
 
 export async function loadCalibrationStore(

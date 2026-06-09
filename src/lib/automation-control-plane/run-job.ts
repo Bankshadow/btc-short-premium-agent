@@ -4,6 +4,8 @@ import { runAutopilotCycle } from "@/lib/autopilot/run-autopilot";
 import { DEFAULT_AUTOPILOT_SETTINGS } from "@/lib/autopilot/config";
 import { buildLearningStatus } from "@/lib/autopilot/build-learning-status";
 import { buildOperatorActionQueue } from "@/lib/operator-action-queue/build-action-queue";
+import { applyTestnetPrimaryCommandCenterView } from "@/lib/command-center/apply-testnet-primary-view";
+import { buildTestnetPerpDeskPanel } from "@/lib/command-center/build-testnet-perp-panel";
 import { buildCommandCenterReport } from "@/lib/command-center/evaluate-status";
 import { buildCommandCenterServerContext } from "@/lib/command-center/server-context";
 import { buildDeskPortfolioSnapshot } from "@/lib/portfolio/milestones";
@@ -436,7 +438,7 @@ export async function runAutomationJob(
     case "COMMAND_CENTER_REFRESH":
       return runTimed(jobType, ctx, async () => {
         const serverContext = await buildCommandCenterServerContext();
-        const report = buildCommandCenterReport({
+        const baseReport = buildCommandCenterReport({
           entries,
           orders,
           perpPositions: server.perpPositions,
@@ -444,9 +446,11 @@ export async function runAutomationJob(
           latestAnalysis: ctx.analyze,
           serverContext,
         });
-        ctx.commandCenterStatus = report.status;
+        const testnetPerp = await buildTestnetPerpDeskPanel();
+        const report = applyTestnetPrimaryCommandCenterView(baseReport, testnetPerp);
+        ctx.commandCenterStatus = report.operationalStatus ?? report.status;
         return {
-          summary: `Desk ${report.status} · ${report.blockers.length} blocker(s)`,
+          summary: `Desk ${report.operationalStatus ?? report.status} · ${report.blockers.length} blocker(s)`,
         };
       });
 

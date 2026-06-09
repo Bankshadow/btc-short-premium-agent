@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import {
   CONTINUOUS_IMPROVEMENT_MAX_PROPOSALS,
   CONTINUOUS_IMPROVEMENT_STORE_FILE,
@@ -10,10 +9,6 @@ const memoryStore: ContinuousImprovementStore = defaultImprovementStore();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), CONTINUOUS_IMPROVEMENT_STORE_FILE);
 }
 
 export function defaultImprovementStore(workspaceId = "server-default"): ContinuousImprovementStore {
@@ -27,18 +22,15 @@ export function defaultImprovementStore(workspaceId = "server-default"): Continu
 
 async function readStore(): Promise<ContinuousImprovementStore> {
   if (!isServer()) return memoryStore;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<ContinuousImprovementStore>;
-    return {
-      ...defaultImprovementStore(parsed.workspaceId),
-      ...parsed,
-      proposals: Array.isArray(parsed.proposals) ? parsed.proposals : [],
-    };
-  } catch {
-    return defaultImprovementStore();
-  }
+  const parsed = await readCronJsonFile<Partial<ContinuousImprovementStore>>(
+    CONTINUOUS_IMPROVEMENT_STORE_FILE,
+    {},
+  );
+  return {
+    ...defaultImprovementStore(parsed.workspaceId),
+    ...parsed,
+    proposals: Array.isArray(parsed.proposals) ? parsed.proposals : [],
+  };
 }
 
 async function writeStore(store: ContinuousImprovementStore): Promise<void> {
@@ -49,10 +41,7 @@ async function writeStore(store: ContinuousImprovementStore): Promise<void> {
     memoryStore.proposals = [...store.proposals];
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(CONTINUOUS_IMPROVEMENT_STORE_FILE, store);
 }
 
 export async function loadImprovementStore(

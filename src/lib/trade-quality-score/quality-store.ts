@@ -1,17 +1,8 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import { TRADE_QUALITY_MAX_SCORES, TRADE_QUALITY_STORE_FILE } from "./config";
 import type { TradeQualityScore, TradeQualityStore } from "./types";
 
 const memoryStore: TradeQualityStore = defaultTradeQualityStore();
-
-function isServer(): boolean {
-  return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), TRADE_QUALITY_STORE_FILE);
-}
 
 export function defaultTradeQualityStore(workspaceId = "server-default"): TradeQualityStore {
   return {
@@ -21,21 +12,21 @@ export function defaultTradeQualityStore(workspaceId = "server-default"): TradeQ
     updatedAt: new Date().toISOString(),
   };
 }
+function isServer(): boolean {
+  return typeof window === "undefined";
+}
 
 async function readStore(): Promise<TradeQualityStore> {
   if (!isServer()) return memoryStore;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<TradeQualityStore>;
-    return {
-      ...defaultTradeQualityStore(parsed.workspaceId),
-      ...parsed,
-      scores: Array.isArray(parsed.scores) ? parsed.scores : [],
-    };
-  } catch {
-    return defaultTradeQualityStore();
-  }
+  const parsed = await readCronJsonFile<Partial<TradeQualityStore>>(
+    TRADE_QUALITY_STORE_FILE,
+    {},
+  );
+  return {
+    ...defaultTradeQualityStore(parsed.workspaceId),
+    ...parsed,
+    scores: Array.isArray(parsed.scores) ? parsed.scores : [],
+  };
 }
 
 async function writeStore(store: TradeQualityStore): Promise<void> {
@@ -46,10 +37,7 @@ async function writeStore(store: TradeQualityStore): Promise<void> {
     memoryStore.scores = [...store.scores];
     return;
   }
-  const fs = await import("fs/promises");
-  const filePath = storePath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), "utf8");
+  await writeCronJsonFile(TRADE_QUALITY_STORE_FILE, store);
 }
 
 export async function loadTradeQualityStore(

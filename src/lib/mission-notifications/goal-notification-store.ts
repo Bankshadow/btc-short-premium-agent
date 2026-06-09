@@ -1,6 +1,4 @@
-import fs from "fs/promises";
-import path from "path";
-import { getCronDataDir } from "@/lib/cron/cron-config";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 
 const PREFS_FILE = "goal-notification-prefs.json";
 
@@ -16,18 +14,12 @@ const DEFAULT_PREFS: GoalNotificationPrefs = {
   lastAlertAt: null,
 };
 
-function prefsPath(): string {
-  return path.join(getCronDataDir(), PREFS_FILE);
-}
-
 export async function loadGoalNotificationPrefs(): Promise<GoalNotificationPrefs> {
-  try {
-    const raw = await fs.readFile(prefsPath(), "utf8");
-    const parsed = JSON.parse(raw) as Partial<GoalNotificationPrefs>;
-    return { ...DEFAULT_PREFS, ...parsed };
-  } catch {
-    return { ...DEFAULT_PREFS };
-  }
+  const parsed = await readCronJsonFile<Partial<GoalNotificationPrefs>>(
+    PREFS_FILE,
+    {},
+  );
+  return { ...DEFAULT_PREFS, ...parsed };
 }
 
 export async function saveGoalNotificationPrefs(
@@ -35,8 +27,6 @@ export async function saveGoalNotificationPrefs(
 ): Promise<GoalNotificationPrefs> {
   const current = await loadGoalNotificationPrefs();
   const next = { ...current, ...patch };
-  const filePath = prefsPath();
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, JSON.stringify(next, null, 2), "utf8");
+  await writeCronJsonFile(PREFS_FILE, next);
   return next;
 }

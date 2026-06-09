@@ -1,5 +1,4 @@
-import { getCronDataDir } from "@/lib/cron/cron-config";
-import path from "path";
+import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type { TelegramControlChannelState, TelegramPermissionPrompt } from "./types";
 import { TELEGRAM_CONTROL_STORE_FILE } from "./config";
 import { isTelegramControlEnabled } from "./config";
@@ -8,10 +7,6 @@ const memory = defaultTelegramControlState();
 
 function isServer(): boolean {
   return typeof window === "undefined";
-}
-
-function storePath(): string {
-  return path.join(getCronDataDir(), TELEGRAM_CONTROL_STORE_FILE);
 }
 
 export function defaultTelegramControlState(
@@ -31,14 +26,11 @@ export function defaultTelegramControlState(
 
 async function readState(): Promise<TelegramControlChannelState> {
   if (!isServer()) return memory;
-  try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(storePath(), "utf8");
-    const parsed = JSON.parse(raw) as TelegramControlChannelState;
-    return { ...defaultTelegramControlState(parsed.workspaceId), ...parsed };
-  } catch {
-    return defaultTelegramControlState();
-  }
+  const parsed = await readCronJsonFile<TelegramControlChannelState>(
+    TELEGRAM_CONTROL_STORE_FILE,
+    defaultTelegramControlState(),
+  );
+  return { ...defaultTelegramControlState(parsed.workspaceId), ...parsed };
 }
 
 async function writeState(state: TelegramControlChannelState): Promise<void> {
@@ -49,10 +41,7 @@ async function writeState(state: TelegramControlChannelState): Promise<void> {
     return;
   }
   try {
-    const fs = await import("fs/promises");
-    const filePath = storePath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(state, null, 2), "utf8");
+    await writeCronJsonFile(TELEGRAM_CONTROL_STORE_FILE, state);
   } catch {
     Object.assign(memory, state);
   }
