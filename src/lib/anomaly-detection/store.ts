@@ -1,3 +1,4 @@
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
 import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type {
   AnomalyFinding,
@@ -17,6 +18,23 @@ function severityRank(value: AnomalyIncident["severity"]): number {
   if (value === "CRITICAL") return 3;
   if (value === "WARNING") return 2;
   return 1;
+}
+
+function resolveIncidentSeverity(
+  existing: AnomalyIncident | undefined,
+  finding: AnomalyFinding,
+): AnomalyIncident["severity"] {
+  if (!existing) return finding.severity;
+  if (
+    isTestnetPrimaryAutomation() &&
+    finding.anomalyType === "alert_delivery_failed" &&
+    finding.severity === "WARNING"
+  ) {
+    return "WARNING";
+  }
+  return severityRank(finding.severity) > severityRank(existing.severity)
+    ? finding.severity
+    : existing.severity;
 }
 
 async function saveIncidents(incidents: AnomalyIncident[]): Promise<void> {
@@ -46,10 +64,7 @@ export async function upsertAnomalyFindings(
     if (existing && existing.status !== "RESOLVED") {
       byFingerprint.set(finding.fingerprint, {
         ...existing,
-        severity:
-          severityRank(finding.severity) > severityRank(existing.severity)
-            ? finding.severity
-            : existing.severity,
+        severity: resolveIncidentSeverity(existing, finding),
         title: finding.title,
         evidence: finding.evidence,
         impactedModules: finding.impactedModules,

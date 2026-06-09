@@ -15,6 +15,9 @@ const LIVE_SCALING_BACKBONE_PATTERNS = [
   /warehouse-backed/i,
   /validation sample/i,
   /decision log/i,
+  /partial derivatives/i,
+  /combination read/i,
+  /derivatives data/i,
 ];
 
 export function isLiveScalingBackboneBlocker(message: string): boolean {
@@ -25,6 +28,13 @@ export function isLiveScalingAnalyzeFailureError(error: string): boolean {
   return isLiveScalingBackboneBlocker(error);
 }
 
+export function getOperationalBackboneBlockers(
+  health: DeskBackboneHealth,
+): string[] {
+  if (!isTestnetPrimaryAutomation()) return health.writeBlockers;
+  return health.writeBlockers.filter((b) => !isLiveScalingBackboneBlocker(b));
+}
+
 /** Whether DESK_ANALYZE should hard-stop on persisted backbone health. */
 export function shouldBlockDeskAnalyzeOnBackbone(input: {
   healthy: boolean;
@@ -33,9 +43,5 @@ export function shouldBlockDeskAnalyzeOnBackbone(input: {
 }): boolean {
   if (input.force || input.healthy || !input.health) return false;
   if (!isTestnetPrimaryAutomation()) return true;
-
-  const operationalBlockers = input.health.writeBlockers.filter(
-    (b) => !isLiveScalingBackboneBlocker(b),
-  );
-  return operationalBlockers.length > 0;
+  return getOperationalBackboneBlockers(input.health).length > 0;
 }

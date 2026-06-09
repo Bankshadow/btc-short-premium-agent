@@ -60,4 +60,53 @@ describe("P-MVP 4 Automation Control Plane", () => {
     if (prevMode === undefined) delete process.env.AUTOMATION_PRIMARY_MODE;
     else process.env.AUTOMATION_PRIMARY_MODE = prevMode;
   });
+
+  it("skips live-scaling backbone blockers for DESK_ANALYZE in testnet primary", async () => {
+    const prevMode = process.env.AUTOMATION_PRIMARY_MODE;
+    process.env.AUTOMATION_PRIMARY_MODE = "testnet_perp";
+    const {
+      shouldBlockDeskAnalyzeOnBackbone,
+      isLiveScalingAnalyzeFailureError,
+    } = await import("./analyze-backbone-gate");
+    const liveBlockers = [
+      "No resolved paper trades — outcome resolution required.",
+      "Exchange API keys not configured.",
+    ];
+    assert.equal(
+      shouldBlockDeskAnalyzeOnBackbone({
+        healthy: false,
+        health: {
+          healthy: false,
+          writeBlockers: liveBlockers,
+          staleWarning: null,
+          lastWriteAt: null,
+          source: "hybrid",
+        },
+      }),
+      false,
+    );
+    assert.equal(
+      isLiveScalingAnalyzeFailureError(liveBlockers.join("; ")),
+      true,
+    );
+    assert.equal(
+      shouldBlockDeskAnalyzeOnBackbone({
+        healthy: false,
+        health: {
+          healthy: false,
+          writeBlockers: [
+            liveBlockers.join("; "),
+            "No Telegram, Discord, or desk webhook configured.",
+            "Partial derivatives data — combination read may be wrong.",
+          ],
+          staleWarning: null,
+          lastWriteAt: null,
+          source: "hybrid",
+        },
+      }),
+      false,
+    );
+    if (prevMode === undefined) delete process.env.AUTOMATION_PRIMARY_MODE;
+    else process.env.AUTOMATION_PRIMARY_MODE = prevMode;
+  });
 });

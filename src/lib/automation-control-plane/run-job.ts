@@ -39,7 +39,10 @@ import {
   buildMarketContextHash,
 } from "@/lib/autopilot-loop-guard/fingerprints";
 import { recordLoopGuardAction } from "@/lib/autopilot-loop-guard/record-action";
-import { shouldBlockDeskAnalyzeOnBackbone } from "./analyze-backbone-gate";
+import {
+  getOperationalBackboneBlockers,
+  shouldBlockDeskAnalyzeOnBackbone,
+} from "./analyze-backbone-gate";
 import { isTestnetPrimaryAutomation } from "./primary-mode";
 
 export type AutomationJobContext = {
@@ -180,8 +183,9 @@ export async function runAutomationJob(
             force: ctx.input.force,
           })
         ) {
+          const operational = getOperationalBackboneBlockers(eval_.health!);
           throw new Error(
-            eval_.health!.writeBlockers[0] ??
+            operational[0] ??
               eval_.health!.staleWarning ??
               "Backbone unhealthy — analyze blocked.",
           );

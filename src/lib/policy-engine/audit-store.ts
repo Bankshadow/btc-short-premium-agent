@@ -1,6 +1,5 @@
 import { POLICY_AUDIT_FILE, POLICY_MAX_AUDIT } from "./config";
 import type { PolicyDecisionRecord, PolicyResult } from "./types";
-import path from "path";
 
 const memoryAudit: PolicyDecisionRecord[] = [];
 
@@ -8,18 +7,14 @@ function isServer(): boolean {
   return typeof window === "undefined";
 }
 
-function auditPath(): string {
-  const base = process.env.JOURNAL_DATA_DIR;
-  const dir = base ?? path.join(/* turbopackIgnore: true */ process.cwd(), "data");
-  return path.join(dir, POLICY_AUDIT_FILE);
-}
-
 async function readServerAudit(): Promise<PolicyDecisionRecord[]> {
   if (!isServer()) return [];
   try {
-    const fs = await import("fs/promises");
-    const raw = await fs.readFile(auditPath(), "utf8");
-    const parsed = JSON.parse(raw) as PolicyDecisionRecord[];
+    const { readCronJsonFile } = await import("@/lib/cron/cron-config");
+    const parsed = await readCronJsonFile<PolicyDecisionRecord[]>(
+      POLICY_AUDIT_FILE,
+      [],
+    );
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -29,10 +24,8 @@ async function readServerAudit(): Promise<PolicyDecisionRecord[]> {
 async function writeServerAudit(records: PolicyDecisionRecord[]): Promise<void> {
   if (!isServer()) return;
   try {
-    const fs = await import("fs/promises");
-    const filePath = auditPath();
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, JSON.stringify(records, null, 2), "utf8");
+    const { writeCronJsonFile } = await import("@/lib/cron/cron-config");
+    await writeCronJsonFile(POLICY_AUDIT_FILE, records);
   } catch {
     // fall back to memory only
   }
