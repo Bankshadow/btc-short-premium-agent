@@ -52,7 +52,7 @@ async function runAutomationCycle() {
   const { res, data } = await fetchJson("/api/automation/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ trigger: "manual" }),
+    body: JSON.stringify({ trigger: "manual", force: true }),
   });
   if (!res.ok || data.ok === false) {
     throw new Error(data.error ?? data.result?.error ?? `Automation HTTP ${res.status}`);
@@ -139,7 +139,13 @@ async function main() {
     try {
       log("automation", "Running automation cycle (analyze → autoexecute → monitor)…");
       const automation = await runAutomationCycle();
-      log("automation", `${automation.status} · ${automation.summary ?? automation.jobs?.length ?? 0} job(s)`);
+      log(
+        "automation",
+        `${automation.status} · ${automation.summary ?? `${automation.jobs?.length ?? 0} job(s)`}`,
+      );
+      if (automation.status === "SKIPPED") {
+        throw new Error("Automation skipped — falling back to manual analysis/execute");
+      }
     } catch (err) {
       log("automation", `fallback to analysis/run — ${err instanceof Error ? err.message : err}`);
       try {

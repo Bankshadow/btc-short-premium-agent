@@ -25,6 +25,14 @@ export async function buildIntegratedStrategyHealth(
   const evidenceQualityBlocked = Boolean(
     evidenceQuality?.blocksStrategyHealthReview,
   );
+  /** Allow new testnet entries while collecting valid evidence toward 12/12. */
+  const evidenceCollectionInProgress = Boolean(
+    evidenceQuality &&
+      evidenceQuality.validEvidenceCount < STRATEGY_HEALTH_EVIDENCE_REQUIRED &&
+      evidenceQuality.invalidEvidenceCount === 0,
+  );
+  const evidenceBlocksNewTestnetEntries =
+    evidenceQualityBlocked && !evidenceCollectionInProgress;
   const evidenceQualityBlockReason = evidenceQualityBlocked
     ? evidenceQuality?.blockReason ??
       "Evidence quality poor — strategy health review blocked."
@@ -121,7 +129,8 @@ export async function buildIntegratedStrategyHealth(
     agentScoreboardLearned: input.agentScoreboardLearned ?? 0,
     governanceWarningActive,
     blocksNewTestnetEntries:
-      evidenceQualityBlocked || blocksTestnetEntriesForHealth(primaryReport),
+      evidenceBlocksNewTestnetEntries ||
+      blocksTestnetEntriesForHealth(primaryReport),
     autoStrategyChangeAllowed: false,
     liveTradingBlocked: true,
     confidenceOverconfidenceDetected:
