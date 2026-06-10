@@ -18,6 +18,7 @@ import {
   buildMicroLiveReadiness,
   buildMicroLiveReadinessDefaults,
 } from "@/lib/micro-live-readiness";
+import { isMissionPausingCriticalIncident } from "@/lib/anomaly-detection/testnet-gate";
 import { loadAnomalyIncidents } from "@/lib/anomaly-detection/store";
 import { loadMonitorJournalEvents } from "./monitor-journal-server";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
@@ -387,10 +388,8 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
       : loadMonitorJournalEvents().catch(() => []),
     loadAnomalyIncidents().catch(() => []),
   ]);
-  const criticalIncident = incidents.find(
-    (i) =>
-      i.severity === "CRITICAL" &&
-      (i.status === "OPEN" || i.status === "INVESTIGATING"),
+  const criticalIncident = incidents.find((i) =>
+    isMissionPausingCriticalIncident(i),
   );
   const microLiveReadiness = await buildMicroLiveReadiness(
     buildMicroLiveReadinessDefaults({

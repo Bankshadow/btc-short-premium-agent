@@ -18,6 +18,8 @@ export type ConsistencyIssueKind =
 export type ConsistencyAutoFixId =
   | "journal_reconcile"
   | "journal_backfill"
+  | "decision_log_backfill"
+  | "monitor_event_backfill"
   | "learning_sync"
   | "mission_snapshot_refresh";
 

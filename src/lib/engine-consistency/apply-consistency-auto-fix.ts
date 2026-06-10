@@ -9,6 +9,11 @@ import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { buildClosedTradesFromJournal } from "@/lib/testnet-monitor/build-testnet-monitor-snapshot";
 import { syncLearningRecordsFromClosedTradesServer } from "@/lib/testnet-monitor/learning-records-server";
+import { loadMonitorJournalEvents } from "@/lib/testnet-monitor/monitor-journal-server";
+import {
+  backfillMissingDecisionLogIds,
+  backfillMissingMonitorEvents,
+} from "./backfill-engine-consistency-links";
 import type { ConsistencyAutoFixId } from "./types";
 
 export interface ApplyConsistencyAutoFixResult {
@@ -62,6 +67,35 @@ export async function applyConsistencyAutoFix(
             await saveServerBinanceTestnetJournal(backfilled);
           }
           applied.push(action);
+          break;
+        }
+        case "decision_log_backfill": {
+          const [journal, decisions] = await Promise.all([
+            loadServerBinanceTestnetJournal(),
+            loadServerAnalysisJournal().catch(() => []),
+          ]);
+          const { journal: linked, linkedCount } = backfillMissingDecisionLogIds(
+            journal,
+            decisions,
+          );
+          if (linkedCount > 0) {
+            await saveServerBinanceTestnetJournal(linked);
+          }
+          applied.push(action);
+          break;
+        }
+        case "monitor_event_backfill": {
+          const [decisions, monitorEvents] = await Promise.all([
+            loadServerAnalysisJournal().catch(() => []),
+            loadMonitorJournalEvents().catch(() => []),
+          ]);
+          const { createdCount } = await backfillMissingMonitorEvents({
+            decisions,
+            monitorEvents,
+          });
+          if (createdCount >= 0) {
+            applied.push(action);
+          }
           break;
         }
         case "learning_sync": {

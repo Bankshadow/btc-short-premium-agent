@@ -15,6 +15,8 @@ export default function ReconciliationDashboard() {
   const [status, setStatus] = useState<ReconciliationStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [autoFixBusy, setAutoFixBusy] = useState(false);
+  const [autoFixMessage, setAutoFixMessage] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -39,6 +41,37 @@ export default function ReconciliationDashboard() {
 
   useEffect(() => {
     void refresh();
+  }, [refresh]);
+
+  const runAutoFix = useCallback(async () => {
+    setAutoFixBusy(true);
+    setAutoFixMessage(null);
+    try {
+      const res = await fetch("/api/analysis/consistency/fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applyRecommended: true }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        result?: { applied?: string[]; errors?: string[] };
+      };
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error ?? "Auto-fix failed");
+      }
+      const applied = data.result?.applied ?? [];
+      setAutoFixMessage(
+        applied.length > 0
+          ? `Applied: ${applied.join(", ")}`
+          : "No auto-fix actions were needed.",
+      );
+      await refresh();
+    } catch (err) {
+      setAutoFixMessage(err instanceof Error ? err.message : "Auto-fix failed");
+    } finally {
+      setAutoFixBusy(false);
+    }
   }, [refresh]);
 
   const summary = status?.status ?? "WARNING";
@@ -100,13 +133,23 @@ export default function ReconciliationDashboard() {
           </section>
 
           {status.autoFixAvailable && (
-            <p className="mt-4 text-xs text-violet-300">
-              Auto-fix available — use legacy{" "}
-              <Link href="/api/analysis/consistency/fix" className="underline">
-                consistency fix API
-              </Link>{" "}
-              from operator tools.
-            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={autoFixBusy}
+                onClick={() => void runAutoFix()}
+                className="rounded-md border border-violet-800/60 bg-violet-950/40 px-3 py-2 text-xs text-violet-100 hover:bg-violet-900/40 disabled:opacity-50"
+              >
+                {autoFixBusy ? "Running auto-fix…" : "Run safe auto-fix"}
+              </button>
+              <span className="text-[10px] text-zinc-500">
+                Journal reconcile, backfill, decision links, learning sync — no orders placed.
+              </span>
+            </div>
+          )}
+
+          {autoFixMessage && (
+            <p className="mt-2 text-xs text-violet-200">{autoFixMessage}</p>
           )}
 
           {status.requiredManualAction && (

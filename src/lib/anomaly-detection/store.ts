@@ -49,23 +49,32 @@ export async function loadAnomalyIncidents(): Promise<AnomalyIncident[]> {
   return Array.isArray(parsed) ? parsed : [];
 }
 
-function healStaleTestnetAlertIncidents(
+function healStaleTestnetIncidents(
   incidents: AnomalyIncident[],
 ): AnomalyIncident[] {
   if (!isTestnetPrimaryAutomation()) return incidents;
   const now = new Date().toISOString();
-  return incidents.map((incident) =>
-    incident.anomalyType === "alert_delivery_failed" &&
-    incident.severity === "CRITICAL"
-      ? { ...incident, severity: "WARNING", updatedAt: now }
-      : incident,
-  );
+  return incidents.map((incident) => {
+    if (
+      incident.anomalyType === "alert_delivery_failed" &&
+      incident.severity === "CRITICAL"
+    ) {
+      return { ...incident, severity: "WARNING", updatedAt: now };
+    }
+    if (
+      incident.anomalyType === "micro_live_readiness_blocked" &&
+      incident.severity === "CRITICAL"
+    ) {
+      return { ...incident, severity: "WARNING", updatedAt: now };
+    }
+    return incident;
+  });
 }
 
 export async function upsertAnomalyFindings(
   findings: AnomalyFinding[],
 ): Promise<AnomalyIncident[]> {
-  const current = healStaleTestnetAlertIncidents(await loadAnomalyIncidents());
+  const current = healStaleTestnetIncidents(await loadAnomalyIncidents());
   const now = new Date().toISOString();
   const byFingerprint = new Map<string, AnomalyIncident>();
   for (const incident of current) {

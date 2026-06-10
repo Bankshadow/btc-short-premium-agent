@@ -61,10 +61,11 @@ export function assembleEngineConsistencySnapshot(
           message: `Binance journal ${j.symbol} ${j.status} missing decisionLogId.`,
           source: "Binance Testnet Journal",
           relatedId: j.binanceTestnetTradeId,
-          autoFixId: null,
-          requiredManualAction: "Attach decision log when reviewing trade in Raw Ledger.",
+          autoFixId: "decision_log_backfill",
+          requiredManualAction: null,
         }),
       );
+      autoFixActions.add("decision_log_backfill");
     }
   }
 
@@ -176,11 +177,11 @@ export function assembleEngineConsistencySnapshot(
           message: `Decision ${entry.id.slice(0, 12)}… has no monitor journal event.`,
           source: "Decision Log",
           relatedId: entry.id,
-          autoFixId: null,
-          requiredManualAction:
-            "Run analysis cycle or check monitor journal — may be pre-monitor legacy entry.",
+          autoFixId: "monitor_event_backfill",
+          requiredManualAction: null,
         }),
       );
+      autoFixActions.add("monitor_event_backfill");
     }
   }
 

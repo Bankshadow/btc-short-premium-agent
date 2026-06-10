@@ -85,7 +85,7 @@ export async function applyMicroLiveReadinessSideEffects(input: {
   if (input.report.readinessStatus === "BLOCKED") {
     const finding: AnomalyFinding = {
       anomalyType: "micro_live_readiness_blocked",
-      severity: "CRITICAL",
+      severity: "WARNING",
       title: "Micro-live readiness BLOCKED",
       evidence: {
         blockers: input.report.blockers,

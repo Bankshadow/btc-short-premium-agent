@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 const VALID_FIXES = new Set<ConsistencyAutoFixId>([
   "journal_reconcile",
   "journal_backfill",
+  "decision_log_backfill",
+  "monitor_event_backfill",
   "learning_sync",
   "mission_snapshot_refresh",
 ]);
