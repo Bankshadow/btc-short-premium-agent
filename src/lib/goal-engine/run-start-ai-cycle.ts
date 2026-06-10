@@ -1,3 +1,5 @@
+import { probeBinanceStatus } from "@/lib/testnet-engine-activation/activation-probes";
+import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
 import { runCentralAnalysisOrchestrator } from "@/lib/analysis-engine/analysis-orchestrator";
 import type { DeskRun } from "@/lib/data-backbone/types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
@@ -20,11 +22,14 @@ export interface GoalStartAiCycleResult {
 
 /** Start AI — delegates to MVP 83 Central Analysis Engine. */
 export async function runGoalStartAiCycle(): Promise<GoalStartAiCycleResult> {
+  const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(
+    await probeBinanceStatus(),
+  );
   const output = await runCentralAnalysisOrchestrator({
     trigger: "start_ai",
     enrichMvp9: true,
     runAutopilot: true,
-    createTestnetPreview: false,
+    createTestnetPreview: diagnostic.connected,
   });
 
   if (!output.result.analyzeResponse || !output.result.journalEntry) {

@@ -73,21 +73,7 @@ export async function POST(request: Request) {
       orders: body.orders,
     });
 
-    if (result.ok) {
-      await recordMonitorEvent({
-        exchange: "BINANCE",
-        environment: "TESTNET",
-        eventType: "POSITION_CLOSED",
-        symbol: body.symbol,
-        payload: {
-          exchangeOrderId: result.exchangeOrderId,
-          positionId: body.positionId,
-        },
-        decisionLogId: result.journalEntry?.decisionLogId ?? null,
-        orderId: result.exchangeOrderId,
-        positionId: body.positionId ?? null,
-      });
-    } else {
+    if (!result.ok) {
       await recordMonitorEvent({
         exchange: "BINANCE",
         environment: "TESTNET",

@@ -10,6 +10,7 @@
     "docs:pdf": "node scripts/generate-desk-overview-pdf.mjs",
     "setup:testnet": "powershell -ExecutionPolicy Bypass -File scripts/setup-testnet.ps1",
     "verify:exchange": "node scripts/verify-testnet-setup.mjs",
+    "testnet:evidence-collector": "node scripts/run-testnet-evidence-collector.mjs",
     "push:vercel-env": "powershell -ExecutionPolicy Bypass -File scripts/push-vercel-env.ps1",
     "test:paper-relaxed": "npx --yes tsx --test src/lib/paper/paper-relaxed-gate.test.ts",
     "test:live-pilot": "npx --yes tsx --test src/lib/live-pilot/pilot-guards.test.ts",

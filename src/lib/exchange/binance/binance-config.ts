@@ -1,5 +1,6 @@
 import type { BinanceConfig, BinanceCredentials } from "./binance-types";
 import { BINANCE_PRODUCTION_HARD_BLOCK } from "./binance-types";
+import { BINANCE_MIN_NOTIONAL_USD } from "./trust-scaled-notional";
 
 const TESTNET_BASE_DEFAULT = "https://demo-fapi.binance.com";
 
@@ -91,7 +92,10 @@ export function loadBinanceConfig(): BinanceConfig {
     upstreamBaseUrl,
     proxyEnabled: Boolean(proxyUrl),
     allowedSymbols,
-    maxNotionalUsd: envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 55),
+    maxNotionalUsd: Math.max(
+      BINANCE_MIN_NOTIONAL_USD,
+      envNumber("BINANCE_TESTNET_MAX_NOTIONAL_USD", 55),
+    ),
     maxTradesPerDay: envNumber(
       "BINANCE_TESTNET_MAX_TRADES_PER_DAY",
       multiTf ? 30 : 15,

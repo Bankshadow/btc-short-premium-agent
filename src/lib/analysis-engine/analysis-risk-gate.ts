@@ -63,8 +63,8 @@ export function runAnalysisRiskGate(input: {
     blockers.push(liveBlock);
   }
 
-  if (input.context.testnetStatus.autoExecuteEnabled) {
-    reasons.push("Testnet auto-execute is disabled by policy — double confirm required.");
+  if (!input.context.testnetStatus.autoExecuteEnabled) {
+    reasons.push("Testnet auto-execute disabled — manual double confirm required.");
   }
 
   const committeeReason =
@@ -95,8 +95,7 @@ export function runAnalysisRiskGate(input: {
   const executionReady =
     blockers.length === 0 &&
     input.finalVerdict === "TRADE" &&
-    input.context.testnetStatus.connected &&
-    !input.context.testnetStatus.autoExecuteEnabled;
+    input.context.testnetStatus.connected;
 
   const humanActionRequired =
     input.finalVerdict === "TRADE" ||
@@ -109,9 +108,11 @@ export function runAnalysisRiskGate(input: {
   if (blockers.length > 0) {
     nextAction = `Resolve blocker: ${blockers[0]}`;
   } else if (input.finalVerdict === "TRADE") {
-    nextAction = executionReady
-      ? "Review testnet preview and double-confirm execution on Dashboard."
-      : "TRADE verdict — connect testnet or resolve readiness blockers.";
+    nextAction = input.context.testnetStatus.autoExecuteEnabled
+      ? "TRADE verdict — autopilot will preview/execute on next cycle (double confirm enforced)."
+      : executionReady
+        ? "Review testnet preview and double-confirm execution on Dashboard."
+        : "TRADE verdict — connect testnet or resolve readiness blockers.";
   } else if (input.finalVerdict === "WAIT") {
     nextAction = "Wait for clearer setup — no trade candidate.";
   }

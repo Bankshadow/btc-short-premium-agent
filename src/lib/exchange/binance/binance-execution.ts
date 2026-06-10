@@ -30,6 +30,7 @@ import type { GovernanceDeskState } from "@/lib/governance/governance-types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
+import { recordTestnetCloseMonitorEvents } from "@/lib/testnet-monitor/record-close-monitor-events";
 
 export async function executeBinanceTestnetOrder(input: {
   execute: BinanceExecuteInput;
@@ -362,6 +363,16 @@ export async function executeBinanceTestnetClose(input: {
       title: "Testnet position closing",
       body: `${input.close.symbol} reduce-only close submitted · order ${order.orderId}`,
     }).catch(() => undefined);
+
+    if (journalEntry) {
+      await recordTestnetCloseMonitorEvents({
+        symbol: input.close.symbol,
+        exchangeOrderId: String(order.orderId),
+        decisionLogId: journalEntry.decisionLogId ?? null,
+        journalTradeId: journalEntry.binanceTestnetTradeId,
+        realizedPnl: estimatedPnl,
+      }).catch(() => undefined);
+    }
 
     return {
       ok: true,

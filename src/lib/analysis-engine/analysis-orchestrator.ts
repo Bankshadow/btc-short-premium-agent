@@ -185,7 +185,7 @@ export async function runCentralAnalysisOrchestrator(
     createTestnetPreview &&
     testnetConnected &&
     finalVerdict === "TRADE" &&
-    riskGate.executionReady
+    blockers.length === 0
   ) {
     try {
       const previewInput = buildBinancePreviewInputFromAiSignal({

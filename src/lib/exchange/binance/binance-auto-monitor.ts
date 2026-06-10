@@ -289,6 +289,17 @@ export async function runBinanceTestnetAutoMonitor(input: {
         positions,
       });
       journalWriteAt = new Date().toISOString();
+
+      await (
+        await import("@/lib/testnet-monitor/build-testnet-monitor-snapshot")
+      )
+        .buildTestnetMonitorSnapshot({ fresh: true })
+        .catch(() => null);
+      await (
+        await import("@/lib/testnet-monitor/learning-records-server")
+      )
+        .autoMarkPendingLearningRecordsServer()
+        .catch(() => null);
     }
 
     await recordMonitorCycleHeartbeat({
