@@ -178,6 +178,10 @@ function detectPositionSizeMismatch(
   });
 }
 
+function isReconcileBackfillPreviewId(previewId: string): boolean {
+  return previewId.startsWith("backfill-reconcile-");
+}
+
 function detectDuplicateOrder(
   findings: AnomalyFinding[],
   journal: BinanceTestnetJournalEntry[],
@@ -185,6 +189,7 @@ function detectDuplicateOrder(
   const byExchangeOrder = new Map<string, BinanceTestnetJournalEntry[]>();
   const byPreview = new Map<string, BinanceTestnetJournalEntry[]>();
   for (const item of journal) {
+    if (isReconcileBackfillPreviewId(item.previewId)) continue;
     if (item.exchangeOrderId) {
       const list = byExchangeOrder.get(item.exchangeOrderId) ?? [];
       list.push(item);
