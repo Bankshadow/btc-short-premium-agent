@@ -1,5 +1,9 @@
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { loadAnomalyIncidents } from "@/lib/anomaly-detection/store";
+import {
+  filterTradeBlockingCriticalIncidents,
+  isIncidentOpen,
+} from "@/lib/anomaly-detection/incident-policy";
 import { buildTestnetMonitorSnapshot } from "@/lib/testnet-monitor/build-testnet-monitor-snapshot";
 import { loadServerUnifiedPortfolio } from "@/lib/portfolio/unified-paper-server-store";
 import { loadServerPendingOperatorActions } from "@/lib/automation-control-plane/state-store";
@@ -113,11 +117,9 @@ export async function buildServerLiveEvidenceInput(): Promise<LiveEvidenceBuildI
   const paperWinRate =
     paperClosed.length > 0 ? Number(((paperWinCount / paperClosed.length) * 100).toFixed(1)) : 0;
 
-  const openCriticalIncidents = incidents.filter(
-    (i) => i.severity === "CRITICAL" && (i.status === "OPEN" || i.status === "INVESTIGATING"),
-  ).length;
+  const openCriticalIncidents = filterTradeBlockingCriticalIncidents(incidents).length;
   const openWarningIncidents = incidents.filter(
-    (i) => i.severity === "WARNING" && (i.status === "OPEN" || i.status === "INVESTIGATING"),
+    (i) => i.severity === "WARNING" && isIncidentOpen(i.status),
   ).length;
 
   const failedLiveTrades = liveTrades.filter((t) => t.status === "FAILED").length;
@@ -128,14 +130,14 @@ export async function buildServerLiveEvidenceInput(): Promise<LiveEvidenceBuildI
   const executionCritical = incidents.filter(
     (i) =>
       (i.anomalyType === "close_reduce_only_failed" || i.anomalyType === "duplicate_order") &&
-      i.severity === "CRITICAL" &&
-      (i.status === "OPEN" || i.status === "INVESTIGATING"),
+      isIncidentOpen(i.status) &&
+      filterTradeBlockingCriticalIncidents([i]).length > 0,
   ).length;
   const executionWarning = incidents.filter(
     (i) =>
       (i.anomalyType === "close_reduce_only_failed" || i.anomalyType === "duplicate_order") &&
       i.severity === "WARNING" &&
-      (i.status === "OPEN" || i.status === "INVESTIGATING"),
+      isIncidentOpen(i.status),
   ).length;
 
   const pendingApprovals = operatorActions.filter(

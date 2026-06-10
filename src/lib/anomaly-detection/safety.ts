@@ -1,5 +1,7 @@
-import { loadAnomalyIncidents, isIncidentOpen } from "./store";
-import { filterBlockingCriticalIncidents } from "./testnet-gate";
+import { loadAnomalyIncidents } from "./store";
+import {
+  filterTradeBlockingCriticalIncidents,
+} from "./incident-policy";
 
 export interface AnomalySafetyGateResult {
   allowed: boolean;
@@ -11,10 +13,7 @@ export async function evaluateRiskyActionGate(
   actionLabel: string,
 ): Promise<AnomalySafetyGateResult> {
   const incidents = await loadAnomalyIncidents();
-  const criticalOpen = incidents.filter(
-    (item) => item.severity === "CRITICAL" && isIncidentOpen(item.status),
-  );
-  const blocking = filterBlockingCriticalIncidents(criticalOpen);
+  const blocking = filterTradeBlockingCriticalIncidents(incidents);
   if (blocking.length === 0) {
     return { allowed: true, reason: null, criticalIncidentIds: [] };
   }

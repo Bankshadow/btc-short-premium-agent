@@ -1,4 +1,10 @@
-import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
+import {
+  normalizeAnomalyFinding,
+  normalizeAnomalyIncident,
+  normalizeAnomalyIncidents,
+  isTradeBlockingCriticalIncident,
+  hasTradeBlockingCriticalIncident,
+} from "./incident-policy";
 import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
 import type {
   AnomalyFinding,
@@ -24,67 +30,42 @@ function resolveIncidentSeverity(
   existing: AnomalyIncident | undefined,
   finding: AnomalyFinding,
 ): AnomalyIncident["severity"] {
-  if (!existing) return finding.severity;
-  if (
-    isTestnetPrimaryAutomation() &&
-    finding.anomalyType === "alert_delivery_failed" &&
-    finding.severity === "WARNING"
-  ) {
-    return "WARNING";
-  }
-  return severityRank(finding.severity) > severityRank(existing.severity)
-    ? finding.severity
+  const normalized = normalizeAnomalyFinding(finding);
+  if (!existing) return normalized.severity;
+  return severityRank(normalized.severity) > severityRank(existing.severity)
+    ? normalized.severity
     : existing.severity;
 }
 
-async function saveIncidents(incidents: AnomalyIncident[]): Promise<void> {
+export async function saveAnomalyIncidents(
+  incidents: AnomalyIncident[],
+): Promise<void> {
   await writeCronJsonFile(
     INCIDENTS_FILE,
-    incidents.slice(0, MAX_INCIDENTS),
+    normalizeAnomalyIncidents(incidents).slice(0, MAX_INCIDENTS),
   );
 }
 
 export async function loadAnomalyIncidents(): Promise<AnomalyIncident[]> {
   const parsed = await readCronJsonFile<AnomalyIncident[]>(INCIDENTS_FILE, []);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function healStaleTestnetIncidents(
-  incidents: AnomalyIncident[],
-): AnomalyIncident[] {
-  if (!isTestnetPrimaryAutomation()) return incidents;
-  const now = new Date().toISOString();
-  return incidents.map((incident) => {
-    if (
-      incident.anomalyType === "alert_delivery_failed" &&
-      incident.severity === "CRITICAL"
-    ) {
-      return { ...incident, severity: "WARNING", updatedAt: now };
-    }
-    if (
-      incident.anomalyType === "micro_live_readiness_blocked" &&
-      incident.severity === "CRITICAL"
-    ) {
-      return { ...incident, severity: "WARNING", updatedAt: now };
-    }
-    return incident;
-  });
+  return normalizeAnomalyIncidents(Array.isArray(parsed) ? parsed : []);
 }
 
 export async function upsertAnomalyFindings(
   findings: AnomalyFinding[],
 ): Promise<AnomalyIncident[]> {
-  const current = healStaleTestnetIncidents(await loadAnomalyIncidents());
+  const current = await loadAnomalyIncidents();
   const now = new Date().toISOString();
   const byFingerprint = new Map<string, AnomalyIncident>();
   for (const incident of current) {
     byFingerprint.set(incident.fingerprint, incident);
   }
 
-  for (const finding of findings) {
+  for (const raw of findings) {
+    const finding = normalizeAnomalyFinding(raw);
     const existing = byFingerprint.get(finding.fingerprint);
     if (existing && existing.status !== "RESOLVED") {
-      byFingerprint.set(finding.fingerprint, {
+      byFingerprint.set(finding.fingerprint, normalizeAnomalyIncident({
         ...existing,
         severity: resolveIncidentSeverity(existing, finding),
         title: finding.title,
@@ -92,11 +73,11 @@ export async function upsertAnomalyFindings(
         impactedModules: finding.impactedModules,
         recommendedAction: finding.recommendedAction,
         updatedAt: now,
-      });
+      }));
       continue;
     }
 
-    const incident: AnomalyIncident = {
+    const incident: AnomalyIncident = normalizeAnomalyIncident({
       incidentId: newIncidentId(),
       anomalyType: finding.anomalyType,
       severity: finding.severity,
@@ -112,14 +93,14 @@ export async function upsertAnomalyFindings(
       resolvedAt: null,
       resolvedBy: null,
       resolutionNote: null,
-    };
+    });
     byFingerprint.set(finding.fingerprint, incident);
   }
 
   const next = [...byFingerprint.values()].sort((a, b) =>
     b.updatedAt.localeCompare(a.updatedAt),
   );
-  await saveIncidents(next);
+  await saveAnomalyIncidents(next);
   return next;
 }
 
@@ -135,8 +116,9 @@ export async function updateAnomalyIncident(
   const target = incidents.find((i) => i.incidentId === incidentId);
   if (!target) return null;
 
+  const normalized = normalizeAnomalyIncident(target);
   if (
-    target.severity === "CRITICAL" &&
+    isTradeBlockingCriticalIncident(normalized) &&
     patch.status === "RESOLVED" &&
     patch.actor === "AI"
   ) {
@@ -144,29 +126,31 @@ export async function updateAnomalyIncident(
   }
 
   const now = new Date().toISOString();
-  const updated: AnomalyIncident = {
-    ...target,
-    status: patch.status ?? target.status,
-    resolutionNote: patch.resolutionNote ?? target.resolutionNote,
+  const updated: AnomalyIncident = normalizeAnomalyIncident({
+    ...normalized,
+    status: patch.status ?? normalized.status,
+    resolutionNote: patch.resolutionNote ?? normalized.resolutionNote,
     resolvedBy:
-      patch.status === "RESOLVED" ? patch.actor ?? target.resolvedBy : target.resolvedBy,
+      patch.status === "RESOLVED"
+        ? patch.actor ?? normalized.resolvedBy
+        : normalized.resolvedBy,
     resolvedAt:
-      patch.status === "RESOLVED" ? now : patch.status ? null : target.resolvedAt,
+      patch.status === "RESOLVED"
+        ? now
+        : patch.status
+          ? null
+          : normalized.resolvedAt,
     updatedAt: now,
-  };
+  });
 
   const next = incidents.map((item) =>
     item.incidentId === incidentId ? updated : item,
   );
-  await saveIncidents(next);
+  await saveAnomalyIncidents(next);
   return updated;
-}
-
-export function isIncidentOpen(status: AnomalyIncidentStatus): boolean {
-  return status === "OPEN" || status === "INVESTIGATING";
 }
 
 export async function hasOpenCriticalAnomalyIncident(): Promise<boolean> {
   const incidents = await loadAnomalyIncidents();
-  return incidents.some((i) => i.severity === "CRITICAL" && isIncidentOpen(i.status));
+  return hasTradeBlockingCriticalIncident(incidents);
 }

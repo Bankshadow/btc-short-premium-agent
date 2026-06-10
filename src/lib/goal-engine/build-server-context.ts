@@ -5,6 +5,7 @@ import { loadServerUnifiedPortfolio } from "@/lib/portfolio/unified-paper-server
 import { getAutomationStatus } from "@/lib/automation-control-plane/scheduler";
 import { buildObservabilitySnapshot } from "@/lib/observability/build-snapshot";
 import { evaluateRealTimeRisk } from "@/lib/real-time-risk/evaluate-realtime-risk";
+import { findMissionPausingCriticalIncident } from "@/lib/anomaly-detection/incident-policy";
 import { loadAnomalyIncidents } from "@/lib/anomaly-detection/store";
 import {
   buildStrategyHealthSignal,
@@ -121,9 +122,7 @@ export async function buildGoalDashboardServerPayload(
   });
 
   const live = liveExecutionStatus();
-  const criticalIncident = incidents.find(
-    (i) => i.severity === "CRITICAL" && (i.status === "OPEN" || i.status === "INVESTIGATING"),
-  );
+  const criticalIncident = findMissionPausingCriticalIncident(incidents);
 
   const settings = automation?.state.settings;
   const lastVerdict = entries.find((e) => e.finalVerdict)?.finalVerdict ?? null;

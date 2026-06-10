@@ -18,8 +18,9 @@ import {
   buildMicroLiveReadiness,
   buildMicroLiveReadinessDefaults,
 } from "@/lib/micro-live-readiness";
-import { isMissionPausingCriticalIncident } from "@/lib/anomaly-detection/testnet-gate";
+import { findMissionPausingCriticalIncident, isIncidentOpen } from "@/lib/anomaly-detection/incident-policy";
 import { loadAnomalyIncidents } from "@/lib/anomaly-detection/store";
+import { reconcileIncidents } from "@/lib/anomaly-detection/reconcile-operational-incidents";
 import { loadMonitorJournalEvents } from "./monitor-journal-server";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import {
@@ -382,15 +383,13 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
     strategyHealth: integratedStrategyHealth,
     confidenceCalibrationReport: integratedConfidenceCalibration.report,
   });
-  const [monitorEvents, incidents] = await Promise.all([
+  const [monitorEvents, incidentsInitial] = await Promise.all([
     monitorEventsForEvidence.length > 0
       ? Promise.resolve(monitorEventsForEvidence)
       : loadMonitorJournalEvents().catch(() => []),
     loadAnomalyIncidents().catch(() => []),
   ]);
-  const criticalIncident = incidents.find((i) =>
-    isMissionPausingCriticalIncident(i),
-  );
+  const preliminaryCritical = findMissionPausingCriticalIncident(incidentsInitial);
   const microLiveReadiness = await buildMicroLiveReadiness(
     buildMicroLiveReadinessDefaults({
       connected,
@@ -399,8 +398,8 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
       journal,
       learningRecords,
       monitorEvents,
-      criticalIncidentOpen: Boolean(criticalIncident),
-      criticalIncidentTitle: criticalIncident?.title ?? null,
+      criticalIncidentOpen: Boolean(preliminaryCritical),
+      criticalIncidentTitle: preliminaryCritical?.title ?? null,
       persistSideEffects: true,
     }),
   );
@@ -411,6 +410,18 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
     autoExecuteEnabled: true,
     autoRecover: true,
   });
+
+  await reconcileIncidents({
+    operational: {
+      monitorHealthy:
+        monitorReliability.health !== "BLOCKED" &&
+        !monitorReliability.positionStateUncertain,
+      monitorMismatches: mismatches,
+      readinessStatus: microLiveReadiness.report.readinessStatus,
+    },
+  });
+  const incidents = await loadAnomalyIncidents().catch(() => []);
+  const criticalIncident = findMissionPausingCriticalIncident(incidents);
   const equitySeries = buildEquitySeries(closedTrades, openPositions);
   const riskStatus = resolveRiskStatus({
     liveBlock,
@@ -465,9 +476,7 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
     (sum, p) => sum + Math.abs(p.notionalUsd),
     0,
   );
-  const incidentOpenCount = incidents.filter(
-    (i) => i.status === "OPEN" || i.status === "INVESTIGATING",
-  ).length;
+  const incidentOpenCount = incidents.filter((i) => isIncidentOpen(i.status)).length;
   const missionControllerRiskBudget = buildMissionControllerRiskBudget({
     integratedRiskBudget,
     currentEquity: GOAL_START_CAPITAL + summary.netPnl,

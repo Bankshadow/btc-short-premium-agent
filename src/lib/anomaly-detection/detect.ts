@@ -13,8 +13,9 @@ import { buildTestnetMonitorSnapshot } from "@/lib/testnet-monitor";
 import { loadMonitorJournalEvents } from "@/lib/testnet-monitor/monitor-journal-server";
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
 import type { TestnetMonitorSnapshot } from "@/lib/testnet-monitor/types";
-import { isIncidentOpen, loadAnomalyIncidents, upsertAnomalyFindings } from "./store";
-import { filterBlockingCriticalIncidents } from "./testnet-gate";
+import { normalizeAnomalySeverity, filterTradeBlockingCriticalIncidents, isIncidentOpen } from "./incident-policy";
+import { reconcileIncidents } from "./reconcile-operational-incidents";
+import { loadAnomalyIncidents, upsertAnomalyFindings } from "./store";
 import type { AnomalyDetectionSummary, AnomalyFinding } from "./types";
 
 let cachedSummary: AnomalyDetectionSummary | null = null;
@@ -43,7 +44,7 @@ function add(
 ) {
   findings.push({
     anomalyType: finding.anomalyType,
-    severity: finding.severity,
+    severity: normalizeAnomalySeverity(finding.anomalyType, finding.severity),
     title: finding.title,
     evidence: finding.evidence,
     impactedModules: finding.impactedModules,
@@ -595,15 +596,20 @@ export async function runAnomalyDetectionSnapshot(options?: {
       ? await loadAnomalyIncidents()
       : await upsertAnomalyFindings(findings);
 
-  const open = incidents.filter((item) => isIncidentOpen(item.status));
+  if (options?.persist !== false) {
+    await reconcileIncidents({ detectFindings: findings });
+  }
+
+  const refreshedIncidents = await loadAnomalyIncidents();
+  const open = refreshedIncidents.filter((item) => isIncidentOpen(item.status));
   const warningOpenCount = open.filter((item) => item.severity === "WARNING").length;
   const criticalOpen = open.filter((item) => item.severity === "CRITICAL");
-  const blockingCriticalOpen = filterBlockingCriticalIncidents(criticalOpen);
+  const blockingCriticalOpen = filterTradeBlockingCriticalIncidents(open);
 
   const summary: AnomalyDetectionSummary = {
     generatedAt: new Date().toISOString(),
     findings,
-    incidents,
+    incidents: refreshedIncidents,
     openCount: open.length,
     warningOpenCount,
     criticalOpenCount: criticalOpen.length,

@@ -55,15 +55,16 @@ describe("anomaly detection incident store", () => {
 
   it("blocks risky actions when critical incident open", async () => {
     await withTempDataDir(async () => {
+      process.env.AUTOMATION_PRIMARY_MODE = "full_desk";
       await upsertAnomalyFindings([
         {
-          anomalyType: "automation_job_failed",
+          anomalyType: "duplicate_order",
           severity: "CRITICAL",
-          title: "Automation job failed",
-          evidence: { failed: 1 },
-          impactedModules: ["Worker"],
-          recommendedAction: "Retry worker",
-          fingerprint: "automation_job_failed:test",
+          title: "Duplicate order detected",
+          evidence: { duplicate: true },
+          impactedModules: ["Testnet Monitor"],
+          recommendedAction: "Pause auto execute",
+          fingerprint: "duplicate_order:gate-test",
         },
       ]);
 
