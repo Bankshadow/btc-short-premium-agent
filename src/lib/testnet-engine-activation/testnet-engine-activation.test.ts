@@ -5,9 +5,9 @@ import { buildEvidenceQualityActivationStatus } from "./build-evidence-quality-s
 import { buildReconciliationStatus } from "./build-reconciliation-status";
 import { withActivationTimeout } from "./build-engine-health-status";
 
-test("resolveBinanceTestnetDiagnosticFromStatus — null status is UNKNOWN", () => {
+test("resolveBinanceTestnetDiagnosticFromStatus — null status is DISCONNECTED", () => {
   const diag = resolveBinanceTestnetDiagnosticFromStatus(null);
-  assert.equal(diag.status, "UNKNOWN");
+  assert.equal(diag.status, "DISCONNECTED");
   assert.equal(diag.connected, false);
   assert.ok(diag.recommendation.length > 0);
 });

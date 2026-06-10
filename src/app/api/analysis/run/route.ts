@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
-import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
+import { probeBinanceStatus } from "@/lib/testnet-engine-activation/activation-probes";
 import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
 import {
   runCentralAnalysisOrchestrator,
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         ? body.trigger
         : "api";
 
-    const binanceStatus = await getBinanceStatus().catch(() => null);
+    const binanceStatus = await probeBinanceStatus();
     const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
     const allowPreview =
       body.createTestnetPreview === false ? false : diagnostic.connected;

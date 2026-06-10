@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GoalShell from "@/components/goal/GoalShell";
+import { fetchActivationStatus } from "@/lib/client/fetch-activation-status";
 import type { ReconciliationStatusResponse } from "@/lib/testnet-engine-activation/types";
 
 const STATUS_CLASS = {
@@ -21,22 +22,15 @@ export default function ReconciliationDashboard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await fetch("/api/reconciliation/status", { cache: "no-store" });
-      const data = (await res.json()) as ReconciliationStatusResponse & {
-        ok?: boolean;
-        error?: string;
-      };
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error ?? "Reconciliation check failed");
-      }
-      setStatus(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Reconciliation check failed");
-      setStatus(null);
-    } finally {
-      setLoading(false);
+    const result = await fetchActivationStatus<ReconciliationStatusResponse>(
+      "/api/reconciliation/status",
+    );
+    if (result.ok) {
+      setStatus(result.data);
+    } else {
+      setError(result.error);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -74,7 +68,7 @@ export default function ReconciliationDashboard() {
     }
   }, [refresh]);
 
-  const summary = status?.status ?? "WARNING";
+  const summary = status?.status ?? "OK";
 
   return (
     <GoalShell
@@ -114,6 +108,9 @@ export default function ReconciliationDashboard() {
             <p className="text-xs uppercase tracking-wide opacity-80">Consistency status</p>
             <h2 className="mt-1 text-2xl font-semibold">{status.status}</h2>
             <p className="mt-2 text-sm opacity-90">{status.message}</p>
+            <p className="mt-2 text-xs opacity-70">
+              Updated {new Date(status.updatedAt).toLocaleString()} · live locked
+            </p>
           </section>
 
           <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs text-zinc-400">
@@ -143,7 +140,9 @@ export default function ReconciliationDashboard() {
                 {autoFixBusy ? "Running auto-fix…" : "Run safe auto-fix"}
               </button>
               <span className="text-[10px] text-zinc-500">
-                Runs automatically on monitor/cron when fixes are available. Manual run forces immediate apply — journal reconcile, backfill, decision links, learning sync; no orders placed.
+                Runs automatically on monitor/cron when fixes are available. Manual run forces
+                immediate apply — journal reconcile, backfill, decision links, learning sync; no
+                orders placed.
               </span>
             </div>
           )}
@@ -168,7 +167,10 @@ export default function ReconciliationDashboard() {
       )}
 
       {!status && !error && !loading && (
-        <p className="text-sm text-zinc-500">No reconciliation data — try Refresh.</p>
+        <section className="rounded-xl border border-zinc-800/80 p-5 text-sm text-zinc-400">
+          <p className="font-medium text-zinc-200">Zero-state</p>
+          <p className="mt-2">OK — no trades to reconcile yet.</p>
+        </section>
       )}
     </GoalShell>
   );

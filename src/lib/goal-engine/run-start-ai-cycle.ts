@@ -24,7 +24,7 @@ export async function runGoalStartAiCycle(): Promise<GoalStartAiCycleResult> {
     trigger: "start_ai",
     enrichMvp9: true,
     runAutopilot: true,
-    createTestnetPreview: true,
+    createTestnetPreview: false,
   });
 
   if (!output.result.analyzeResponse || !output.result.journalEntry) {

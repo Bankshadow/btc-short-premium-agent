@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GoalShell from "@/components/goal/GoalShell";
+import { fetchActivationStatus } from "@/lib/client/fetch-activation-status";
 import type { EngineActivationHealthResponse } from "@/lib/testnet-engine-activation/types";
 
 const SUMMARY_CLASS = {
@@ -19,22 +20,15 @@ export default function EngineHealthDashboard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await fetch("/api/analysis/health", { cache: "no-store" });
-      const data = (await res.json()) as EngineActivationHealthResponse & {
-        ok?: boolean;
-        error?: string;
-      };
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error ?? "Failed to load engine health");
-      }
-      setHealth(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load engine health");
-      setHealth(null);
-    } finally {
-      setLoading(false);
+    const result = await fetchActivationStatus<EngineActivationHealthResponse>(
+      "/api/analysis/health",
+    );
+    if (result.ok) {
+      setHealth(result.data);
+    } else {
+      setError(result.error);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -83,7 +77,7 @@ export default function EngineHealthDashboard() {
             </p>
             <p className="mt-2 text-xs opacity-70">
               Updated {new Date(health.updatedAt).toLocaleString()} · {health.checks.length}{" "}
-              checks
+              checks · live locked
             </p>
           </section>
 
@@ -130,7 +124,10 @@ export default function EngineHealthDashboard() {
       )}
 
       {!health && !error && !loading && (
-        <p className="text-sm text-zinc-500">No health data — try Refresh.</p>
+        <section className="rounded-xl border border-zinc-800/80 p-5 text-sm text-zinc-400">
+          <p className="font-medium text-zinc-200">Zero-state</p>
+          <p className="mt-2">No health data yet — run Start AI or Refresh.</p>
+        </section>
       )}
     </GoalShell>
   );

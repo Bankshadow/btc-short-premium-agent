@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { fetchActivationStatus } from "@/lib/client/fetch-activation-status";
 import type {
   EngineActivationHealthResponse,
   EvidenceQualityStatusResponse,
@@ -55,60 +56,38 @@ export default function EngineActivationStatusPanel() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const [healthRes, reconRes, evidenceRes] = await Promise.all([
-        fetch("/api/analysis/health", { cache: "no-store" }),
-        fetch("/api/reconciliation/status", { cache: "no-store" }),
-        fetch("/api/evidence-quality/status", { cache: "no-store" }),
-      ]);
-      const [healthData, reconData, evidenceData] = await Promise.all([
-        healthRes.json(),
-        reconRes.json(),
-        evidenceRes.json(),
-      ]);
-      if (!healthRes.ok || healthData.ok === false) {
-        throw new Error(healthData.error ?? "Engine health unavailable");
-      }
-      if (!reconRes.ok || reconData.ok === false) {
-        throw new Error(reconData.error ?? "Reconciliation unavailable");
-      }
-      if (!evidenceRes.ok || evidenceData.ok === false) {
-        throw new Error(evidenceData.error ?? "Evidence quality unavailable");
-      }
-      setHealth(healthData as EngineActivationHealthResponse);
-      setReconciliation(reconData as ReconciliationStatusResponse);
-      setEvidence(evidenceData as EvidenceQualityStatusResponse);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Activation status failed");
-      setHealth(null);
-      setReconciliation(null);
-      setEvidence(null);
-    } finally {
-      setLoading(false);
+    const [healthResult, reconResult, evidenceResult] = await Promise.all([
+      fetchActivationStatus<EngineActivationHealthResponse>("/api/analysis/health"),
+      fetchActivationStatus<ReconciliationStatusResponse>("/api/reconciliation/status"),
+      fetchActivationStatus<EvidenceQualityStatusResponse>("/api/evidence-quality/status"),
+    ]);
+
+    if (healthResult.ok) setHealth(healthResult.data);
+    if (reconResult.ok) setReconciliation(reconResult.data);
+    if (evidenceResult.ok) setEvidence(evidenceResult.data);
+
+    const errors = [
+      !healthResult.ok ? healthResult.error : null,
+      !reconResult.ok ? reconResult.error : null,
+      !evidenceResult.ok ? evidenceResult.error : null,
+    ].filter(Boolean);
+
+    if (errors.length === 3) {
+      setError(errors[0] ?? "Activation status failed");
+    } else if (errors.length > 0) {
+      setError(errors.join(" · "));
+    } else {
+      setError(null);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  if (loading && !health) {
+  if (loading && !health && !reconciliation && !evidence) {
     return <p className="text-sm text-zinc-500">Loading activation status…</p>;
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-lg border border-rose-900/40 bg-rose-950/20 px-3 py-2 text-xs text-rose-200">
-        {error}
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="ml-2 text-emerald-300 hover:underline"
-        >
-          Retry
-        </button>
-      </div>
-    );
   }
 
   return (
@@ -126,6 +105,9 @@ export default function EngineActivationStatusPanel() {
           Refresh
         </button>
       </div>
+      {error && (
+        <p className="text-[10px] text-amber-300/90">{error}</p>
+      )}
       <ul className="space-y-2">
         {health && (
           <Row

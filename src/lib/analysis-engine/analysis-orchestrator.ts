@@ -12,7 +12,8 @@ import {
   buildServerBackboneFromInput,
   writeServerBackboneRecord,
 } from "@/lib/background-worker/server-backbone";
-import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
+import { emitEngineEvent } from "@/lib/engine-event-bus/emit-engine-event";
+import { probeBinanceStatus } from "@/lib/testnet-engine-activation/activation-probes";
 import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
 import { buildOrderPreview } from "@/lib/exchange/binance";
 import { buildBinancePreviewInputFromAiSignal } from "@/lib/exchange/binance/build-ai-preview";
@@ -90,6 +91,13 @@ export async function runCentralAnalysisOrchestrator(
   const runAutopilot = input.runAutopilot ?? true;
   const createTestnetPreview = input.createTestnetPreview ?? true;
 
+  await emitEngineEvent({
+    type: "ANALYSIS_STARTED",
+    runId,
+    summary: `Analysis run started (${trigger}) · ${runId.slice(0, 16)}…`,
+    meaningful: false,
+  });
+
   const context = await buildAnalysisContext({ runId, riskProfile, orders: input.orders });
 
   const entriesRaw = await loadServerAnalysisJournal().catch(() => []);
@@ -115,9 +123,9 @@ export async function runCentralAnalysisOrchestrator(
   }
 
   const saved = await appendServerAnalysisFromResponse(analysis);
-  const finalVerdict = resolveFinalVerdictFromAnalysis(analysis, saved.entry);
+  let finalVerdict = resolveFinalVerdictFromAnalysis(analysis, saved.entry);
   const confidence = resolveConfidenceFromAnalysis(analysis);
-  const riskGate = runAnalysisRiskGate({ context, analysis, finalVerdict });
+  let riskGate = runAnalysisRiskGate({ context, analysis, finalVerdict });
 
   let autopilot = null;
   let deskRun: DeskRun | null = null;
@@ -149,17 +157,28 @@ export async function runCentralAnalysisOrchestrator(
     deskRun = record.run ?? null;
   }
 
-  const binanceStatus = await getBinanceStatus().catch(() => null);
+  const binanceStatus = await probeBinanceStatus();
   const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
   const testnetConnected = diagnostic.connected;
   let testnetPreview = null;
 
   const blockers = [...riskGate.blockers];
   if (!testnetConnected) {
-    const testnetBlocker = `Testnet ${diagnostic.status}: ${diagnostic.reason}`;
-    if (!blockers.some((b) => b.includes("Testnet"))) {
-      blockers.push(testnetBlocker);
+    if (finalVerdict === "TRADE") {
+      finalVerdict = "WAIT";
     }
+    const testnetReason = "Binance testnet not connected";
+    if (!blockers.some((b) => b.toLowerCase().includes("testnet") || b.includes("Binance"))) {
+      blockers.push(testnetReason);
+    }
+    riskGate = {
+      ...riskGate,
+      blockers,
+      riskStatus: "BLOCKED",
+      executionReady: false,
+      humanActionRequired: true,
+      nextAction: "Connect Binance Testnet",
+    };
   }
 
   if (
@@ -215,10 +234,8 @@ export async function runCentralAnalysisOrchestrator(
     riskStatus: riskGate.riskStatus,
     blockers,
     reasons: riskGate.reasons,
-    nextAction: testnetConnected
-      ? riskGate.nextAction
-      : diagnostic.recommendation,
-    humanActionRequired: riskGate.humanActionRequired,
+    nextAction: testnetConnected ? riskGate.nextAction : "Connect Binance Testnet",
+    humanActionRequired: testnetConnected ? riskGate.humanActionRequired : true,
     aiState: "ANALYZING",
     missionImpact: partialResult.missionImpact,
     reportSummary: reportBridge.reportSummary,

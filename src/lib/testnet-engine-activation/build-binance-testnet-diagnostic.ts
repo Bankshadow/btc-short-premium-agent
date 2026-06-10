@@ -58,7 +58,7 @@ export function resolveBinanceTestnetDiagnosticFromStatus(
   if (!binanceStatus) {
     return {
       mvp: TESTNET_ENGINE_ACTIVATION_MVP,
-      status: "UNKNOWN",
+      status: "DISCONNECTED",
       connected: false,
       testnetEnabled: config.testnetEnabled,
       liveEnabled: config.liveEnabled,
@@ -69,8 +69,12 @@ export function resolveBinanceTestnetDiagnosticFromStatus(
       apiSecretPresent,
       baseUrl: config.baseUrl,
       lastCheckedAt: generatedAt,
-      reason: "Binance status probe failed.",
-      recommendation: recommendationFor("UNKNOWN"),
+      reason: apiKeyPresent && apiSecretPresent
+        ? "Not connected yet."
+        : "Binance status probe failed — check env and network.",
+      recommendation: apiKeyPresent && apiSecretPresent
+        ? recommendationFor("DISCONNECTED")
+        : recommendationFor("MISSING_ENV"),
     };
   }
 

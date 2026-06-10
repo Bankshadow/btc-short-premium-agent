@@ -9,12 +9,14 @@ import { queryEngineEvents } from "@/lib/engine-event-bus/engine-event-bus";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const fresh = url.searchParams.get("fresh") === "1";
     const liveBlock = blockBinanceProductionOrder();
     const [{ state, latest }, missionResult, engineEvents] = await Promise.all([
       loadCentralAnalysisBundle(),
-      buildMissionFlowServerSnapshot().catch(() => null),
+      buildMissionFlowServerSnapshot({ fresh }).catch(() => null),
       queryEngineEvents({ limit: 50 }),
     ]);
 

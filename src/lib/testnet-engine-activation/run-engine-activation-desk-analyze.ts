@@ -2,7 +2,7 @@ import { runCentralAnalysisOrchestrator } from "@/lib/analysis-engine/analysis-o
 import { emitEngineEvent } from "@/lib/engine-event-bus/emit-engine-event";
 import { buildMissionFlowServerSnapshot } from "@/lib/mission-flow/build-server-snapshot";
 import { resolveBinanceTestnetDiagnosticFromStatus } from "./build-binance-testnet-diagnostic";
-import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
+import { probeBinanceStatus } from "./activation-probes";
 import type { AutomationJobContext } from "@/lib/automation-control-plane/run-job";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { AutopilotRunResult } from "@/lib/autopilot/types";
@@ -22,7 +22,7 @@ export interface EngineActivationDeskAnalyzeResult {
 export async function runEngineActivationDeskAnalyze(
   ctx: AutomationJobContext,
 ): Promise<EngineActivationDeskAnalyzeResult> {
-  const binanceStatus = await getBinanceStatus().catch(() => null);
+  const binanceStatus = await probeBinanceStatus();
   const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
 
   await emitEngineEvent({

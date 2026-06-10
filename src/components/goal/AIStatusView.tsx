@@ -80,6 +80,14 @@ export default function AIStatusView() {
         <p className="mt-2 text-xs text-zinc-500">{m.binanceTestnet.recommendation}</p>
         <dl className="mt-4 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
           <div>
+            <dt className="text-zinc-500">Testnet enabled</dt>
+            <dd>{m.binanceTestnet.testnetEnabled ? "Yes" : "No"}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Live trading</dt>
+            <dd className="text-amber-300">Locked</dd>
+          </div>
+          <div>
             <dt className="text-zinc-500">API key / secret</dt>
             <dd>
               {m.binanceTestnet.apiKeyPresent ? "key ✓" : "key ✗"} ·{" "}
@@ -189,8 +197,8 @@ export default function AIStatusView() {
       </section>
 
       <EngineEventFeed
-        events={analysis.events.filter((e) => e.meaningful)}
-        limit={8}
+        events={analysis.events.slice(0, 5)}
+        limit={5}
         title="Recent events"
         compact
       />

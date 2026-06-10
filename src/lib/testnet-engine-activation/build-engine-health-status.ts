@@ -1,6 +1,6 @@
 import { loadCentralAnalysisBundle } from "@/lib/analysis-engine/analysis-orchestrator";
 import { probeJournalWritable } from "@/lib/cron/ensure-journal-dir";
-import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
+import { probeBinanceStatus } from "./activation-probes";
 import { loadGovernanceState } from "@/lib/governance/governance-state";
 import { loadIncidents } from "@/lib/governance/incidents-store";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
@@ -54,7 +54,7 @@ export async function buildEngineActivationHealthStatus(): Promise<EngineActivat
     centralBundle,
     recentEventsResult,
   ] = await Promise.all([
-    getBinanceStatus().catch(() => null),
+    probeBinanceStatus(),
     probeJournalWritable(),
     loadServerAnalysisJournal().catch(() => []),
     listWarehouseRows("paper_trades", 500).catch(() => [] as PaperOrder[]),
@@ -77,15 +77,22 @@ export async function buildEngineActivationHealthStatus(): Promise<EngineActivat
     Array.isArray(paperRows) ? (paperRows as PaperOrder[]) : [],
   );
   const binanceDiag = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
+  const zeroState =
+    entries.length === 0 &&
+    !centralBundle.state.latestRunId &&
+    orders.length === 0 &&
+    !mission;
 
   checks.push(
     check(
       "missionSnapshot",
       "Mission snapshot",
-      mission ? "OK" : "WARNING",
+      mission || zeroState ? "OK" : "WARNING",
       mission
         ? `Cached mission snapshot · ${mission.lastUpdatedAt}`
-        : "No cached mission snapshot — run Start AI or wait for cron.",
+        : zeroState
+          ? "Ready — run Start AI to populate mission snapshot."
+          : "No cached mission snapshot — run Start AI or wait for cron.",
       mission?.lastUpdatedAt ?? null,
     ),
   );
@@ -94,10 +101,12 @@ export async function buildEngineActivationHealthStatus(): Promise<EngineActivat
     check(
       "decisionLog",
       "Decision log",
-      entries.length > 0 ? "OK" : "WARNING",
+      "OK",
       entries.length > 0
         ? `${entries.length} decision(s) · head ${entries[0]?.id.slice(0, 12) ?? "—"}…`
-        : "No decision log entries yet — run Start AI.",
+        : zeroState
+          ? "Empty — ready for first analysis."
+          : "No decision log entries yet — run Start AI.",
       entries[0]?.timestamp ?? null,
     ),
   );
@@ -139,7 +148,11 @@ export async function buildEngineActivationHealthStatus(): Promise<EngineActivat
             binanceDiag.status === "CLOCK_SKEW"
           ? "BLOCKED"
           : "WARNING",
-      binanceDiag.reason,
+      binanceDiag.connected
+        ? binanceDiag.reason
+        : binanceDiag.reason === "Not connected yet."
+          ? "Not connected yet"
+          : binanceDiag.reason,
       binanceDiag.lastCheckedAt,
     ),
   );

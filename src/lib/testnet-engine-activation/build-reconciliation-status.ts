@@ -1,5 +1,6 @@
 import { loadServerBinanceTestnetJournal } from "@/lib/exchange/binance/binance-testnet-journal-server";
-import { getBinanceStatus, getPositions } from "@/lib/exchange/binance/binance-futures-testnet";
+import { getPositions } from "@/lib/exchange/binance/binance-futures-testnet";
+import { probeBinanceStatus } from "./activation-probes";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { filterProductionEntries } from "@/lib/journal/production-filter";
 import { loadLearningRecordsServer } from "@/lib/testnet-monitor/learning-records-server";
@@ -90,19 +91,23 @@ export async function buildReconciliationStatus(): Promise<ReconciliationStatusR
     };
   }
 
-  const [journal, entriesRaw, learningRecords, monitorEvents, binanceStatus, positions] =
+  const [journal, entriesRaw, learningRecords, monitorEvents, binanceStatus] =
     await Promise.all([
       loadServerBinanceTestnetJournal().catch(() => []),
       loadServerAnalysisJournal().catch(() => []),
       loadLearningRecordsServer().catch(() => []),
       loadMonitorJournalEvents().catch(() => []),
-      getBinanceStatus().catch(() => null),
-      getPositions().catch(() => []),
+      probeBinanceStatus(),
     ]);
 
   const decisions = filterProductionEntries(entriesRaw);
   const closedTrades = buildClosedTradesFromJournal(journal);
+  const hasOpenJournal = journal.some((j) => j.status !== "CLOSED");
   const connected = Boolean(binanceStatus?.connected);
+  const positions =
+    closedTrades.length > 0 || hasOpenJournal
+      ? await getPositions().catch(() => [])
+      : [];
   const mismatches: string[] = [];
 
   const ec = assembleEngineConsistencySnapshot({

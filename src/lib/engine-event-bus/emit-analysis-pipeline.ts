@@ -17,13 +17,6 @@ export async function emitAnalysisPipelineEngineEvents(input: {
 
   const events = await emitEngineEvents([
     {
-      type: "ANALYSIS_STARTED",
-      runId,
-      decisionLogId,
-      summary: `Analysis run started (${runId.slice(0, 16)}…)`,
-      meaningful: false,
-    },
-    {
       type: "CONTEXT_BUILT",
       runId,
       decisionLogId,
@@ -72,6 +65,19 @@ export async function emitAnalysisPipelineEngineEvents(input: {
       summary: `Risk ${result.riskStatus} · ${result.blockers.length} blocker(s)`,
       meaningful: false,
       payload: { riskStatus: result.riskStatus },
+    },
+    {
+      type: "EXECUTION_READINESS_CHECKED",
+      runId,
+      decisionLogId,
+      summary: context.testnetStatus.connected
+        ? "Execution readiness checked — testnet connected, live locked"
+        : "Execution readiness blocked — Binance testnet not connected",
+      meaningful: false,
+      payload: {
+        testnetConnected: context.testnetStatus.connected,
+        liveTradingLocked: true,
+      },
     },
     {
       type: "VERDICT_CREATED",
@@ -135,6 +141,24 @@ export async function emitAnalysisPipelineEngineEvents(input: {
 
   events.push(
     ...(await emitEngineEvents([
+      {
+        type: "MISSION_SNAPSHOT_UPDATED",
+        runId,
+        decisionLogId,
+        summary: "Mission snapshot refreshed after analysis cycle",
+        meaningful: false,
+      },
+      {
+        type: "AI_STATUS_UPDATED",
+        runId,
+        decisionLogId,
+        summary: `AI state ${result.aiState} · next: ${result.nextAction.slice(0, 80)}`,
+        meaningful: true,
+        payload: {
+          aiState: result.aiState,
+          finalVerdict: result.finalVerdict,
+        },
+      },
       {
         type: "REPORT_UPDATED",
         runId,

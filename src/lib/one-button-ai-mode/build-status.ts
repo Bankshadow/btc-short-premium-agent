@@ -26,7 +26,7 @@ export async function buildOneButtonAiStatus(
 ): Promise<OneButtonAiStatus> {
   const [flow, controller, events, loopGuard, parallel, brain, dailyStatus] =
     await Promise.all([
-      buildMissionFlowServerSnapshot({ fresh: true }),
+      buildMissionFlowServerSnapshot({ fresh: false }),
       evaluateMissionController().catch(() => null),
       loadAiStatusEvents(30).catch(() => []),
       getLoopGuardDashboardSnapshot(workspaceId).catch(() => null),

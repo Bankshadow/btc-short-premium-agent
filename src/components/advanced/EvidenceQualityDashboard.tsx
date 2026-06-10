@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GoalShell from "@/components/goal/GoalShell";
+import { fetchActivationStatus } from "@/lib/client/fetch-activation-status";
 import type { EvidenceQualityStatusResponse } from "@/lib/testnet-engine-activation/types";
 
 export default function EvidenceQualityDashboard() {
@@ -13,22 +14,15 @@ export default function EvidenceQualityDashboard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await fetch("/api/evidence-quality/status", { cache: "no-store" });
-      const data = (await res.json()) as EvidenceQualityStatusResponse & {
-        ok?: boolean;
-        error?: string;
-      };
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.error ?? "Failed to load evidence quality");
-      }
-      setStatus(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Load failed");
-      setStatus(null);
-    } finally {
-      setLoading(false);
+    const result = await fetchActivationStatus<EvidenceQualityStatusResponse>(
+      "/api/evidence-quality/status",
+    );
+    if (result.ok) {
+      setStatus(result.data);
+    } else {
+      setError(result.error);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -74,6 +68,9 @@ export default function EvidenceQualityDashboard() {
           </h2>
           <p className="mt-3 text-2xl font-semibold text-zinc-100">{status.status}</p>
           <p className="mt-2 text-sm text-zinc-300">{status.message}</p>
+          <p className="mt-2 text-xs text-zinc-500">
+            Updated {new Date(status.updatedAt).toLocaleString()} · live locked
+          </p>
           <dl className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
             <div>
               <dt className="text-zinc-500">Valid evidence</dt>
@@ -107,7 +104,10 @@ export default function EvidenceQualityDashboard() {
       )}
 
       {!status && !error && !loading && (
-        <p className="text-sm text-zinc-500">No evidence quality data — try Refresh.</p>
+        <section className="rounded-xl border border-zinc-800/80 p-5 text-sm text-zinc-400">
+          <p className="font-medium text-zinc-200">Zero-state</p>
+          <p className="mt-2">No completed trades yet — 0/12 evidence toward trust.</p>
+        </section>
       )}
     </GoalShell>
   );
