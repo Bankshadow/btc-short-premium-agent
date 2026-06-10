@@ -1,6 +1,8 @@
 import { readCronJsonFile, writeCronJsonFile } from "@/lib/cron/cron-config";
+import { isClosedJournalEntry } from "@/lib/learning-queue/build-learning-progress";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { BinanceTestnetJournalEntry } from "@/lib/exchange/binance/binance-types";
+import { classifyTradeResult } from "@/lib/testnet-monitor/pnl";
 import type {
   TestnetAgentScoreboardSegment,
   TestnetClosedTrade,
@@ -16,10 +18,49 @@ async function writeRecords(records: TestnetLearningRecord[]): Promise<void> {
   await writeCronJsonFile(LEARNING_RECORDS_FILE, records);
 }
 
+function parseCloseReason(note: string | null | undefined): string | null {
+  const trimmed = note?.trim();
+  if (!trimmed) return null;
+  const monitor = trimmed.match(/Autonomous testnet monitor — (.+)/i);
+  if (monitor?.[1]) return monitor[1];
+  return trimmed;
+}
+
+function normalizeLearningRecord(
+  raw: TestnetLearningRecord,
+): TestnetLearningRecord {
+  const tradeId = raw.tradeId ?? raw.closedTradeId;
+  return {
+    ...raw,
+    tradeId,
+    closedTradeId: raw.closedTradeId ?? tradeId,
+    side: raw.side ?? null,
+    strategyTag: raw.strategyTag ?? raw.strategy,
+    aiVerdict: raw.aiVerdict ?? raw.finalVerdict,
+    entryReason: raw.entryReason ?? null,
+    closeReason: raw.closeReason ?? null,
+    whatWorked: raw.whatWorked ?? null,
+    whatFailed: raw.whatFailed ?? null,
+    suggestedAdjustment: raw.suggestedAdjustment ?? null,
+    qualityGrade: raw.qualityGrade ?? null,
+    qualityScore: raw.qualityScore ?? null,
+    qualityScoreId: raw.qualityScoreId ?? null,
+  };
+}
+
+export async function saveLearningRecordsServer(
+  records: TestnetLearningRecord[],
+): Promise<void> {
+  const next = records
+    .map(normalizeLearningRecord)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  await writeRecords(next);
+}
+
 export async function loadLearningRecordsServer(): Promise<TestnetLearningRecord[]> {
   const parsed = await readCronJsonFile(LEARNING_RECORDS_FILE, [] as TestnetLearningRecord[]);
   if (!Array.isArray(parsed)) return [];
-  return parsed;
+  return parsed.map(normalizeLearningRecord);
 }
 
 function newLearningRecordId(): string {
@@ -28,6 +69,9 @@ function newLearningRecordId(): string {
 
 function confidenceFromDecision(entry: DecisionLogEntry | undefined): number | null {
   if (!entry) return null;
+  if (entry.playbookConfidence != null && Number.isFinite(entry.playbookConfidence)) {
+    return Number(entry.playbookConfidence.toFixed(3));
+  }
   const committee = entry.agentOutputs.find((a) =>
     a.agentName.toLowerCase().includes("committee"),
   );
@@ -60,75 +104,162 @@ function deriveExcursions(grossPnl: number): {
   };
 }
 
+function entryReasonFrom(input: {
+  journal?: BinanceTestnetJournalEntry;
+  decision?: DecisionLogEntry;
+}): string | null {
+  const journalReason = input.journal?.reason?.trim();
+  if (journalReason) return journalReason;
+  const top = input.decision?.topReasons?.[0]?.trim();
+  if (top) return top;
+  return input.decision?.actionPlan?.trim() ?? null;
+}
+
 function buildLearningRecord(input: {
-  trade: TestnetClosedTrade;
+  trade?: TestnetClosedTrade;
   journal?: BinanceTestnetJournalEntry;
   decision?: DecisionLogEntry;
 }): TestnetLearningRecord {
+  const journal = input.journal;
+  const trade = input.trade;
+  const tradeId =
+    journal?.binanceTestnetTradeId ?? trade?.id ?? newLearningRecordId();
   const now = new Date().toISOString();
-  const notional = input.journal?.notionalUsd ?? null;
+  const notional = journal?.notionalUsd ?? null;
+  const fee = journal?.fees ?? trade?.fee ?? 0;
+  const netPnl = journal?.realizedPnl ?? trade?.netPnl ?? 0;
+  const grossPnl = netPnl + fee;
+  const side =
+    journal?.side === "BUY" || trade?.side === "LONG"
+      ? "LONG"
+      : journal?.side === "SELL" || trade?.side === "SHORT"
+        ? "SHORT"
+        : null;
+  const openedAt = journal?.executedAt ?? journal?.createdAt ?? trade?.openedAt ?? now;
+  const closedAt = journal?.closedAt ?? trade?.closedAt ?? now;
+  const durationMs =
+    trade?.durationMs ??
+    Math.max(0, Date.parse(closedAt) - Date.parse(openedAt));
+  const result = trade?.result ?? classifyTradeResult(netPnl);
   const rMultiple = estimateRMultiple({
-    netPnl: input.trade.netPnl,
+    netPnl,
     notionalUsd: notional,
-    existingR: input.trade.rMultiple,
+    existingR: trade?.rMultiple ?? null,
   });
-  const excursions = deriveExcursions(input.trade.grossPnl);
+  const excursions = deriveExcursions(grossPnl);
+  const aiVerdict = input.decision?.finalVerdict ?? trade?.aiVerdict ?? null;
+  const strategyTag = journal?.source ?? trade?.strategy ?? null;
+
   return {
     learningRecordId: newLearningRecordId(),
     environment: "TESTNET",
-    symbol: input.trade.symbol,
-    decisionLogId: input.trade.decisionLogId,
-    previewId: input.trade.previewId,
-    orderId: input.journal?.exchangeOrderId ?? null,
-    positionId: `pos-${input.trade.symbol}-${input.trade.side}`,
-    closedTradeId: input.trade.id,
-    strategy: input.trade.strategy,
-    sourceAgent: input.journal?.source?.toUpperCase() ?? null,
-    finalVerdict: input.decision?.finalVerdict ?? null,
-    confidence: confidenceFromDecision(input.decision),
-    grossPnl: Number(input.trade.grossPnl.toFixed(4)),
-    netPnl: Number(input.trade.netPnl.toFixed(4)),
-    fee: Number(input.trade.fee.toFixed(4)),
+    tradeId,
+    symbol: journal?.symbol ?? trade?.symbol ?? "UNKNOWN",
+    side,
+    decisionLogId: journal?.decisionLogId ?? trade?.decisionLogId ?? null,
+    previewId: journal?.previewId ?? trade?.previewId ?? null,
+    orderId: journal?.exchangeOrderId ?? null,
+    positionId: side ? `pos-${journal?.symbol ?? trade?.symbol}-${side}` : null,
+    closedTradeId: tradeId,
+    strategy: strategyTag,
+    strategyTag,
+    sourceAgent: journal?.source?.toUpperCase() ?? null,
+    finalVerdict: aiVerdict,
+    aiVerdict,
+    confidence: confidenceFromDecision(input.decision) ?? trade?.confidence ?? null,
+    entryReason: entryReasonFrom({ journal, decision: input.decision }),
+    closeReason: parseCloseReason(journal?.operatorNote ?? trade?.notes),
+    whatWorked: null,
+    whatFailed: null,
+    suggestedAdjustment: null,
+    grossPnl: Number(grossPnl.toFixed(4)),
+    netPnl: Number(netPnl.toFixed(4)),
+    fee: Number(fee.toFixed(4)),
     rMultiple,
     maxFavorableExcursion: excursions.mfe,
     maxAdverseExcursion: excursions.mae,
-    durationMs: input.trade.durationMs,
-    result: input.trade.result,
+    durationMs,
+    result,
     includeInLearning: true,
     status: "PENDING_REVIEW",
     reflectionNotes: null,
-    createdAt: input.trade.closedAt,
+    createdAt: closedAt,
     updatedAt: now,
   };
 }
 
+function patchMissingFields(
+  existing: TestnetLearningRecord,
+  fresh: TestnetLearningRecord,
+): TestnetLearningRecord {
+  return {
+    ...existing,
+    tradeId: existing.tradeId ?? fresh.tradeId,
+    side: existing.side ?? fresh.side,
+    strategyTag: existing.strategyTag ?? fresh.strategyTag,
+    aiVerdict: existing.aiVerdict ?? fresh.aiVerdict,
+    entryReason: existing.entryReason ?? fresh.entryReason,
+    closeReason: existing.closeReason ?? fresh.closeReason,
+    finalVerdict: existing.finalVerdict ?? fresh.finalVerdict,
+    confidence: existing.confidence ?? fresh.confidence,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** MVP 73C — create a learning record for every CLOSED journal entry if missing. */
 export async function syncLearningRecordsFromClosedTradesServer(input: {
   closedTrades: TestnetClosedTrade[];
   journal: BinanceTestnetJournalEntry[];
   decisions: DecisionLogEntry[];
 }): Promise<TestnetLearningRecord[]> {
   const existing = await loadLearningRecordsServer();
-  const byTradeId = new Map(existing.map((r) => [r.closedTradeId, r]));
+  const byTradeId = new Map(
+    existing.map((r) => [r.tradeId ?? r.closedTradeId, r]),
+  );
   const journalByTradeId = new Map(
     input.journal.map((j) => [j.binanceTestnetTradeId, j]),
   );
+  const tradeById = new Map(input.closedTrades.map((t) => [t.id, t]));
   const decisionsById = new Map(input.decisions.map((d) => [d.id, d]));
+
+  for (const entry of input.journal) {
+    if (!isClosedJournalEntry(entry)) continue;
+    const tradeId = entry.binanceTestnetTradeId;
+    const trade = tradeById.get(tradeId);
+    const decision = entry.decisionLogId
+      ? decisionsById.get(entry.decisionLogId)
+      : trade?.decisionLogId
+        ? decisionsById.get(trade.decisionLogId)
+        : undefined;
+
+    const current = byTradeId.get(tradeId);
+    if (!current) {
+      byTradeId.set(
+        tradeId,
+        buildLearningRecord({ trade, journal: entry, decision }),
+      );
+      continue;
+    }
+
+    const fresh = buildLearningRecord({ trade, journal: entry, decision });
+    byTradeId.set(tradeId, patchMissingFields(current, fresh));
+  }
 
   for (const trade of input.closedTrades) {
     if (byTradeId.has(trade.id)) continue;
-    const record = buildLearningRecord({
-      trade,
-      journal: journalByTradeId.get(trade.id),
-      decision: trade.decisionLogId
-        ? decisionsById.get(trade.decisionLogId)
-        : undefined,
-    });
-    byTradeId.set(trade.id, record);
+    const journal = journalByTradeId.get(trade.id);
+    const decision = trade.decisionLogId
+      ? decisionsById.get(trade.decisionLogId)
+      : undefined;
+    byTradeId.set(
+      trade.id,
+      buildLearningRecord({ trade, journal, decision }),
+    );
   }
 
-  const next = [...byTradeId.values()].sort((a, b) =>
-    b.createdAt.localeCompare(a.createdAt),
-  );
+  const next = [...byTradeId.values()]
+    .map(normalizeLearningRecord)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   await writeRecords(next);
   return next;
 }
@@ -151,14 +282,26 @@ export function buildLearningQueueFromRecords(
   records: TestnetLearningRecord[],
 ): TestnetLearningQueueItem[] {
   return records
-    .filter((r) => r.status !== "LEARNED")
+    .filter((r) => r.status !== "LEARNED" && r.status !== "EXCLUDED")
     .map(mapRecordToQueueItem)
     .sort((a, b) => b.closedAt.localeCompare(a.closedAt));
 }
 
-async function patchRecordStatus(
+type LearningRecordPatch = Partial<
+  Pick<
+    TestnetLearningRecord,
+    | "status"
+    | "reflectionNotes"
+    | "includeInLearning"
+    | "whatWorked"
+    | "whatFailed"
+    | "suggestedAdjustment"
+  >
+>;
+
+async function patchRecord(
   learningRecordId: string,
-  patch: Partial<Pick<TestnetLearningRecord, "status" | "reflectionNotes" | "includeInLearning">>,
+  patch: LearningRecordPatch,
 ): Promise<TestnetLearningRecord | null> {
   const existing = await loadLearningRecordsServer();
   let updated: TestnetLearningRecord | null = null;
@@ -178,11 +321,22 @@ async function patchRecordStatus(
 
 export async function markLearningRecordLearnedServer(
   learningRecordId: string,
+  review?: {
+    whatWorked?: string | null;
+    whatFailed?: string | null;
+    suggestedAdjustment?: string | null;
+  },
 ): Promise<TestnetLearningRecord | null> {
-  return patchRecordStatus(learningRecordId, {
+  const patch: LearningRecordPatch = {
     status: "LEARNED",
     includeInLearning: true,
-  });
+  };
+  if (review?.whatWorked != null) patch.whatWorked = review.whatWorked;
+  if (review?.whatFailed != null) patch.whatFailed = review.whatFailed;
+  if (review?.suggestedAdjustment != null) {
+    patch.suggestedAdjustment = review.suggestedAdjustment;
+  }
+  return patchRecord(learningRecordId, patch);
 }
 
 /** Autopilot path — ingest closed trades without operator clicking Mark learned. */
@@ -212,7 +366,7 @@ export async function autoMarkPendingLearningRecordsServer(): Promise<{
 export async function excludeLearningRecordServer(
   learningRecordId: string,
 ): Promise<TestnetLearningRecord | null> {
-  return patchRecordStatus(learningRecordId, {
+  return patchRecord(learningRecordId, {
     status: "EXCLUDED",
     includeInLearning: false,
   });
@@ -221,7 +375,7 @@ export async function excludeLearningRecordServer(
 export async function markLearningRecordPendingReviewServer(
   learningRecordId: string,
 ): Promise<TestnetLearningRecord | null> {
-  return patchRecordStatus(learningRecordId, {
+  return patchRecord(learningRecordId, {
     status: "PENDING_REVIEW",
     includeInLearning: true,
   });
@@ -236,10 +390,20 @@ export async function generateLearningReflectionServer(input: {
   if (!target) return null;
   const notes =
     input.notes?.trim() ||
-    `TESTNET ${target.result} ${target.positionId ?? ""} net ${target.netPnl.toFixed(2)} R ${target.rMultiple.toFixed(2)}`;
-  return patchRecordStatus(input.learningRecordId, {
+    `TESTNET ${target.result} ${target.symbol} net ${target.netPnl.toFixed(2)} R ${target.rMultiple.toFixed(2)}`;
+  const whatFailed =
+    target.result === "LOSS"
+      ? target.closeReason ?? "Loss — review entry thesis and exit timing."
+      : null;
+  const whatWorked =
+    target.result === "WIN"
+      ? target.entryReason ?? "Win — entry aligned with thesis."
+      : null;
+  return patchRecord(input.learningRecordId, {
     status: "REFLECTION_READY",
     reflectionNotes: notes,
+    whatWorked: target.whatWorked ?? whatWorked,
+    whatFailed: target.whatFailed ?? whatFailed,
   });
 }
 
@@ -251,13 +415,39 @@ export function buildAgentScoreboardSegmentFromRecords(
   records: TestnetLearningRecord[],
 ): TestnetAgentScoreboardSegment {
   const learned = learnedRecords(records);
-  const byAgent = new Map<string, { n: number; wins: number; net: number }>();
+  const byAgent = new Map<
+    string,
+    { n: number; wins: number; net: number; quality: number[]; scoredWins: number; scoredTotal: number }
+  >();
   for (const record of learned) {
     const key = record.sourceAgent ?? "UNKNOWN";
-    const row = byAgent.get(key) ?? { n: 0, wins: 0, net: 0 };
+    const row = byAgent.get(key) ?? {
+      n: 0,
+      wins: 0,
+      net: 0,
+      quality: [],
+      scoredWins: 0,
+      scoredTotal: 0,
+    };
     row.n += 1;
     if (record.result === "WIN") row.wins += 1;
     row.net += record.netPnl;
+    byAgent.set(key, row);
+  }
+  for (const record of records) {
+    if (record.qualityScore == null) continue;
+    const key = record.sourceAgent ?? "UNKNOWN";
+    const row = byAgent.get(key) ?? {
+      n: 0,
+      wins: 0,
+      net: 0,
+      quality: [],
+      scoredWins: 0,
+      scoredTotal: 0,
+    };
+    row.quality.push(record.qualityScore);
+    row.scoredTotal += 1;
+    if (record.result === "WIN") row.scoredWins += 1;
     byAgent.set(key, row);
   }
   return {
@@ -270,6 +460,16 @@ export function buildAgentScoreboardSegmentFromRecords(
         winningTrades: row.wins,
         winRate: row.n > 0 ? (row.wins / row.n) * 100 : 0,
         netPnl: Number(row.net.toFixed(4)),
+        avgQualityScore:
+          row.quality.length > 0
+            ? Math.round(
+                row.quality.reduce((a, b) => a + b, 0) / row.quality.length,
+              )
+            : null,
+        agentAlignmentPct:
+          row.scoredTotal > 0
+            ? Math.round((row.scoredWins / row.scoredTotal) * 100)
+            : null,
       }))
       .sort((a, b) => b.totalLearned - a.totalLearned),
     updatedAt: new Date().toISOString(),
@@ -282,7 +482,7 @@ export function buildStrategyPerformanceSegmentFromRecords(
   const learned = learnedRecords(records);
   const byStrategy = new Map<string, { n: number; wins: number; net: number; r: number }>();
   for (const record of learned) {
-    const key = record.strategy ?? "UNSPECIFIED";
+    const key = record.strategyTag ?? record.strategy ?? "UNSPECIFIED";
     const row = byStrategy.get(key) ?? { n: 0, wins: 0, net: 0, r: 0 };
     row.n += 1;
     if (record.result === "WIN") row.wins += 1;

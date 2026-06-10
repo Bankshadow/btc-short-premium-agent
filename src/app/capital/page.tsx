@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import CapitalDashboard from "@/components/capital/CapitalDashboard";
 
 export const metadata = {
@@ -9,7 +10,9 @@ export const metadata = {
 export default function CapitalPage() {
   return (
     <main className="min-h-full bg-zinc-950">
-      <CapitalDashboard />
+      <AdvancedModuleLayout moduleId="capital">
+        <CapitalDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

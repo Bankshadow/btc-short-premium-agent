@@ -515,6 +515,7 @@ export async function runAutomationJob(
       return runTimed(jobType, ctx, async () => {
         const monitor = await runBinanceTestnetAutoMonitor({
           analysis: ctx.analyze,
+          runId: ctx.runId,
         });
         if (monitor.closedCount > 0 && isBinanceTestnetAutoExecuteEnabled()) {
           await (

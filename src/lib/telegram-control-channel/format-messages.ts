@@ -32,6 +32,11 @@ export function formatPinnedStatusMessage(input: {
       : "Position: flat",
     `AI: ${m.aiStatus.state} · ${m.aiStatus.nextAction}`,
     `Autopilot: ${m.automation.paused ? "PAUSED" : m.automation.enabled ? "ON" : "OFF"} · ${m.automation.intervalMinutes}m`,
+    m.alwaysOnOperatorLayer?.actionRequired
+      ? `Operator: ⚠️ ${m.alwaysOnOperatorLayer.nextAction}`
+      : m.alwaysOnOperatorLayer?.heartbeat.lastTickAt
+        ? `Operator: monitoring · tick ${m.alwaysOnOperatorLayer.heartbeat.tickCount}`
+        : null,
     actionNeeded ? "⚠️ Action needed — check permission prompt or /approve" : "✅ No permission pending",
     m.risk.blocker ? `Blocker: ${m.risk.blocker}` : null,
     "",
@@ -136,5 +141,12 @@ export function formatPermissionPromptMessage(prompt: TelegramPermissionPrompt):
 
 export function formatHelpMessage(): string {
   const rows = TELEGRAM_COMMANDS.map((c) => `${c.command} — ${c.description}`);
-  return sanitizeBriefingText(["Telegram control (testnet only)", ...rows].join("\n"));
+  return sanitizeBriefingText(
+    [
+      "Telegram operator layer (MVP 93 · testnet only)",
+      ...rows,
+      "",
+      "Safety: heartbeat cannot open orders · Telegram cannot enable live · /approve still requires double-confirm.",
+    ].join("\n"),
+  );
 }

@@ -37,12 +37,13 @@ export function buildTradeQualitySummary(
   if (scores.length > 0) {
     const totals: Record<keyof TradeQualityDimensions, number> = {
       setupQuality: 0,
+      marketRegimeFit: 0,
       entryQuality: 0,
-      riskReward: 0,
-      executionQuality: 0,
       exitQuality: 0,
+      riskReward: 0,
       ruleCompliance: 0,
-      aiReasoningQuality: 0,
+      executionQuality: 0,
+      reasoningConsistency: 0,
     };
     for (const s of scores) {
       for (const key of Object.keys(totals) as (keyof TradeQualityDimensions)[]) {

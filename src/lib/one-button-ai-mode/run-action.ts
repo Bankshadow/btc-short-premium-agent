@@ -1,6 +1,6 @@
+import { runCentralAnalysisOrchestrator } from "@/lib/analysis-engine/analysis-orchestrator";
 import {
   pauseAutomation,
-  runAutomationCycle,
 } from "@/lib/automation-control-plane/scheduler";
 import { runDailySelfReview } from "@/lib/daily-self-review/run-daily-self-review";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
@@ -46,7 +46,7 @@ export async function runOneButtonAiAction(
     return {
       ok: false,
       action: forcedAction ?? "RESOLVE_ISSUE",
-      label: "Resolve Issue",
+      label: "Resolve blocker",
       summary: liveBlock,
       requiresClientConfirm: false,
       confirmMode: null,
@@ -65,7 +65,7 @@ export async function runOneButtonAiAction(
     case "ASK_PERMISSION_EXECUTE":
       return clientConfirmResult(
         action,
-        "Approve Testnet Order",
+        "Approve testnet order",
         status.state.detail,
         "execute",
         {
@@ -80,7 +80,7 @@ export async function runOneButtonAiAction(
     case "ASK_PERMISSION_CLOSE":
       return clientConfirmResult(
         action,
-        "Close Position",
+        "Close position",
         status.state.detail,
         "close",
       );
@@ -104,20 +104,23 @@ export async function runOneButtonAiAction(
     }
 
     case "RUN_ANALYSIS_CYCLE": {
-      const result = await runAutomationCycle({
-        workspaceId,
+      const cycle = await runCentralAnalysisOrchestrator({
         trigger: "manual",
-        force: true,
+        enrichMvp9: true,
+        runAutopilot: true,
+        createTestnetPreview: true,
       });
       invalidateMissionSnapshotCache();
       return {
-        ok: result.status === "SUCCESS" || result.status === "SKIPPED",
+        ok: cycle.ok,
         action,
         label,
-        summary: `Autopilot cycle ${result.status.toLowerCase()}`,
+        summary: `Analysis cycle · verdict ${cycle.result.finalVerdict}`,
         requiresClientConfirm: false,
         confirmMode: null,
         navigateTo: null,
+        previewId: cycle.result.tradeCandidate?.previewId ?? null,
+        decisionLogId: cycle.result.decisionLogId,
         safetyNotice: ONE_BUTTON_AI_SAFETY_NOTICE,
         cannotAutoExecuteLive: true,
       };
@@ -129,7 +132,7 @@ export async function runOneButtonAiAction(
       if (cycle.testnetPreview && !cycle.testnetPreview.blocked) {
         return clientConfirmResult(
           "ASK_PERMISSION_EXECUTE",
-          "Approve Testnet Order",
+          "Approve testnet order",
           `Preview ${cycle.testnetPreview.symbol} ${cycle.testnetPreview.side} ready for review.`,
           "execute",
           {
@@ -141,7 +144,7 @@ export async function runOneButtonAiAction(
       return {
         ok: true,
         action,
-        label: "Approve Testnet Order",
+        label: "Approve testnet order",
         summary: cycle.testnetPreview?.blocked
           ? `Preview blocked: ${cycle.testnetPreview.blockReasons.join("; ")}`
           : `Verdict ${cycle.journalEntry.finalVerdict} — no testnet preview created.`,
@@ -160,11 +163,17 @@ export async function runOneButtonAiAction(
       await runAnomalyDetectionSnapshot({ persist: true, useCache: false }).catch(
         () => null,
       );
+      const { emitEngineEvent } = await import("@/lib/engine-event-bus/emit-engine-event");
+      await emitEngineEvent({
+        type: "POSITION_MONITORED",
+        summary: "Open position monitored — testnet snapshot refreshed",
+        meaningful: true,
+      }).catch(() => undefined);
       invalidateMissionSnapshotCache();
       return {
         ok: true,
         action,
-        label: "Continue Monitoring",
+        label: "Monitor position",
         summary: "Testnet monitor refreshed — position and risk checked.",
         requiresClientConfirm: false,
         confirmMode: null,
@@ -178,7 +187,7 @@ export async function runOneButtonAiAction(
       return {
         ok: true,
         action,
-        label: "Review Trade",
+        label: "Review preview",
         summary: "Open learning review for closed trades.",
         requiresClientConfirm: false,
         confirmMode: null,
@@ -196,7 +205,7 @@ export async function runOneButtonAiAction(
       return {
         ok: review.ok && !review.skipped,
         action,
-        label: "Generate Report",
+        label: "Generate report",
         summary: review.skipped
           ? (review.reason ?? "Daily review not due.")
           : "Daily AI self-review generated.",
@@ -214,7 +223,7 @@ export async function runOneButtonAiAction(
       return {
         ok: true,
         action,
-        label: "Resolve Issue",
+        label: "Resolve blocker",
         summary: "Autopilot paused due to risk or loop guard.",
         requiresClientConfirm: false,
         confirmMode: null,
@@ -231,7 +240,7 @@ export async function runOneButtonAiAction(
       return {
         ok: true,
         action,
-        label: "Resolve Issue",
+        label: "Resolve blocker",
         summary: blockers[0] ?? status.state.detail,
         requiresClientConfirm: false,
         confirmMode: null,

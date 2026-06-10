@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import AutomationDashboard from "@/components/automation/AutomationDashboard";
 
 export const metadata = {
@@ -8,7 +9,9 @@ export const metadata = {
 export default function AutomationPage() {
   return (
     <main className="desk-root min-h-screen">
-      <AutomationDashboard />
+      <AdvancedModuleLayout moduleId="automation">
+        <AutomationDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

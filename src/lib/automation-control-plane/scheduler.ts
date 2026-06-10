@@ -460,6 +460,15 @@ export async function runAutomationCycle(
     /* mission controller risk adjust is best-effort */
   }
 
+  if (trigger !== "cron") {
+    try {
+      const { runOperatorLayerTick } = await import("@/lib/always-on-operator-layer");
+      await runOperatorLayerTick({ trigger: "automation", workspaceId });
+    } catch {
+      /* operator layer is best-effort */
+    }
+  }
+
   return run;
 }
 

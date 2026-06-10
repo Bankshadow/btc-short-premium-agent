@@ -72,6 +72,8 @@ export interface RiskBudgetInput {
   recentLossStreak?: number;
   /** MVP 83 — capped at 1.0; reduces size only when overconfident. */
   confidenceCalibrationMultiplier?: number;
+  /** MVP 77 — integrated calibration recommendation (reduce-only). */
+  confidenceCalibrationRecommendation?: string | null;
   strategyPerformance?: Array<{
     strategyId: string;
     winRate: number;

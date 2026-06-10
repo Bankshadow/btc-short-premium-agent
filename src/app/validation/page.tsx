@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import ValidationDashboard from "@/components/validation/ValidationDashboard";
 
 export const metadata = {
@@ -9,7 +10,9 @@ export const metadata = {
 export default function ValidationPage() {
   return (
     <main className="min-h-full bg-zinc-950">
-      <ValidationDashboard />
+      <AdvancedModuleLayout moduleId="validation">
+        <ValidationDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

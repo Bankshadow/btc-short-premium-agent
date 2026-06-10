@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import IncidentsDashboard from "@/components/governance/IncidentsDashboard";
 
 export const metadata = {
@@ -8,7 +9,9 @@ export const metadata = {
 export default function IncidentsPage() {
   return (
     <main className="min-h-full bg-zinc-950">
-      <IncidentsDashboard />
+      <AdvancedModuleLayout moduleId="incidents">
+        <IncidentsDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

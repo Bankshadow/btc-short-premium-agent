@@ -10,7 +10,37 @@ import { loadServerBinanceTestnetJournal, saveServerBinanceTestnetJournal } from
 import { backfillOrphanBinanceJournalEntries } from "@/lib/exchange/binance/binance-journal-backfill";
 import { reconcileBinanceJournalStatuses } from "@/lib/exchange/binance/binance-journal-reconcile";
 import { reconcileBinancePositions } from "@/lib/exchange/binance/binance-position-monitor";
+import { buildEvidenceProgress } from "@/lib/evidence-progress";
+import { buildEvidenceQualitySnapshot } from "@/lib/evidence-quality/build-evidence-quality";
+import { buildLearningProgress } from "@/lib/learning-queue";
+import { buildIntegratedStrategyHealth } from "@/lib/integrated-strategy-health";
+import {
+  buildMicroLiveReadiness,
+  buildMicroLiveReadinessDefaults,
+} from "@/lib/micro-live-readiness";
+import { loadAnomalyIncidents } from "@/lib/anomaly-detection/store";
+import { loadMonitorJournalEvents } from "./monitor-journal-server";
 import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
+import {
+  buildIntegratedTradeQualitySnapshot,
+  syncTradeQualityFromClosedJournal,
+} from "@/lib/trade-quality-score/sync-trade-quality-from-closed";
+import { buildIntegratedConfidenceCalibration } from "@/lib/integrated-confidence-calibration";
+import { buildIntegratedRiskBudget } from "@/lib/integrated-risk-budget";
+import {
+  buildMissionControllerRiskBudget,
+  computeLosingStreakFromClosedTrades,
+} from "@/lib/mission-controller-risk-budget";
+import { buildAlwaysOnOperatorLayerSnapshot } from "@/lib/always-on-operator-layer/build-operator-layer-snapshot";
+import {
+  buildMicroLiveReadinessReviewFromSnapshots,
+  persistReadinessReviewSideEffects,
+} from "@/lib/micro-live-readiness-review";
+import { buildIntegratedDailySelfReviewSnapshot } from "@/lib/integrated-daily-self-review";
+import { buildIntegratedQualityCalibration } from "@/lib/integrated-quality-calibration";
+import { buildIntegratedStrategyAgentHealth } from "@/lib/integrated-strategy-agent-health";
+import { GOAL_START_CAPITAL } from "@/lib/goal-engine/types";
+import { buildMonitorReliabilitySnapshot } from "@/lib/monitor-reliability";
 import { mapBinanceSource } from "./decision-linkage";
 import { buildExecutionQualitySummary } from "@/lib/execution-quality";
 import {
@@ -19,6 +49,7 @@ import {
   buildStrategyPerformanceSegmentFromRecords,
   buildValidationMetricsSegmentFromRecords,
   syncLearningRecordsFromClosedTradesServer,
+  saveLearningRecordsServer,
 } from "./learning-records-server";
 import {
   buildEquitySeries,
@@ -113,7 +144,7 @@ function mapExchangeOrder(
   };
 }
 
-function buildClosedTrades(
+export function buildClosedTradesFromJournal(
   journal: BinanceTestnetJournalEntry[],
 ): TestnetClosedTrade[] {
   const closed: TestnetClosedTrade[] = [];
@@ -253,12 +284,43 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
     mapExchangeOrder(o, journalBySymbol.get(o.symbol)),
   );
 
-  const closedTrades = buildClosedTrades(journal);
+  const closedTrades = buildClosedTradesFromJournal(journal);
   const decisions = await loadServerAnalysisJournal().catch(() => []);
-  const learningRecords = await syncLearningRecordsFromClosedTradesServer({
+  let learningRecords = await syncLearningRecordsFromClosedTradesServer({
     closedTrades,
     journal,
     decisions,
+  });
+  const recordsBeforeQuality = learningRecords;
+  const qualitySync = await syncTradeQualityFromClosedJournal({
+    journal,
+    closedTrades,
+    decisions,
+    learningRecords,
+    persistEvents: true,
+  });
+  learningRecords = qualitySync.learningRecords;
+  const qualityPersistNeeded =
+    qualitySync.newlyScored > 0 ||
+    qualitySync.learningRecords.some((r) => {
+      const prev = recordsBeforeQuality.find(
+        (p) =>
+          (p.tradeId ?? p.closedTradeId) === (r.tradeId ?? r.closedTradeId),
+      );
+      return prev && r.qualityScoreId !== prev.qualityScoreId;
+    });
+  if (qualityPersistNeeded) {
+    await saveLearningRecordsServer(learningRecords);
+  }
+  const integratedTradeQuality = buildIntegratedTradeQualitySnapshot({
+    scores: qualitySync.scores,
+  });
+  const integratedConfidenceCalibration = await buildIntegratedConfidenceCalibration({
+    journal,
+    closedTrades,
+    decisions,
+    learningRecords,
+    persistSideEffects: true,
   });
   const learningQueue = buildLearningQueueFromRecords(learningRecords);
   const agentScoreboardSegment =
@@ -270,6 +332,84 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
   const executionQuality = buildExecutionQualitySummary({
     testnetJournal: journal,
   });
+  const evidenceProgress = buildEvidenceProgress({
+    journal,
+    closedTrades,
+    learningRecords,
+    openPositionCount: openPositions.length,
+    connected,
+  });
+  const learningProgress = buildLearningProgress({
+    journal,
+    learningRecords,
+  });
+  const monitorEventsForEvidence = await loadMonitorJournalEvents().catch(() => []);
+  const evidenceQuality = buildEvidenceQualitySnapshot({
+    journal,
+    closedTrades,
+    learningRecords,
+    decisions,
+    tradeQualityScores: qualitySync.scores,
+    monitorEvents: monitorEventsForEvidence,
+  });
+  const integratedStrategyHealth = await buildIntegratedStrategyHealth({
+    journal,
+    closedTrades,
+    learningRecords,
+    decisions,
+    evidenceCompletedTrades: evidenceQuality.validEvidenceCount,
+    evidenceValidTrades: evidenceProgress.validTrades,
+    tradeQualityScores: qualitySync.scores,
+    agentScoreboardLearned: agentScoreboardSegment.totalLearned,
+    confidenceCalibrationReport: integratedConfidenceCalibration.report,
+    persistSideEffects: true,
+    evidenceQuality,
+  });
+  const integratedQualityCalibration = buildIntegratedQualityCalibration({
+    tradeQuality: integratedTradeQuality,
+    confidenceCalibration: integratedConfidenceCalibration,
+    strategyHealth: integratedStrategyHealth,
+  });
+  const integratedStrategyAgentHealth = buildIntegratedStrategyAgentHealth({
+    journal,
+    closedTrades,
+    learningRecords,
+    decisions,
+    tradeQualityScores: qualitySync.scores,
+    strategyHealth: integratedStrategyHealth,
+    confidenceCalibrationReport: integratedConfidenceCalibration.report,
+  });
+  const [monitorEvents, incidents] = await Promise.all([
+    monitorEventsForEvidence.length > 0
+      ? Promise.resolve(monitorEventsForEvidence)
+      : loadMonitorJournalEvents().catch(() => []),
+    loadAnomalyIncidents().catch(() => []),
+  ]);
+  const criticalIncident = incidents.find(
+    (i) =>
+      i.severity === "CRITICAL" &&
+      (i.status === "OPEN" || i.status === "INVESTIGATING"),
+  );
+  const microLiveReadiness = await buildMicroLiveReadiness(
+    buildMicroLiveReadinessDefaults({
+      connected,
+      testnetConfigured: config.testnetEnabled,
+      evidenceProgress,
+      journal,
+      learningRecords,
+      monitorEvents,
+      criticalIncidentOpen: Boolean(criticalIncident),
+      criticalIncidentTitle: criticalIncident?.title ?? null,
+      persistSideEffects: true,
+    }),
+  );
+  const monitorReliability = await buildMonitorReliabilitySnapshot({
+    journal,
+    positions,
+    connected,
+    autoExecuteEnabled: true,
+    autoRecover: true,
+  });
   const equitySeries = buildEquitySeries(closedTrades, openPositions);
   const riskStatus = resolveRiskStatus({
     liveBlock,
@@ -277,6 +417,77 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
     mismatches,
   });
   const summary = buildSummary({ openPositions, closedTrades, riskStatus });
+
+  const integratedRiskBudget = await buildIntegratedRiskBudget({
+    evidenceProgress,
+    strategyHealth: integratedStrategyHealth,
+    confidenceCalibration: integratedConfidenceCalibration,
+    tradeQuality: integratedTradeQuality,
+    microLiveReadiness,
+    openPositionCount: openPositions.length,
+    dailyPnlUsd: summary.dailyPnl,
+    equityUsd: GOAL_START_CAPITAL + summary.netPnl,
+    persistSideEffects: true,
+    qualityCalibration: integratedQualityCalibration,
+  });
+
+  const integratedDailySelfReview = await buildIntegratedDailySelfReviewSnapshot({
+    evidenceProgress,
+    closedTrades,
+    decisions,
+    learningRecords,
+    learningProgress,
+    strategyHealth: integratedStrategyHealth,
+    tradeQuality: integratedTradeQuality,
+    confidenceCalibration: integratedConfidenceCalibration,
+    riskBudget: integratedRiskBudget,
+    executionQuality,
+    monitorEvents,
+    incidents,
+    dailyPnlUsd: summary.dailyPnl,
+    persistSideEffects: true,
+  });
+
+  const openExposureUsd = openPositions.reduce(
+    (sum, p) => sum + Math.abs(p.notionalUsd),
+    0,
+  );
+  const incidentOpenCount = incidents.filter(
+    (i) => i.status === "OPEN" || i.status === "INVESTIGATING",
+  ).length;
+  const missionControllerRiskBudget = buildMissionControllerRiskBudget({
+    integratedRiskBudget,
+    currentEquity: GOAL_START_CAPITAL + summary.netPnl,
+    winRate: summary.winRate,
+    losingStreak: computeLosingStreakFromClosedTrades(closedTrades),
+    maxDrawdownUsd: summary.maxDrawdown,
+    dailyPnlUsd: summary.dailyPnl,
+    openExposureUsd,
+    openPositionCount: openPositions.length,
+    incidentOpenCount,
+    criticalIncidentOpen: Boolean(criticalIncident),
+    blocksNewTestnetEntries: integratedStrategyHealth.blocksNewTestnetEntries,
+  });
+
+  const alwaysOnOperatorLayer = await buildAlwaysOnOperatorLayerSnapshot();
+
+  const microLiveReadinessReview = buildMicroLiveReadinessReviewFromSnapshots({
+    connected,
+    testnetConfigured: config.testnetEnabled,
+    evidenceProgress,
+    evidenceQuality,
+    integratedStrategyHealth,
+    integratedRiskBudget,
+    monitorReliability,
+    microLiveReadiness,
+    alwaysOnOperatorLayer,
+    criticalIncidentOpen: Boolean(criticalIncident),
+    criticalIncidentTitle: criticalIncident?.title ?? null,
+    learningPendingCount: learningQueue.filter(
+      (q) => q.status === "PENDING_REVIEW",
+    ).length,
+  });
+  await persistReadinessReviewSideEffects({ review: microLiveReadinessReview });
 
   return {
     openPositions,
@@ -293,6 +504,22 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
     strategyPerformanceSegment,
     validationMetricsSegment,
     executionQuality,
+    evidenceProgress,
+    monitorReliability,
+    learningProgress,
+    integratedStrategyHealth,
+    microLiveReadiness,
+    integratedTradeQuality,
+    integratedConfidenceCalibration,
+    agentScoreboardV2Segment: integratedConfidenceCalibration.agentScoreboardV2,
+    integratedRiskBudget,
+    integratedDailySelfReview,
+    evidenceQuality,
+    integratedQualityCalibration,
+    integratedStrategyAgentHealth,
+    missionControllerRiskBudget,
+    alwaysOnOperatorLayer,
+    microLiveReadinessReview,
     lastUpdatedAt: new Date().toISOString(),
     connected,
     mismatches,

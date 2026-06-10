@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import WarRoomDashboard from "@/components/war-room/WarRoomDashboard";
 
 export const metadata = {
@@ -8,7 +9,9 @@ export const metadata = {
 export default function WarRoomPage() {
   return (
     <main className="desk-root min-h-screen">
-      <WarRoomDashboard />
+      <AdvancedModuleLayout moduleId="war-room">
+        <WarRoomDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

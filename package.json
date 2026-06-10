@@ -54,6 +54,7 @@
     "test:execution-quality": "npx --yes tsx --test src/lib/execution-quality/execution-quality.test.ts",
     "test:goal-engine": "npx --yes tsx --test src/lib/goal-engine/goal-engine.test.ts",
     "test:mission-flow": "npx --yes tsx --test src/lib/mission-flow/mission-flow.test.ts",
+    "test:no-orphan-mvp": "npx --yes tsx --test src/lib/no-orphan-mvp/no-orphan-mvp.test.ts",
     "test:prediction-market-arbitrage": "npx --yes tsx --test src/lib/prediction-market-arbitrage/prediction-market-arbitrage.test.ts"
   },
   "dependencies": {

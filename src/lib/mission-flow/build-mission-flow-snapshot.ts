@@ -1,6 +1,25 @@
 import type { GoalDashboardServerPayload } from "@/lib/goal-engine/build-server-context";
 import type { GoalNotificationPrefs } from "@/lib/mission-notifications/goal-notification-store";
-import { GOAL_MIN_TRADES_FOR_TRUST } from "@/lib/goal-engine/types";
+import { emptyEvidenceProgress } from "@/lib/evidence-progress";
+import { emptyLearningProgress } from "@/lib/learning-queue/empty-snapshot";
+import { emptyIntegratedStrategyHealth } from "@/lib/integrated-strategy-health/empty-snapshot";
+import {
+  resolveAiNextActionFromIntegrated,
+  resolveMissionStrategyHealthFromIntegrated,
+} from "@/lib/integrated-strategy-health/map-mission-health";
+import { emptyMicroLiveReadiness } from "@/lib/micro-live-readiness/empty-snapshot";
+import { emptyIntegratedTradeQuality } from "@/lib/trade-quality-score/empty-snapshot";
+import { emptyIntegratedConfidenceCalibration } from "@/lib/integrated-confidence-calibration/empty-snapshot";
+import { emptyIntegratedRiskBudget } from "@/lib/integrated-risk-budget/empty-snapshot";
+import { emptyIntegratedDailySelfReview } from "@/lib/integrated-daily-self-review/empty-snapshot";
+import { emptyEvidenceQualitySnapshot } from "@/lib/evidence-quality/build-evidence-quality";
+import { emptyIntegratedQualityCalibration } from "@/lib/integrated-quality-calibration/build-integrated-quality-calibration";
+import { emptyIntegratedStrategyAgentHealth } from "@/lib/integrated-strategy-agent-health/build-integrated-strategy-agent-health";
+import { emptyMissionControllerRiskBudget } from "@/lib/mission-controller-risk-budget/empty-snapshot";
+import { emptyAlwaysOnOperatorLayer } from "@/lib/always-on-operator-layer/empty-snapshot";
+import { emptyMicroLiveReadinessReview } from "@/lib/micro-live-readiness-review/empty-snapshot";
+import { resolveAiNextActionChain } from "@/lib/integrated-daily-self-review/map-mission-action";
+import { emptyMonitorReliabilitySnapshot } from "@/lib/monitor-reliability/empty-snapshot";
 import { resolveTrustScaledNotionalUsd } from "@/lib/exchange/binance/trust-scaled-notional";
 import { loadBinanceConfig } from "@/lib/exchange/binance/binance-config";
 import { resolvePrimaryStrategyHealth } from "./resolve-primary-strategy-health";
@@ -144,6 +163,57 @@ export function buildMissionFlowSnapshot(
       automation?.state.lastRun?.completedAt,
   );
 
+  const evidence =
+    payload.testnetSnapshot?.evidenceProgress ?? emptyEvidenceProgress();
+  const monitorReliability =
+    payload.testnetSnapshot?.monitorReliability ?? emptyMonitorReliabilitySnapshot();
+  const learningProgress =
+    payload.testnetSnapshot?.learningProgress ?? emptyLearningProgress();
+  const integratedStrategyHealth =
+    payload.testnetSnapshot?.integratedStrategyHealth ??
+    emptyIntegratedStrategyHealth();
+  const microLiveReadiness =
+    payload.testnetSnapshot?.microLiveReadiness ?? emptyMicroLiveReadiness();
+  const integratedTradeQuality =
+    payload.testnetSnapshot?.integratedTradeQuality ?? emptyIntegratedTradeQuality();
+  const integratedConfidenceCalibration =
+    payload.testnetSnapshot?.integratedConfidenceCalibration ??
+    emptyIntegratedConfidenceCalibration();
+  const integratedRiskBudget =
+    payload.testnetSnapshot?.integratedRiskBudget ?? emptyIntegratedRiskBudget();
+  const integratedDailySelfReview =
+    payload.testnetSnapshot?.integratedDailySelfReview ?? emptyIntegratedDailySelfReview();
+  const evidenceQuality =
+    payload.testnetSnapshot?.evidenceQuality ?? emptyEvidenceQualitySnapshot();
+  const integratedQualityCalibration =
+    payload.testnetSnapshot?.integratedQualityCalibration ??
+    emptyIntegratedQualityCalibration();
+  const integratedStrategyAgentHealth =
+    payload.testnetSnapshot?.integratedStrategyAgentHealth ??
+    emptyIntegratedStrategyAgentHealth();
+  const missionControllerRiskBudget =
+    payload.testnetSnapshot?.missionControllerRiskBudget ??
+    emptyMissionControllerRiskBudget();
+  const alwaysOnOperatorLayer =
+    payload.testnetSnapshot?.alwaysOnOperatorLayer ?? emptyAlwaysOnOperatorLayer();
+  const microLiveReadinessReview =
+    payload.testnetSnapshot?.microLiveReadinessReview ??
+    emptyMicroLiveReadinessReview();
+  const resolvedStrategyHealth = resolveMissionStrategyHealthFromIntegrated(
+    integratedStrategyHealth,
+    extras?.strategyHealth ?? null,
+  );
+  const aiNextAction = pendingTestnetPreview && !pendingTestnetPreview.blocked
+    ? `Double-confirm testnet ${pendingTestnetPreview.symbol} ${pendingTestnetPreview.side} order.`
+    : resolveAiNextActionChain({
+        microLiveReadiness,
+        dailyReview: integratedDailySelfReview,
+        integratedFallback: resolveAiNextActionFromIntegrated(
+          integratedStrategyHealth,
+          mission.nextAction,
+        ),
+      });
+
   return {
     startCapital: mission.startCapital,
     targetCapital: mission.targetCapital,
@@ -168,10 +238,7 @@ export function buildMissionFlowSnapshot(
       lastAction: hasCycle
         ? goal.aiActivity.lastAction
         : "Autopilot scheduled — first cycle starting soon.",
-      nextAction:
-        pendingTestnetPreview && !pendingTestnetPreview.blocked
-          ? `Double-confirm testnet ${pendingTestnetPreview.symbol} ${pendingTestnetPreview.side} order.`
-          : mission.nextAction,
+      nextAction: aiNextAction,
       humanActionRequired:
         mission.humanActionRequired ||
         Boolean(pendingTestnetPreview && !pendingTestnetPreview.blocked),
@@ -192,9 +259,9 @@ export function buildMissionFlowSnapshot(
       blocker: goal.risk.blocker,
     },
     trust: {
-      completedTrades: mission.totalTrades,
-      minRequired: mission.minTradesForTrust,
-      ready: mission.trustReady,
+      completedTrades: evidence.completedTrades,
+      minRequired: evidence.requiredTrades,
+      ready: evidence.evidenceSetReady,
     },
     nextRecommendation: buildNextRecommendation(payload, pendingTestnetPreview),
     scopeLabel: mission.scopeLabel,
@@ -231,12 +298,27 @@ export function buildMissionFlowSnapshot(
     },
     recentActivity: extras?.recentActivity ?? [],
     learningInsights: extras?.learningInsights ?? EMPTY_LEARNING_INSIGHTS,
-    strategyHealth: extras?.strategyHealth ?? null,
+    strategyHealth: resolvedStrategyHealth,
     trustNotionalUsd: resolveTrustScaledNotionalUsd({
-      completedTrades: mission.totalTrades,
-      minRequired: mission.minTradesForTrust ?? GOAL_MIN_TRADES_FOR_TRUST,
+      completedTrades: evidence.completedTrades,
+      minRequired: evidence.requiredTrades,
       maxNotionalUsd: loadBinanceConfig().maxNotionalUsd,
     }),
+    evidenceProgress: evidence,
+    monitorReliability,
+    learningProgress,
+    integratedStrategyHealth,
+    microLiveReadiness,
+    integratedTradeQuality,
+    integratedConfidenceCalibration,
+    integratedRiskBudget,
+    integratedDailySelfReview,
+    evidenceQuality,
+    integratedQualityCalibration,
+    integratedStrategyAgentHealth,
+    missionControllerRiskBudget,
+    alwaysOnOperatorLayer,
+    microLiveReadinessReview,
     selfLearning: extras?.selfLearning ?? {
       serverEvaluated: 0,
       lastTopAgent: null,

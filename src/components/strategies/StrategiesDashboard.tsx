@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { loadDeskBackboneInputs } from "@/lib/data-backbone/read-desk-state";
 import DataHealthPanel from "@/components/data-backbone/DataHealthPanel";
@@ -21,6 +21,7 @@ import type {
   StrategyRegistryStatus,
   StrategySkill,
 } from "@/lib/strategy-registry/strategy-registry-types";
+import type { StrategyRegistryHealthRecommendation } from "@/lib/integrated-strategy-health/types";
 import type { StrategyId } from "@/lib/validation/validation-types";
 import { REGIME_ROUTER_RULES } from "@/lib/validation/regime-router";
 
@@ -40,6 +41,20 @@ export default function StrategiesDashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedId, setSelectedId] = useState<StrategyId | null>(null);
   const [linkRuleId, setLinkRuleId] = useState("");
+  const [healthRecs, setHealthRecs] = useState<StrategyRegistryHealthRecommendation[]>(
+    [],
+  );
+
+  useEffect(() => {
+    void fetch("/api/integrated-strategy-health", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.ok && Array.isArray(json.registryRecommendations)) {
+          setHealthRecs(json.registryRecommendations);
+        }
+      })
+      .catch(() => undefined);
+  }, [refreshKey]);
 
   const { record, productionEntries, productionOrders, riskProfile } = useMemo(() => {
     void refreshKey;
@@ -126,6 +141,25 @@ export default function StrategiesDashboard() {
           </button>
         </div>
       </header>
+
+      {healthRecs.length > 0 && (
+        <section className="desk-panel border border-indigo-900/40 bg-indigo-950/15 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-indigo-300/80">
+            MVP 74 testnet health recommendations (advisory only)
+          </p>
+          <ul className="mt-2 space-y-2 text-xs text-zinc-300">
+            {healthRecs.slice(0, 5).map((rec) => (
+              <li key={`${rec.strategyTag}-${rec.reportId}`}>
+                <span className="font-mono text-zinc-100">{rec.strategyTag}</span> ·{" "}
+                {rec.status} — {rec.recommendation}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-zinc-500">
+            Does not auto-promote or demote registry status — operator approval required.
+          </p>
+        </section>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
         <section className="desk-panel px-3 py-3">

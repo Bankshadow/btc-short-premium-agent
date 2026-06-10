@@ -1,26 +1,9 @@
-import { loadCronAnalysisInput } from "@/lib/cron/cron-config";
-import { runAnalyzeRequest } from "@/lib/decision/run-analyze";
-import { enrichAnalyzeWithMvp9 } from "@/lib/desk/enrich-analyze-mvp9";
-import { runAutopilotCycle } from "@/lib/autopilot/run-autopilot";
-import { DEFAULT_AUTOPILOT_SETTINGS } from "@/lib/autopilot/config";
-import { buildCommandCenterServerContext } from "@/lib/command-center/server-context";
-import {
-  appendServerAnalysisFromResponse,
-  loadServerAnalysisJournal,
-} from "@/lib/journal/journal-server-store";
-import {
-  buildServerBackboneFromInput,
-  writeServerBackboneRecord,
-} from "@/lib/background-worker/server-backbone";
-import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
-import { buildOrderPreview } from "@/lib/exchange/binance";
-import { buildBinancePreviewInputFromAiSignal } from "@/lib/exchange/binance/build-ai-preview";
+import { runCentralAnalysisOrchestrator } from "@/lib/analysis-engine/analysis-orchestrator";
 import type { DeskRun } from "@/lib/data-backbone/types";
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
 import type { AutopilotRunResult } from "@/lib/autopilot/types";
 import type { BinanceOrderPreview } from "@/lib/exchange/binance/binance-types";
-import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 
 export interface GoalStartAiCycleResult {
   ok: boolean;
@@ -31,94 +14,43 @@ export interface GoalStartAiCycleResult {
   deskRun: DeskRun;
   testnetPreview: BinanceOrderPreview | null;
   testnetConnected: boolean;
+  runId: string;
   error?: string;
 }
 
+/** Start AI — delegates to MVP 83 Central Analysis Engine. */
 export async function runGoalStartAiCycle(): Promise<GoalStartAiCycleResult> {
-  const entries = await loadServerAnalysisJournal();
-  const cronInput = await loadCronAnalysisInput();
-  const analysis = await enrichAnalyzeWithMvp9(await runAnalyzeRequest(cronInput));
-  const saved = await appendServerAnalysisFromResponse(analysis);
-
-  const autopilot = await runAutopilotCycle({
-    entries: [...entries.filter((e) => e.id !== saved.entry.id), saved.entry],
-    orders: [],
-    perpPositions: [],
-    riskProfile: "balanced",
-    latestAnalysis: analysis,
-    settings: {
-      ...DEFAULT_AUTOPILOT_SETTINGS,
-      autopilotEnabled: true,
-      liveAutopilotEnabled: false,
-      requireHumanApprovalForLive: true,
-    },
-    serverContext: await buildCommandCenterServerContext(),
+  const output = await runCentralAnalysisOrchestrator({
+    trigger: "start_ai",
+    enrichMvp9: true,
+    runAutopilot: true,
+    createTestnetPreview: true,
   });
 
-  const record = buildServerBackboneFromInput({
-    entries: [...entries.filter((e) => e.id !== saved.entry.id), saved.entry],
-    orders: [],
-    perpPositions: [],
-    riskProfile: "balanced",
-    autopilotResult: autopilot,
-  });
-  await writeServerBackboneRecord(record);
+  if (!output.result.analyzeResponse || !output.result.journalEntry) {
+    throw new Error("Central analysis did not return analyze response");
+  }
 
-  const deskRun = record.run;
-  if (!deskRun) {
+  if (!output.deskRun) {
     throw new Error("DeskRun record was not created");
   }
 
-  const binanceStatus = await getBinanceStatus();
-  const testnetConnected = Boolean(binanceStatus.connected);
-  let testnetPreview: BinanceOrderPreview | null = null;
-
-  const verdict =
-    analysis.tradingDesk?.weightedCommittee?.weightedVerdict ??
-    analysis.step5_verdict?.recommendation;
-
-  if (testnetConnected && verdict === "TRADE") {
-    try {
-      const previewInput = buildBinancePreviewInputFromAiSignal({
-        data: analysis,
-        decisionLogId: saved.entry.id,
-      });
-      testnetPreview = await buildOrderPreview(previewInput);
-    } catch {
-      testnetPreview = null;
-    }
+  const autopilot = output.result.autopilot;
+  if (!autopilot) {
+    throw new Error("Autopilot result missing from central analysis");
   }
 
-  const verdictLabel =
-    analysis.tradingDesk?.weightedCommittee?.weightedVerdict ??
-    analysis.step5_verdict?.recommendation ??
-    saved.entry.finalVerdict ??
-    "—";
-
-  void emitMissionAlert({
-    kind: "cycle_complete",
-    title: "AI cycle complete",
-    body: `Verdict: ${String(verdictLabel).toUpperCase()} · desk run ${deskRun.runId.slice(0, 12)}…`,
-  }).catch(() => undefined);
-
-  if (String(verdictLabel).toUpperCase() === "TRADE") {
-    void emitMissionAlert({
-      kind: "trade_verdict",
-      title: "TRADE verdict — review required",
-      body: testnetPreview
-        ? `${testnetPreview.symbol} ${testnetPreview.side} preview ready · double confirm on Dashboard.`
-        : "No testnet preview created — check Binance connection.",
-    }).catch(() => undefined);
-  }
+  const journalEntry = output.result.journalEntry;
 
   return {
-    ok: true,
-    analysis,
-    journalEntry: saved.entry,
-    journalStatus: saved.status,
+    ok: output.ok,
+    analysis: output.result.analyzeResponse,
+    journalEntry,
+    journalStatus: output.journalStatus,
     autopilot,
-    deskRun,
-    testnetPreview,
-    testnetConnected,
+    deskRun: output.deskRun,
+    testnetPreview: output.result.testnetPreview ?? null,
+    testnetConnected: Boolean(output.result.context?.testnetStatus.connected),
+    runId: output.runId,
   };
 }

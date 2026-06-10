@@ -11,12 +11,21 @@ import {
   isBinanceForceMaxAutopilotEnabled,
   isBinanceTestnetAutoExecuteEnabled,
 } from "./binance-config";
+import type { MonitorReliabilitySnapshot } from "@/lib/monitor-reliability/types";
+import type { IntegratedStrategyHealthSnapshot } from "@/lib/integrated-strategy-health/types";
+import type { MissionMode } from "@/lib/mission-controller-risk-budget/types";
 
 export interface UnifiedTestnetTradeGateInput {
   analysis: AnalyzeApiResponse | null;
   commandCenterStatus?: string | null;
   entries?: DecisionLogEntry[];
   orders?: PaperOrder[];
+  monitorReliability?: MonitorReliabilitySnapshot | null;
+  integratedStrategyHealth?: IntegratedStrategyHealthSnapshot | null;
+  consistencyBlocksNewTrades?: boolean;
+  consistencyIssue?: string | null;
+  missionMode?: MissionMode | null;
+  missionNextAction?: string | null;
 }
 
 export interface UnifiedTestnetTradeGateResult {
@@ -39,6 +48,34 @@ export function evaluateUnifiedTestnetTradeGate(
   const forceMax = isBinanceForceMaxAutopilotEnabled();
   const futuresOnly = isBinanceFuturesOnlyMode();
   const blockReasons: string[] = [];
+
+  if (input.monitorReliability?.blocksNewEntries) {
+    blockReasons.push(
+      input.monitorReliability.currentIssue ??
+        "Position state uncertain — monitor recovery required before new entries.",
+    );
+  }
+
+  if (input.consistencyBlocksNewTrades) {
+    blockReasons.push(
+      input.consistencyIssue ??
+        "Engine consistency reconciliation blocked — position state uncertain.",
+    );
+  }
+
+  if (input.integratedStrategyHealth?.blocksNewTestnetEntries) {
+    blockReasons.push(
+      input.integratedStrategyHealth.primaryReport?.recommendation ??
+        "Strategy health PAUSE/REJECT — testnet entries blocked pending review.",
+    );
+  }
+
+  if (input.missionMode === "PAUSED") {
+    blockReasons.push(
+      input.missionNextAction ??
+        "Mission PAUSED — daily loss limit or critical blocker.",
+    );
+  }
 
   const cc = input.commandCenterStatus?.toUpperCase() ?? null;
   const testnetPrimary = isTestnetPrimaryAutomation();

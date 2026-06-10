@@ -53,7 +53,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Resolve Issue",
+        "Resolve blocker",
         "PAUSE_IF_RISK",
         "Autopilot loop guard stopped the desk.",
         "Review the blocker, then resume when safe. Automation will pause to prevent blind retries.",
@@ -73,7 +73,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Resolve Issue",
+        "Resolve blocker",
         "PAUSE_IF_RISK",
         "Risk limits block new trading.",
         "Autopilot will pause. Clear the risk blocker before continuing.",
@@ -86,7 +86,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Resolve Issue",
+        "Resolve blocker",
         "RESOLVE_ISSUE",
         "Binance testnet connection blocked.",
         m.binanceTestnet.reason,
@@ -99,7 +99,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Resolve Issue",
+        "Resolve blocker",
         "RESOLVE_ISSUE",
         "Mission risk blocker active.",
         `Clear blocker: ${m.risk.blocker}`,
@@ -112,7 +112,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Approve Testnet Order",
+        "Approve testnet order",
         "ASK_PERMISSION_EXECUTE",
         "Testnet preview ready — execution needs your approval.",
         `${preview.symbol} ${preview.side} · $${preview.notionalUsd} · double confirm required.`,
@@ -134,7 +134,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Close Position",
+        "Close position",
         "ASK_PERMISSION_CLOSE",
         "AI monitor recommends closing the open testnet position.",
         `${pos.symbol} ${pos.side} · reduce-only close requires double confirm.`,
@@ -147,7 +147,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Review Trade",
+        "Review preview",
         "REVIEW_TRADE",
         `${m.pendingLearningReview} closed trade(s) need learning review.`,
         "Mark trades as learned so AI can improve tomorrow's plan.",
@@ -171,7 +171,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Continue Monitoring",
+        "Monitor position",
         "MONITOR_POSITION",
         "Open testnet position — monitor before taking new risk.",
         pos?.summary ?? `${m.openTrades} open trade(s) on testnet.`,
@@ -188,7 +188,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Approve Testnet Order",
+        "Approve testnet order",
         "CREATE_TESTNET_PREVIEW",
         "TRADE verdict without preview — create testnet preview next.",
         "AI will build a testnet order preview for your review (no auto-execute).",
@@ -204,7 +204,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Generate Report",
+        "Generate report",
         "GENERATE_REPORT",
         "Daily AI self-review is due.",
         "Summarize today's trades, lessons, and tomorrow's plan.",
@@ -216,7 +216,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Continue Monitoring",
+        "Run cycle now",
         "RUN_ANALYSIS_CYCLE",
         "Standing by for the next safe desk cycle.",
         m.nextRecommendation || m.aiStatus.nextAction,
@@ -229,7 +229,7 @@ export function resolveOneButtonAiState(
     return {
       blockers,
       state: baseState(
-        "Resolve Issue",
+        "Resolve blocker",
         "RESOLVE_ISSUE",
         "Connect Binance testnet before AI can trade.",
         m.binanceTestnet.reason,

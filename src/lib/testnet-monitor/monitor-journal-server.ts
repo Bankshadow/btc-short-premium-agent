@@ -44,5 +44,13 @@ export async function recordMonitorEvent(
     positionId: partial.positionId,
   };
   await appendMonitorJournalEvent(event);
+  try {
+    const { bridgeMonitorEventToEngineBus } = await import(
+      "@/lib/engine-event-bus/bridge-monitor-event"
+    );
+    await bridgeMonitorEventToEngineBus(event);
+  } catch {
+    /* non-fatal */
+  }
   return event;
 }

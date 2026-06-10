@@ -19,6 +19,7 @@ import {
 import { runAutomationCycle } from "./scheduler";
 import { loadAutomationState } from "./state-store";
 import type { AutomationRun } from "./types";
+import type { AlwaysOnOperatorLayerSnapshot } from "@/lib/always-on-operator-layer/types";
 
 export interface CronTickResult {
   ok: boolean;
@@ -28,6 +29,7 @@ export interface CronTickResult {
   lastRunAt: string | null;
   nextDueInMs: number;
   run?: AutomationRun;
+  operatorLayer?: AlwaysOnOperatorLayerSnapshot | null;
 }
 
 export async function runCronTick(input: {
@@ -36,6 +38,19 @@ export async function runCronTick(input: {
 } = {}): Promise<CronTickResult> {
   const { ensureJournalDataDir } = await import("@/lib/cron/ensure-journal-dir");
   await ensureJournalDataDir().catch(() => undefined);
+
+  let operatorLayer = null as Awaited<
+    ReturnType<typeof import("@/lib/always-on-operator-layer").runOperatorLayerTick>
+  > | null;
+  try {
+    const { runOperatorLayerTick } = await import("@/lib/always-on-operator-layer");
+    operatorLayer = await runOperatorLayerTick({
+      trigger: "cron",
+      workspaceId: input.workspaceId ?? "server-default",
+    });
+  } catch {
+    /* operator layer is best-effort */
+  }
 
   const workspaceId = input.workspaceId ?? "server-default";
   const state = await loadAutomationState(workspaceId);
@@ -54,6 +69,7 @@ export async function runCronTick(input: {
       intervalMinutes,
       lastRunAt,
       nextDueInMs: msUntilNextAutomationRun(state),
+      operatorLayer,
     };
   }
 
@@ -69,6 +85,7 @@ export async function runCronTick(input: {
       intervalMinutes,
       lastRunAt,
       nextDueInMs: msUntilNextAutomationRun(state),
+      operatorLayer,
     };
   }
 
@@ -87,6 +104,7 @@ export async function runCronTick(input: {
     lastRunAt: run.completedAt ?? lastRunAt,
     nextDueInMs: intervalMinutes * 60_000,
     run,
+    operatorLayer,
   };
 }
 

@@ -26,6 +26,7 @@ import {
 } from "./build-mission-snapshot";
 import { buildGoalTradeList, type GoalTradeRow } from "./build-trade-list";
 import type { AutomationStatusSnapshot } from "@/lib/automation-control-plane/types";
+import type { TestnetMonitorSnapshot } from "@/lib/testnet-monitor/types";
 import type { TestnetLearningRecord } from "@/lib/testnet-monitor/types";
 import type { StrategyHealthSummary } from "@/lib/strategy-health/types";
 import type {
@@ -44,6 +45,7 @@ export interface GoalDashboardServerPayload {
   learningRecords: TestnetLearningRecord[];
   strategyHealth: StrategyHealthSummary;
   telegramConfigured: boolean;
+  testnetSnapshot: TestnetMonitorSnapshot | null;
 }
 
 export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardServerPayload> {
@@ -296,6 +298,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     strategyHealth,
     telegramConfigured:
       observability?.signals.alerts.telegramConfigured ?? false,
+    testnetSnapshot,
   };
 }
 

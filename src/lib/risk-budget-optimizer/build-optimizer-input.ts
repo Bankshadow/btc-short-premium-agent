@@ -9,6 +9,7 @@ import type { PerpPaperPosition } from "@/lib/multi-asset/types";
 import type { GovernanceAnalyzePayload } from "@/lib/governance/governance-types";
 import type { RiskBudgetInput } from "./types";
 import { getCachedCalibrationProfile } from "@/lib/confidence-calibration/calibration-cache";
+import { getCachedCalibrationRecommendation } from "@/lib/confidence-calibration/calibration-cache";
 import { resolveCalibrationSizeMultiplier } from "@/lib/confidence-calibration/apply-calibration";
 
 export function buildRiskBudgetInput(input: {
@@ -55,6 +56,7 @@ export function buildRiskBudgetInput(input: {
       rawConfidence ?? 50,
       calibrationProfile,
     ),
+    confidenceCalibrationRecommendation: getCachedCalibrationRecommendation(),
     agentConflictLevel: analyze?.conflictAnalysis?.conflictLevel ?? "NONE",
     dataTrust: analyze?.dataTrust ?? null,
     conflictGate: analyze?.conflictGate ?? null,

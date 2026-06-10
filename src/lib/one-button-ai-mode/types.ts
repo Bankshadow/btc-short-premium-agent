@@ -3,12 +3,13 @@ export const ONE_BUTTON_AI_SAFETY_NOTICE =
 
 export type OneButtonAiLabel =
   | "Start AI"
-  | "Continue Monitoring"
-  | "Review Trade"
-  | "Approve Testnet Order"
-  | "Close Position"
-  | "Generate Report"
-  | "Resolve Issue";
+  | "Run cycle now"
+  | "Review preview"
+  | "Approve testnet order"
+  | "Monitor position"
+  | "Close position"
+  | "Generate report"
+  | "Resolve blocker";
 
 export type OneButtonAiAction =
   | "RUN_FIRST_ANALYSIS"

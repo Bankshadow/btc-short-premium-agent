@@ -102,7 +102,7 @@ export async function runProjectStrategist(
     },
     uxRecommendations: ux.simplifyRecommendations,
   });
-  const cursorPrompt = runCursorPromptWriterAgent({
+  const cursorPromptBase = runCursorPromptWriterAgent({
     mvp: mvp.recommendedMVP,
     diagnosis: {
       ...audit,
@@ -114,6 +114,10 @@ export async function runProjectStrategist(
       hiddenRisks: [...new Set([...audit.hiddenRisks, ...architecture.architectureRisks])],
     },
   });
+  const dailyReviewTask = context.suggestedDailyReviewTask;
+  const cursorPrompt = dailyReviewTask
+    ? `${dailyReviewTask}\n\n---\n\nStrategist MVP context:\n${cursorPromptBase}`
+    : cursorPromptBase;
   const report = runProjectStrategistCommitteeAgent({
     audit: {
       ...audit,

@@ -16,6 +16,18 @@ export type TestnetMonitorEventType =
   | "POSITION_CLOSED"
   | "PNL_REALIZED"
   | "LEARNING_UPDATED"
+  | "STRATEGY_HEALTH_REVIEWED"
+  | "READINESS_CHECKED"
+  | "TRADE_QUALITY_SCORED"
+  | "CONFIDENCE_CALIBRATED"
+  | "RISK_BUDGET_RECOMMENDED"
+  | "DAILY_SELF_REVIEW_CREATED"
+  | "CENTRAL_ANALYSIS_COMPLETED"
+  | "EVIDENCE_QUALITY_CHECKED"
+  | "AGENT_SCOREBOARD_REVIEWED"
+  | "MISSION_CONTROLLER_EVALUATED"
+  | "OPERATOR_LAYER_TICK"
+  | "READINESS_REVIEWED"
   | "ERROR";
 
 export interface TestnetOrder {
@@ -137,6 +149,22 @@ export interface TestnetMonitorSnapshot {
   strategyPerformanceSegment: TestnetStrategyPerformanceSegment;
   validationMetricsSegment: TestnetValidationMetricsSegment;
   executionQuality: import("@/lib/execution-quality/types").ExecutionQualitySummary;
+  evidenceProgress: import("@/lib/evidence-progress/types").EvidenceProgressSnapshot;
+  monitorReliability: import("@/lib/monitor-reliability/types").MonitorReliabilitySnapshot;
+  learningProgress: import("@/lib/learning-queue/types").LearningProgressSnapshot;
+  integratedStrategyHealth: import("@/lib/integrated-strategy-health/types").IntegratedStrategyHealthSnapshot;
+  microLiveReadiness: import("@/lib/micro-live-readiness/types").MicroLiveReadinessSnapshot;
+  integratedTradeQuality: import("@/lib/trade-quality-score/types").IntegratedTradeQualitySnapshot;
+  integratedConfidenceCalibration: import("@/lib/integrated-confidence-calibration/types").IntegratedConfidenceCalibrationSnapshot;
+  agentScoreboardV2Segment: import("@/lib/integrated-confidence-calibration/types").TestnetAgentScoreboardV2Segment;
+  integratedRiskBudget: import("@/lib/integrated-risk-budget/types").IntegratedRiskBudgetSnapshot;
+  integratedDailySelfReview: import("@/lib/integrated-daily-self-review/types").IntegratedDailySelfReviewSnapshot;
+  evidenceQuality: import("@/lib/evidence-quality/types").EvidenceQualitySnapshot;
+  integratedQualityCalibration: import("@/lib/integrated-quality-calibration/types").IntegratedQualityCalibrationSnapshot;
+  integratedStrategyAgentHealth: import("@/lib/integrated-strategy-agent-health/types").IntegratedStrategyAgentHealthSnapshot;
+  missionControllerRiskBudget: import("@/lib/mission-controller-risk-budget/types").MissionControllerRiskBudgetSnapshot;
+  alwaysOnOperatorLayer: import("@/lib/always-on-operator-layer/types").AlwaysOnOperatorLayerSnapshot;
+  microLiveReadinessReview: import("@/lib/micro-live-readiness-review/types").MicroLiveReadinessReviewSnapshot;
   lastUpdatedAt: string;
   connected: boolean;
   mismatches: string[];
@@ -181,16 +209,29 @@ export interface TestnetDecisionLinkage {
 export interface TestnetLearningRecord {
   learningRecordId: string;
   environment: "TESTNET";
+  /** MVP 73C — same as closedTradeId / journal binanceTestnetTradeId. */
+  tradeId: string;
   symbol: string;
+  side: string | null;
   decisionLogId: string | null;
   previewId: string | null;
   orderId: string | null;
   positionId: string | null;
   closedTradeId: string;
   strategy: string | null;
+  /** MVP 73C — strategy label for learning reports. */
+  strategyTag: string | null;
   sourceAgent: string | null;
   finalVerdict: string | null;
+  /** MVP 73C — AI verdict at entry. */
+  aiVerdict: string | null;
   confidence: number | null;
+  entryReason: string | null;
+  closeReason: string | null;
+  whatWorked: string | null;
+  whatFailed: string | null;
+  /** Never auto-populated from a single trade — operator review only. */
+  suggestedAdjustment: string | null;
   grossPnl: number;
   netPnl: number;
   fee: number;
@@ -202,6 +243,10 @@ export interface TestnetLearningRecord {
   includeInLearning: boolean;
   status: "PENDING_REVIEW" | "REFLECTION_READY" | "LEARNED" | "EXCLUDED";
   reflectionNotes: string | null;
+  /** MVP 76 — integrated trade quality grade. */
+  qualityGrade?: import("@/lib/trade-quality-score/types").TradeQualityGrade | null;
+  qualityScore?: number | null;
+  qualityScoreId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -212,6 +257,10 @@ export interface TestnetAgentScoreRow {
   winningTrades: number;
   winRate: number;
   netPnl: number;
+  /** MVP 76 — average process quality from closed trades. */
+  avgQualityScore?: number | null;
+  /** MVP 76 — win rate among scored trades (alignment proxy). */
+  agentAlignmentPct?: number | null;
 }
 
 export interface TestnetAgentScoreboardSegment {

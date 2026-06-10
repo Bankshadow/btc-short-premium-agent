@@ -14,18 +14,28 @@ function gradeClass(grade: string): string {
 }
 
 function ScoreRow({ score }: { score: TradeQualityScore }) {
+  const numeric = score.numericScore ?? score.compositeScore;
   return (
     <li className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-3 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className={`text-lg font-bold ${gradeClass(score.grade)}`}>{score.grade}</span>
-        <span className="font-mono text-zinc-500">{score.compositeScore}/100</span>
+        <span className="font-mono text-zinc-500">{numeric}/100</span>
         <span className="text-zinc-500">
           PnL {score.pnlPct}% · {score.source}
+          {score.tradeId ? ` · ${score.tradeId.slice(0, 12)}…` : ""}
         </span>
       </div>
       <p className="mt-1 text-zinc-400">{score.primaryReason}</p>
-      {score.improvements[0] && (
-        <p className="mt-1 text-zinc-500">Improve: {score.improvements[0]}</p>
+      {(score.improvementSuggestion ?? score.improvements[0]) && (
+        <p className="mt-1 text-zinc-500">
+          Improve: {score.improvementSuggestion ?? score.improvements[0]}
+        </p>
+      )}
+      {score.strengths && score.strengths.length > 0 && (
+        <p className="mt-1 text-emerald-400/80">+ {score.strengths.join(" · ")}</p>
+      )}
+      {score.weaknesses && score.weaknesses.length > 0 && (
+        <p className="mt-1 text-amber-400/80">− {score.weaknesses.join(" · ")}</p>
       )}
       <Link
         href={`/trades/${encodeURIComponent(score.decisionLogId)}`}
@@ -76,6 +86,13 @@ export default function TradeQualityPanel({
           {summary.weakestDimension && (
             <p className="mt-1 text-xs text-zinc-500">
               Weakest dimension: {DIMENSION_LABELS[summary.weakestDimension]}
+            </p>
+          )}
+          {summary.testnetScoredCount != null && summary.testnetScoredCount > 0 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              {summary.testnetScoredCount} testnet closed trade(s) scored
+              {summary.avgAgentAlignment != null &&
+                ` · agent alignment ${summary.avgAgentAlignment}/100`}
             </p>
           )}
         </div>

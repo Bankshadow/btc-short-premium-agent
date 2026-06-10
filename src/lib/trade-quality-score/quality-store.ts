@@ -55,7 +55,11 @@ export async function upsertTradeQualityScore(
   const store = await loadTradeQualityStore(workspaceId);
   store.scores = [
     score,
-    ...store.scores.filter((s) => s.decisionLogId !== score.decisionLogId),
+    ...store.scores.filter(
+      (s) =>
+        s.decisionLogId !== score.decisionLogId &&
+        (!score.tradeId || s.tradeId !== score.tradeId),
+    ),
   ].slice(0, TRADE_QUALITY_MAX_SCORES);
   store.lastUpdatedAt = score.generatedAt;
   await writeStore(store);
@@ -68,6 +72,14 @@ export async function getTradeQualityByDecisionId(
 ): Promise<TradeQualityScore | null> {
   const store = await loadTradeQualityStore(workspaceId);
   return store.scores.find((s) => s.decisionLogId === decisionLogId) ?? null;
+}
+
+export async function getTradeQualityByTradeId(
+  tradeId: string,
+  workspaceId = "server-default",
+): Promise<TradeQualityScore | null> {
+  const store = await loadTradeQualityStore(workspaceId);
+  return store.scores.find((s) => s.tradeId === tradeId) ?? null;
 }
 
 export async function resetTradeQualityStoreForTests(): Promise<void> {

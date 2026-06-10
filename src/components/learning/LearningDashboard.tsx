@@ -12,6 +12,8 @@ import {
 import { SELF_LEARNING_SAFETY_NOTICE } from "@/lib/self-learning/types";
 import ConfidenceCalibrationPanel from "./ConfidenceCalibrationPanel";
 import TradeQualityPanel from "./TradeQualityPanel";
+import { IntegratedDailySelfReviewPanel } from "@/components/integrated-daily-self-review/IntegratedDailySelfReviewPanel";
+import type { IntegratedDailySelfReviewSnapshot } from "@/lib/integrated-daily-self-review/types";
 import type { ConfidenceCalibrationProfile } from "@/lib/confidence-calibration/types";
 import type { TradeQualitySummary } from "@/lib/trade-quality-score/types";
 
@@ -47,6 +49,22 @@ export default function LearningDashboard() {
   const [report, setReport] = useState<LearningEvaluationReport | null>(null);
   const [calibration, setCalibration] = useState<ConfidenceCalibrationProfile | null>(null);
   const [tradeQuality, setTradeQuality] = useState<TradeQualitySummary | null>(null);
+  const [dailySelfReview, setDailySelfReview] =
+    useState<IntegratedDailySelfReviewSnapshot | null>(null);
+
+  const loadDailySelfReview = useCallback(async () => {
+    try {
+      const res = await fetch("/api/integrated-daily-self-review", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setDailySelfReview(
+          (data.dailySelfReview as IntegratedDailySelfReviewSnapshot | null) ?? null,
+        );
+      }
+    } catch {
+      /* optional */
+    }
+  }, []);
 
   const loadCalibration = useCallback(async () => {
     try {
@@ -105,7 +123,7 @@ export default function LearningDashboard() {
     const storedResults = loadEvaluationResults();
 
     try {
-      await Promise.all([loadCalibration(), loadTradeQuality()]);
+      await Promise.all([loadCalibration(), loadTradeQuality(), loadDailySelfReview()]);
       const res = await fetch("/api/self-learning/report", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,7 +139,7 @@ export default function LearningDashboard() {
     } finally {
       setBusy(false);
     }
-  }, [loadCalibration, loadTradeQuality]);
+  }, [loadCalibration, loadTradeQuality, loadDailySelfReview]);
 
   const runEvaluate = useCallback(async () => {
     setBusy(true);
@@ -221,6 +239,13 @@ export default function LearningDashboard() {
           profile={calibration}
           busy={busy}
           onRecompute={() => void recomputeCalibration()}
+        />
+      </Panel>
+
+      <Panel title="Integrated daily AI self-review (MVP 79)">
+        <IntegratedDailySelfReviewPanel
+          dailyReview={dailySelfReview}
+          showCursorTask={false}
         />
       </Panel>
 

@@ -147,8 +147,14 @@ function normalizeTestnet(
   snapshot: TestnetMonitorSnapshot | null | undefined,
 ): NormalizedTrade[] {
   if (!snapshot) return [];
+  const validIds = new Set(
+    snapshot.evidenceProgress
+      ? snapshot.evidenceProgress.validTrades.map((t) => t.tradeId)
+      : snapshot.closedTrades.map((t) => t.id),
+  );
   const out: NormalizedTrade[] = [];
   for (const trade of snapshot.closedTrades) {
+    if (!validIds.has(trade.id)) continue;
     out.push({
       environment: "TESTNET",
       symbol: trade.symbol,

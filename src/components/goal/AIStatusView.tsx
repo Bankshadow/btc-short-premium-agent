@@ -1,272 +1,205 @@
-"use client";
-
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import AutopilotControls from "./AutopilotControls";
-import GoalErrorBanner from "./GoalErrorBanner";
-import GoalShell from "./GoalShell";
-import MissionActivityFeed from "./MissionActivityFeed";
-import MissionAutopilotHero from "./MissionAutopilotHero";
-import StrategyHealthBanner from "./StrategyHealthBanner";
-import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry/types";
-import { useMissionSnapshot } from "./use-mission-snapshot";
-import AIStatusCard from "@/components/ai-status/AIStatusCard";
-import AIStatusTechnicalLog from "@/components/ai-status/AIStatusTechnicalLog";
-import { useAiStatusCard } from "@/hooks/useAiStatusCard";
-
-const STATUS_COPY: Record<string, string> = {
-  IDLE: "Idle",
-  ANALYZING: "Analyzing",
-  MONITORING: "Monitoring",
-  IN_TRADE: "In trade",
-  WAITING: "Waiting",
-  BLOCKED: "Blocked",
-};
-
-export default function AIStatusView() {
-  const { snapshot: m, busy, error, degraded, warnings, refresh } =
-    useMissionSnapshot();
-  const [engines, setEngines] = useState<CoreEngineRegistrySnapshot | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [runningCycle, setRunningCycle] = useState(false);
-  const aiStatus = useAiStatusCard({ pollMs: 2500, useSse: true });
-
-  const loadEngines = useCallback(async () => {
-    try {
-      const res = await fetch("/api/goal-dashboard", { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok && json.ok && json.engines) {
-        setEngines(json.engines as CoreEngineRegistrySnapshot);
-      }
-    } catch {
-      /* optional */
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadEngines();
-  }, [loadEngines]);
-
-  const refreshAll = useCallback(async () => {
-    await Promise.all([refresh(), loadEngines()]);
-  }, [refresh, loadEngines]);
-
-  const runAutopilotCycle = useCallback(async () => {
-    setRunningCycle(true);
-    try {
-      const res = await fetch("/api/automation/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trigger: "manual", force: true }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Run failed");
-      await refreshAll();
-    } finally {
-      setRunningCycle(false);
-    }
-  }, [refreshAll]);
-
-  return (
-    <GoalShell
-      title="AI Status"
-      subtitle="Autopilot status, engine health, and what runs every 15 minutes in the background."
-      activePath="/ai-status"
-      missionSnapshot={m}
-      actions={
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void refreshAll()}
-          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
-        >
-          {busy ? "Refreshing..." : "Refresh"}
-        </button>
-      }
-    >
-      <GoalErrorBanner
-        error={error}
-        degraded={degraded}
-        warnings={warnings}
-        snapshot={m}
-      />
-
-      <AIStatusCard
-        card={aiStatus.card}
-        busy={aiStatus.busy}
-        showTechnical={showAdvanced}
-        onLoopGuardAction={() => void aiStatus.refresh()}
-      />
-
-      <MissionAutopilotHero
-        snapshot={m}
-        running={runningCycle}
-        onRunNow={() => void runAutopilotCycle()}
-      />
-
-      <StrategyHealthBanner strategy={m.strategyHealth} />
-
-      <MissionActivityFeed items={m.recentActivity} />
-
-      <AutopilotControls
-        automation={m.automation}
-        onChanged={() => void refreshAll()}
-      />
-
-      {m.pendingTestnetPreview && (
-        <section className="rounded-xl border border-cyan-900/50 bg-cyan-950/20 p-4">
-          <p className="text-xs uppercase tracking-wide text-cyan-400/80">
-            Awaiting your confirmation
-          </p>
-          <p className="mt-1 font-mono text-sm text-zinc-100">
-            {m.pendingTestnetPreview.symbol} {m.pendingTestnetPreview.side} · $
-            {m.pendingTestnetPreview.notionalUsd}
-          </p>
-          <p className="mt-1 text-xs text-zinc-400">
-            Testnet preview expires{" "}
-            {new Date(m.pendingTestnetPreview.expiresAt).toLocaleString()}.
-          </p>
-          {!m.pendingTestnetPreview.blocked && (
-            <Link href="/" className="mt-2 inline-block text-xs text-cyan-300 hover:underline">
-              Review and execute on Dashboard →
-            </Link>
-          )}
-        </section>
-      )}
-
-      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-        <p className="text-xs uppercase tracking-wide text-zinc-500">Current mode</p>
-        <p className="mt-1 font-mono text-2xl text-zinc-50">
-          {STATUS_COPY[m.aiStatus.state] ?? m.aiStatus.state}
-        </p>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-2 text-xs text-zinc-400">
-          <div>
-            <dt className="text-zinc-500">Last cycle</dt>
-            <dd className="mt-0.5 text-zinc-200">
-              {m.lastCycleAt
-                ? new Date(m.lastCycleAt).toLocaleString()
-                : "No cycle has run yet."}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Last verdict</dt>
-            <dd className="mt-0.5 text-zinc-200">{m.lastVerdict ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Latest decision log</dt>
-            <dd className="mt-0.5 font-mono text-zinc-200">
-              {m.latestDecisionLogId ? (
-                <Link href={`/trades/${m.latestDecisionLogId}`} className="text-emerald-300 hover:underline">
-                  {m.latestDecisionLogId.slice(0, 20)}…
-                </Link>
-              ) : (
-                "—"
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Desk run</dt>
-            <dd className="mt-0.5 font-mono text-zinc-200">{m.lastDeskRunId ?? "—"}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Last action</dt>
-            <dd className="mt-0.5 text-zinc-200">{m.aiStatus.lastAction}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Next action</dt>
-            <dd className="mt-0.5 text-zinc-200">{m.aiStatus.nextAction}</dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Human action required</dt>
-            <dd className={`mt-0.5 ${m.aiStatus.humanActionRequired ? "text-amber-300" : "text-emerald-300"}`}>
-              {m.aiStatus.humanActionRequired ? "Yes" : "No"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Current blocker</dt>
-            <dd className={`mt-0.5 ${m.risk.blocker ? "text-rose-300" : "text-emerald-300"}`}>
-              {m.risk.blocker ?? "None"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Binance testnet</dt>
-            <dd className={`mt-0.5 ${m.binanceTestnet.status === "CONNECTED" ? "text-emerald-300" : "text-amber-300"}`}>
-              {m.binanceTestnet.status} — {m.binanceTestnet.reason}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-zinc-500">Engines needing attention</dt>
-            <dd className="mt-0.5 text-zinc-200">{m.enginesNeedingAttention}</dd>
-          </div>
-        </dl>
-      </section>
-
-      {engines && (
-        <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Background engines
-            </h2>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className="text-[11px] text-zinc-500 hover:text-zinc-300"
-            >
-              {showAdvanced ? "Hide advanced reasoning" : "Show advanced reasoning"}
-            </button>
-          </div>
-          <p className="mt-1 text-[11px] text-zinc-600">{engines.safetyNotice}</p>
-          <ul className="mt-3 space-y-2 text-xs">
-            {(showAdvanced ? engines.engines : engines.visibleEngines).map((engine) => (
-              <li
-                key={engine.engineId}
-                className="flex items-center justify-between gap-3 rounded border border-zinc-800/70 px-3 py-2"
-              >
-                <span className="text-zinc-300">
-                  <span className="font-semibold">{engine.label}</span>{" "}
-                  <span className="text-zinc-500">[{engine.status}]</span> —{" "}
-                  {showAdvanced ? engine.summary : engine.userVisibleSummary}
-                </span>
-                {(engine.actionHref ?? engine.advancedHref) && (
-                  <Link
-                    href={engine.actionHref ?? engine.advancedHref ?? "#"}
-                    className="shrink-0 text-emerald-300 hover:underline"
-                  >
-                    Open →
-                  </Link>
-                )}
-              </li>
-            ))}
-            {!showAdvanced && engines.visibleEngines.length === 0 && (
-              <li className="text-zinc-500">All engines healthy. Nothing needs attention.</li>
-            )}
-          </ul>
-        </section>
-      )}
-
-      <section className="rounded-xl border border-emerald-900/40 bg-emerald-950/15 p-4">
-        <p className="text-xs text-zinc-500">Next recommendation</p>
-        <p className="mt-1 text-sm text-emerald-300">{m.nextRecommendation}</p>
-        <Link href="/" className="mt-2 inline-block text-xs text-zinc-400 hover:underline">
-          Mission autopilot on Dashboard →
-        </Link>
-      </section>
-
-      {showAdvanced && (
-        <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-            Technical event log
-          </h2>
-          <AIStatusTechnicalLog events={aiStatus.card.recentToolActions} />
-          <p className="mt-3 text-[11px] text-zinc-600">
-            Raw multi-agent debate:{" "}
-            <Link href="/cockpit" className="text-emerald-300 hover:underline">
-              Open advanced cockpit
-            </Link>
-            .
-          </p>
-        </section>
-      )}
-    </GoalShell>
-  );
-}
+"use client";
+
+import Link from "next/link";
+import GoalErrorBanner from "./GoalErrorBanner";
+import GoalShell from "./GoalShell";
+import { EngineEventFeed } from "./EngineEventFeed";
+import { useMissionSnapshot } from "./use-mission-snapshot";
+import { useAnalysisState } from "@/hooks/useAnalysisState";
+import { listAnalysisPipelineStages } from "@/lib/analysis-engine/analysis-engine-registry";
+
+const AI_STATE_COPY: Record<string, string> = {
+  IDLE: "Idle",
+  ANALYZING: "Analyzing",
+  MONITORING: "Monitoring",
+  WAITING: "Waiting",
+  BLOCKED: "Blocked",
+};
+
+const PIPELINE_STAGES = listAnalysisPipelineStages();
+
+export default function AIStatusView() {
+  const { snapshot: m, busy, error, degraded, warnings, refresh } =
+    useMissionSnapshot();
+  const analysis = useAnalysisState(8000);
+
+  const aiState = analysis.ui?.aiState ?? m.aiStatus.state;
+  const activeStep =
+    aiState === "ANALYZING"
+      ? "playbook_analyzer"
+      : aiState === "BLOCKED"
+        ? "validation_kill_switch"
+        : aiState === "MONITORING"
+          ? "execution_readiness"
+          : "final_result";
+
+  const blockers = [
+    ...(analysis.ui?.blockers ?? []),
+    ...(m.risk.blocker ? [m.risk.blocker] : []),
+  ].filter((b, i, arr) => b && arr.indexOf(b) === i);
+
+  return (
+    <GoalShell
+      title="AI Status"
+      subtitle="Engine state, pipeline step, events, blockers, and permissions."
+      activePath="/ai-status"
+      missionSnapshot={m}
+      actions={
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            void refresh(true);
+            void analysis.refresh(true);
+          }}
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
+        >
+          {busy ? "Refreshing..." : "Refresh"}
+        </button>
+      }
+    >
+      <GoalErrorBanner
+        error={error ?? analysis.error}
+        degraded={degraded}
+        warnings={warnings}
+        snapshot={m}
+      />
+
+      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Engine state
+        </h2>
+        <p className="mt-2 font-mono text-3xl text-zinc-50">
+          {AI_STATE_COPY[aiState] ?? aiState}
+        </p>
+        <p className="mt-2 text-sm text-zinc-400">
+          {analysis.ui?.reportSummary ?? m.aiStatus.lastAction}
+        </p>
+        <dl className="mt-4 grid gap-2 text-xs text-zinc-400 sm:grid-cols-2">
+          <div>
+            <dt className="text-zinc-500">Verdict</dt>
+            <dd>{analysis.ui?.finalVerdict ?? m.lastVerdict ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Next action</dt>
+            <dd>{analysis.ui?.nextAction ?? m.aiStatus.nextAction}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Run ID</dt>
+            <dd className="font-mono text-zinc-200">{analysis.ui?.runId?.slice(0, 24) ?? "—"}</dd>
+          </div>
+          <div>
+            <dt className="text-zinc-500">Decision log</dt>
+            <dd className="font-mono text-zinc-200">
+              {analysis.ui?.decisionLogId ? (
+                <Link
+                  href={`/trades/${analysis.ui.decisionLogId}`}
+                  className="text-emerald-300 hover:underline"
+                >
+                  {analysis.ui.decisionLogId.slice(0, 20)}…
+                </Link>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Current step
+        </h2>
+        <ol className="mt-3 space-y-1.5">
+          {PIPELINE_STAGES.map((stage) => {
+            const active = stage.id === activeStep;
+            const done =
+              PIPELINE_STAGES.findIndex((s) => s.id === stage.id) <
+              PIPELINE_STAGES.findIndex((s) => s.id === activeStep);
+            return (
+              <li
+                key={stage.id}
+                className={`flex items-center gap-2 rounded border px-3 py-2 text-xs ${
+                  active
+                    ? "border-violet-700/50 bg-violet-950/30 text-violet-200"
+                    : done
+                      ? "border-emerald-900/30 text-emerald-400/80"
+                      : "border-zinc-800/60 text-zinc-500"
+                }`}
+              >
+                <span className="w-5 font-mono">{stage.order}</span>
+                <span>{stage.label}</span>
+                {active && (
+                  <span className="ml-auto text-[10px] uppercase">active</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      <EngineEventFeed
+        events={analysis.events.filter((e) => e.meaningful)}
+        limit={8}
+        title="Recent events"
+        compact
+      />
+
+      <section
+        className={`rounded-xl border p-5 ${
+          blockers.length > 0
+            ? "border-rose-900/50 bg-rose-950/20"
+            : "border-zinc-800/80 bg-zinc-950/60"
+        }`}
+      >
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Blockers
+        </h2>
+        {blockers.length === 0 ? (
+          <p className="mt-2 text-sm text-emerald-300/90">No blockers — engine clear.</p>
+        ) : (
+          <ul className="mt-2 space-y-1.5 text-sm text-rose-200/90">
+            {blockers.map((b) => (
+              <li key={b}>• {b}</li>
+            ))}
+          </ul>
+        )}
+        {blockers.length > 0 && (
+          <Link
+            href="/advanced/engine-health"
+            className="mt-3 inline-block text-xs text-emerald-300 hover:underline"
+          >
+            Engine health details →
+          </Link>
+        )}
+      </section>
+
+      <section
+        className={`rounded-xl border p-5 ${
+          analysis.ui?.humanActionRequired || m.pendingTestnetPreview
+            ? "border-amber-900/50 bg-amber-950/20"
+            : "border-zinc-800/80 bg-zinc-950/60"
+        }`}
+      >
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Permission needed
+        </h2>
+        {analysis.ui?.humanActionRequired || m.pendingTestnetPreview ? (
+          <>
+            <p className="mt-2 text-sm text-amber-100">
+              {m.pendingTestnetPreview
+                ? `Testnet preview ${m.pendingTestnetPreview.symbol} ${m.pendingTestnetPreview.side} — double confirm on Dashboard.`
+                : "Human approval required before the next trade action."}
+            </p>
+            <Link href="/" className="mt-2 inline-block text-xs text-emerald-300 hover:underline">
+              Go to Dashboard →
+            </Link>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-400">No permission prompts pending.</p>
+        )}
+      </section>
+    </GoalShell>
+  );
+}
+

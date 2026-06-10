@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import StrategiesDashboard from "@/components/strategies/StrategiesDashboard";
 
 export const metadata = {
@@ -9,7 +10,9 @@ export const metadata = {
 export default function StrategiesPage() {
   return (
     <main className="min-h-full bg-zinc-950">
-      <StrategiesDashboard />
+      <AdvancedModuleLayout moduleId="strategy-registry">
+        <StrategiesDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

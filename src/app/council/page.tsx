@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import CouncilDashboard from "@/components/council/CouncilDashboard";
 
 export const metadata = {
@@ -9,7 +10,9 @@ export const metadata = {
 export default function CouncilPage() {
   return (
     <main className="desk-root min-h-screen">
-      <CouncilDashboard />
+      <AdvancedModuleLayout moduleId="council">
+        <CouncilDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

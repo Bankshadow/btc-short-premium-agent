@@ -1,5 +1,21 @@
 import type { AIActivityStatus } from "@/lib/goal-engine/types";
 
+import type { EvidenceProgressSnapshot } from "@/lib/evidence-progress/types";
+import type { IntegratedStrategyHealthSnapshot } from "@/lib/integrated-strategy-health/types";
+import type { MicroLiveReadinessSnapshot } from "@/lib/micro-live-readiness/types";
+import type { LearningProgressSnapshot } from "@/lib/learning-queue/types";
+import type { MonitorReliabilitySnapshot } from "@/lib/monitor-reliability/types";
+import type { IntegratedTradeQualitySnapshot } from "@/lib/trade-quality-score/types";
+import type { IntegratedConfidenceCalibrationSnapshot } from "@/lib/integrated-confidence-calibration/types";
+import type { IntegratedRiskBudgetSnapshot } from "@/lib/integrated-risk-budget/types";
+import type { IntegratedDailySelfReviewSnapshot } from "@/lib/integrated-daily-self-review/types";
+import type { EvidenceQualitySnapshot } from "@/lib/evidence-quality/types";
+import type { IntegratedQualityCalibrationSnapshot } from "@/lib/integrated-quality-calibration/types";
+import type { IntegratedStrategyAgentHealthSnapshot } from "@/lib/integrated-strategy-agent-health/types";
+import type { MissionControllerRiskBudgetSnapshot } from "@/lib/mission-controller-risk-budget/types";
+import type { AlwaysOnOperatorLayerSnapshot } from "@/lib/always-on-operator-layer/types";
+import type { MicroLiveReadinessReviewSnapshot } from "@/lib/micro-live-readiness-review/types";
+
 export type BinanceTestnetFlowStatus =
   | "CONNECTED"
   | "DISCONNECTED"
@@ -159,6 +175,21 @@ export interface MissionFlowSnapshot {
   learningInsights: MissionFlowLearningInsights;
   strategyHealth: MissionFlowStrategyHealth | null;
   trustNotionalUsd: number;
+  evidenceProgress: EvidenceProgressSnapshot;
+  monitorReliability: MonitorReliabilitySnapshot;
+  learningProgress: LearningProgressSnapshot;
+  integratedStrategyHealth: IntegratedStrategyHealthSnapshot;
+  microLiveReadiness: MicroLiveReadinessSnapshot;
+  integratedTradeQuality: IntegratedTradeQualitySnapshot;
+  integratedConfidenceCalibration: IntegratedConfidenceCalibrationSnapshot;
+  integratedRiskBudget: IntegratedRiskBudgetSnapshot;
+  integratedDailySelfReview: IntegratedDailySelfReviewSnapshot;
+  evidenceQuality: EvidenceQualitySnapshot;
+  integratedQualityCalibration: IntegratedQualityCalibrationSnapshot;
+  integratedStrategyAgentHealth: IntegratedStrategyAgentHealthSnapshot;
+  missionControllerRiskBudget: MissionControllerRiskBudgetSnapshot;
+  alwaysOnOperatorLayer: AlwaysOnOperatorLayerSnapshot;
+  microLiveReadinessReview: MicroLiveReadinessReviewSnapshot;
   selfLearning: MissionFlowSelfLearning;
 }
 

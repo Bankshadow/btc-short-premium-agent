@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import LedgerDashboard from "@/components/ledger/LedgerDashboard";
 
 export const metadata = {
@@ -9,7 +10,9 @@ export const metadata = {
 export default function LedgerPage() {
   return (
     <main className="min-h-full bg-zinc-950">
-      <LedgerDashboard />
+      <AdvancedModuleLayout moduleId="ledger">
+        <LedgerDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

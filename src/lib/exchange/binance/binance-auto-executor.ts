@@ -7,7 +7,11 @@ import {
   isBinanceTestnetAutoExecuteEnabled,
   loadBinanceConfig,
 } from "./binance-config";
-import { GOAL_MIN_TRADES_FOR_TRUST } from "@/lib/goal-engine/types";
+import { GOAL_MIN_TRADES_FOR_TRUST, GOAL_START_CAPITAL } from "@/lib/goal-engine/types";
+import {
+  dailyLossLimitHit,
+  deriveMissionNextAction,
+} from "@/lib/mission-controller-risk-budget/resolve-mission-mode";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import { buildBinancePreviewInputFromAiSignal } from "./build-ai-preview";
@@ -18,6 +22,14 @@ import { pickAutopilotTradeCandidates } from "./pick-autopilot-symbols";
 import { recordAutopilotCycleOutcome } from "./symbol-rotation-store";
 import { evaluateUnifiedTestnetTradeGate } from "./unified-testnet-trade-gate";
 import { resolveTestnetExecutionVerdict } from "./resolve-testnet-execution-verdict";
+import { buildMonitorReliabilitySnapshot } from "@/lib/monitor-reliability";
+import { buildIntegratedStrategyHealth } from "@/lib/integrated-strategy-health";
+import { buildEvidenceProgress } from "@/lib/evidence-progress";
+import { buildEvidenceQualitySnapshot } from "@/lib/evidence-quality/build-evidence-quality";
+import { loadMonitorJournalEvents } from "@/lib/testnet-monitor/monitor-journal-server";
+import { loadTradeQualityStore } from "@/lib/trade-quality-score/quality-store";
+import { buildClosedTradesFromJournal } from "@/lib/testnet-monitor/build-testnet-monitor-snapshot";
+import { loadLearningRecordsServer } from "@/lib/testnet-monitor/learning-records-server";
 
 export type BinanceAutoExecuteOutcome =
   | "DISABLED"
@@ -111,11 +123,85 @@ export async function runBinanceTestnetAutoExecute(input: {
       };
     }
 
+    const positions = await getPositions();
+    const journalForReliability = await loadServerBinanceTestnetJournal().catch(() => []);
+    const monitorReliability = await buildMonitorReliabilitySnapshot({
+      journal: journalForReliability,
+      positions,
+      connected: true,
+      autoExecuteEnabled: true,
+      autoRecover: false,
+    });
+
+    const closedTrades = buildClosedTradesFromJournal(journalForReliability);
+    const learningRecords = await loadLearningRecordsServer().catch(() => []);
+    const [monitorEvents, qualityStore] = await Promise.all([
+      loadMonitorJournalEvents().catch(() => []),
+      loadTradeQualityStore().catch(() => ({ scores: [] })),
+    ]);
+    const evidenceProgress = buildEvidenceProgress({
+      journal: journalForReliability,
+      closedTrades,
+      learningRecords,
+      openPositionCount: positions.filter((p) => Math.abs(Number(p.positionAmt)) > 0)
+        .length,
+      connected: true,
+    });
+    const evidenceQuality = buildEvidenceQualitySnapshot({
+      journal: journalForReliability,
+      closedTrades,
+      learningRecords,
+      decisions: input.entries ?? [],
+      tradeQualityScores: qualityStore.scores ?? [],
+      monitorEvents,
+    });
+    const integratedStrategyHealth = await buildIntegratedStrategyHealth({
+      journal: journalForReliability,
+      closedTrades,
+      learningRecords,
+      decisions: input.entries ?? [],
+      evidenceCompletedTrades: evidenceQuality.validEvidenceCount,
+      evidenceValidTrades: evidenceProgress.validTrades,
+      persistSideEffects: false,
+      evidenceQuality,
+    });
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const dailyPnlUsd = journalForReliability
+      .filter(
+        (j) =>
+          j.status === "CLOSED" &&
+          new Date(j.closedAt ?? j.createdAt).getTime() >= todayStart.getTime(),
+      )
+      .reduce((sum, j) => sum + (j.realizedPnl ?? 0), 0);
+    const netPnlUsd = journalForReliability
+      .filter((j) => j.status === "CLOSED")
+      .reduce((sum, j) => sum + (j.realizedPnl ?? 0), 0);
+    const equityUsd = GOAL_START_CAPITAL + netPnlUsd;
+    const dailyPnlPct =
+      equityUsd > 0 ? (dailyPnlUsd / equityUsd) * 100 : 0;
+    const missionMode = dailyLossLimitHit(dailyPnlPct) ? "PAUSED" : null;
+    const missionNextAction =
+      missionMode === "PAUSED"
+        ? deriveMissionNextAction({
+            missionMode: "PAUSED",
+            progressPct: 0,
+            modeReason: "Daily loss limit hit.",
+          })
+        : null;
+
     const tradeGate = evaluateUnifiedTestnetTradeGate({
       analysis: input.analysis,
       commandCenterStatus: input.commandCenterStatus ?? null,
       entries: input.entries,
       orders: input.orders,
+      monitorReliability,
+      integratedStrategyHealth,
+      consistencyBlocksNewTrades: monitorReliability?.positionStateUncertain ?? false,
+      consistencyIssue: monitorReliability?.currentIssue ?? null,
+      missionMode,
+      missionNextAction,
     });
     if (!tradeGate.allowed) {
       return {
@@ -126,14 +212,11 @@ export async function runBinanceTestnetAutoExecute(input: {
       };
     }
 
-    const positions = await getPositions();
     const openSymbols = positions
       .filter((p) => Math.abs(Number(p.positionAmt)) > 0)
       .map((p) => p.symbol);
 
     const journal = await loadServerBinanceTestnetJournal().catch(() => []);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
     const tradesToday = journal.filter(
       (j) =>
         new Date(j.createdAt).getTime() >= todayStart.getTime() &&

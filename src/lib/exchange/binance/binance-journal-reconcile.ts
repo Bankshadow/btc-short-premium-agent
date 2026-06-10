@@ -58,6 +58,32 @@ export function reconcileBinanceJournalStatuses(
 
     if (
       (entry.status === "SUBMITTED" || entry.status === "FILLED") &&
+      !openSymbols.has(entry.symbol)
+    ) {
+      const entryPrice = Number(entry.fillPrice ?? entry.previewPrice ?? 0);
+      const exitPrice = Number(entry.markPriceAtSubmit ?? entry.previewPrice ?? 0);
+      const pnl =
+        entry.realizedPnl ??
+        (entryPrice > 0 && exitPrice > 0
+          ? computeCloseRealizedPnl({
+              side: entry.side,
+              quantity: entry.quantity,
+              entryPrice,
+              exitPrice,
+            })
+          : entry.notionalUsd
+            ? entry.notionalUsd * 0.001
+            : 0);
+      return {
+        ...entry,
+        status: "CLOSED" as const,
+        closedAt: entry.closedAt ?? new Date().toISOString(),
+        realizedPnl: pnl,
+      };
+    }
+
+    if (
+      (entry.status === "SUBMITTED" || entry.status === "FILLED") &&
       openSymbols.has(entry.symbol)
     ) {
       return { ...entry, status: "FILLED" as const };

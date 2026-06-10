@@ -5,6 +5,7 @@ import {
   TRADE_QUALITY_GRADE_THRESHOLDS,
   TRADE_QUALITY_WEIGHTS,
 } from "./config";
+import { scoreMarketRegimeFit } from "./score-market-regime-fit";
 import { TRADE_QUALITY_SAFETY_NOTICE } from "./types";
 import type {
   TradeQualityDimensions,
@@ -16,11 +17,17 @@ function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
-function gradeFromComposite(score: number): TradeQualityGrade {
+export function gradeFromComposite(score: number): TradeQualityGrade {
   for (const row of TRADE_QUALITY_GRADE_THRESHOLDS) {
     if (score >= row.min) return row.grade;
   }
   return "F";
+}
+
+export function computeWeightedComposite(
+  dimensions: TradeQualityDimensions,
+): number {
+  return compositeScore(dimensions);
 }
 
 function scoreSetup(entry: DecisionLogEntry): number {
@@ -106,18 +113,51 @@ function scoreRuleCompliance(entry: DecisionLogEntry, tradeWouldWin: boolean | n
   return clamp(score);
 }
 
-function scoreAiReasoning(evaluation?: TradeEvaluationResult | null): number {
-  if (!evaluation) return 55;
-  const committee = evaluation.committeeEvaluation.reasoning.reasoningQuality;
-  const agentAvg =
-    evaluation.agentEvaluations.length > 0
-      ? evaluation.agentEvaluations.reduce(
-          (sum, a) => sum + a.reasoning.reasoningQuality,
-          0,
-        ) / evaluation.agentEvaluations.length
-      : 55;
-  const regretPenalty = Math.min(25, evaluation.committeeEvaluation.reasoning.regretScore / 4);
-  return clamp(committee * 0.55 + agentAvg * 0.45 - regretPenalty);
+function scoreReasoningConsistency(
+  entry: DecisionLogEntry,
+  evaluation?: TradeEvaluationResult | null,
+  tradeWouldWin?: boolean | null,
+): number {
+  let score = 50;
+
+  if (entry.agentOutputs.length >= 2) {
+    const recs = entry.agentOutputs.map((a) => a.recommendation);
+    const unanimous = recs.every((r) => r === recs[0]);
+    if (unanimous) score += 14;
+    else score -= 10;
+  }
+
+  if (
+    entry.committeeTradeScore != null &&
+    entry.playbookConfidence != null
+  ) {
+    const delta = Math.abs(entry.committeeTradeScore - entry.playbookConfidence);
+    if (delta <= 8) score += 14;
+    else if (delta > 22) score -= 12;
+  }
+
+  if (evaluation) {
+    const committee = evaluation.committeeEvaluation.reasoning.reasoningQuality;
+    const agentAvg =
+      evaluation.agentEvaluations.length > 0
+        ? evaluation.agentEvaluations.reduce(
+            (sum, a) => sum + a.reasoning.reasoningQuality,
+            0,
+          ) / evaluation.agentEvaluations.length
+        : 55;
+    const regretPenalty = Math.min(
+      22,
+      evaluation.committeeEvaluation.reasoning.regretScore / 4,
+    );
+    score += committee * 0.25 + agentAvg * 0.15 - regretPenalty;
+  }
+
+  const conf = entry.playbookConfidence ?? entry.committeeTradeScore ?? 50;
+  if (tradeWouldWin === true && conf >= 62) score += 8;
+  if (tradeWouldWin === false && conf >= 68) score -= 14;
+  if (entry.topReasons.length >= 2) score += 6;
+
+  return clamp(score);
 }
 
 function compositeScore(dimensions: TradeQualityDimensions): number {
@@ -140,6 +180,9 @@ function buildImprovements(dimensions: TradeQualityDimensions): string[] {
       case "setupQuality":
         hints.push("Improve setup: run pre-mortem and confirm regime + data quality before TRADE.");
         break;
+      case "marketRegimeFit":
+        hints.push("Align strategy with market regime — verify regime tag before entry.");
+        break;
       case "entryQuality":
         hints.push("Tighten entry: align committee TRADE with higher conviction and fewer false positives.");
         break;
@@ -155,8 +198,8 @@ function buildImprovements(dimensions: TradeQualityDimensions): string[] {
       case "ruleCompliance":
         hints.push("Respect risk veto and pre-mortem blocks — do not override gates for speed.");
         break;
-      case "aiReasoningQuality":
-        hints.push("Strengthen agent reasoning — address missed risk factors in committee debate.");
+      case "reasoningConsistency":
+        hints.push("Improve agent/committee alignment — reduce confidence vs outcome drift.");
         break;
     }
   }
@@ -197,12 +240,17 @@ export function buildTradeQualityScore(input: {
 
   const dimensions: TradeQualityDimensions = {
     setupQuality: scoreSetup(entry),
+    marketRegimeFit: scoreMarketRegimeFit(entry),
     entryQuality: scoreEntry(entry, tradeWouldWin, pnlPct),
     riskReward: scoreRiskReward(entry, pnlPct),
     executionQuality: scoreExecution(entry),
     exitQuality: scoreExit(entry, tradeWouldWin),
     ruleCompliance: scoreRuleCompliance(entry, tradeWouldWin),
-    aiReasoningQuality: scoreAiReasoning(input.evaluation),
+    reasoningConsistency: scoreReasoningConsistency(
+      entry,
+      input.evaluation,
+      tradeWouldWin,
+    ),
   };
 
   const composite = compositeScore(dimensions);

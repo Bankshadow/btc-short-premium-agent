@@ -7,3 +7,10 @@ export {
   runTradeQualityUpdate,
   getRecentTradeQualityAvg,
 } from "./run-quality-update";
+export { buildTestnetClosedTradeQualityScore } from "./score-testnet-closed-trade";
+export {
+  syncTradeQualityFromClosedJournal,
+  buildIntegratedTradeQualitySnapshot,
+  enrichAgentScoreboardWithQuality,
+} from "./sync-trade-quality-from-closed";
+export { emptyIntegratedTradeQuality } from "./empty-snapshot";

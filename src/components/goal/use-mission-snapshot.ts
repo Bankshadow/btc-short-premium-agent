@@ -34,6 +34,20 @@ export function useMissionSnapshot() {
 
   useEffect(() => {
     void refresh();
+
+    let es: EventSource | null = null;
+    if (typeof EventSource !== "undefined") {
+      es = new EventSource("/api/analysis/events/stream");
+      es.onmessage = () => {
+        void refresh();
+      };
+    }
+
+    const id = window.setInterval(() => void refresh(), 15000);
+    return () => {
+      es?.close();
+      window.clearInterval(id);
+    };
   }, [refresh]);
 
   return {

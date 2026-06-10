@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import EvidenceProgressPanel from "@/components/evidence-progress/EvidenceProgressPanel";
+import LearningQueuePanel from "@/components/learning-queue/LearningQueuePanel";
+import StrategyHealthReportPanel from "@/components/integrated-strategy-health/StrategyHealthReportPanel";
+import TradeQualityPanel from "@/components/learning/TradeQualityPanel";
+import IntegratedConfidenceCalibrationPanel from "@/components/integrated-confidence-calibration/IntegratedConfidenceCalibrationPanel";
+import { IntegratedRiskBudgetPanel } from "@/components/integrated-risk-budget/IntegratedRiskBudgetPanel";
+import { IntegratedDailySelfReviewPanel } from "@/components/integrated-daily-self-review/IntegratedDailySelfReviewPanel";
+import MonitorReliabilityPanel from "@/components/monitor-reliability/MonitorReliabilityPanel";
 import OpsShell, { OpsKpi } from "@/components/ops/OpsShell";
 import IncidentsV2Badge from "@/components/incidents-v2/IncidentsV2Badge";
 import { loadDecisionLog } from "@/lib/journal/decision-log";
@@ -268,6 +276,52 @@ export default function TestnetMonitorDashboard({
           Testnet PnL is labeled TESTNET and does not prove live profitability.
         </p>
       )}
+
+      <div className="mb-4">
+        <EvidenceProgressPanel evidence={snapshot?.evidenceProgress} showTable />
+      </div>
+
+      <div className="mb-4">
+        <MonitorReliabilityPanel reliability={snapshot?.monitorReliability} />
+      </div>
+
+      <div className="mb-4">
+        <LearningQueuePanel progress={snapshot?.learningProgress} showTable />
+      </div>
+
+      <div className="mb-4">
+        <StrategyHealthReportPanel health={snapshot?.integratedStrategyHealth} />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+        <p className="mb-2 text-[10px] uppercase tracking-widest text-indigo-400/80">
+          MVP 76 · Integrated Trade Quality
+        </p>
+        <TradeQualityPanel summary={snapshot?.integratedTradeQuality?.summary ?? null} />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+        <p className="mb-2 text-[10px] uppercase tracking-widest text-violet-400/80">
+          MVP 77 · Integrated AI Confidence Calibration
+        </p>
+        <IntegratedConfidenceCalibrationPanel
+          calibration={snapshot?.integratedConfidenceCalibration}
+        />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+        <p className="mb-2 text-[10px] uppercase tracking-widest text-rose-400/80">
+          MVP 78 · Integrated Risk Budget
+        </p>
+        <IntegratedRiskBudgetPanel riskBudget={snapshot?.integratedRiskBudget} />
+      </div>
+
+      <div className="mb-4 rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+        <p className="mb-2 text-[10px] uppercase tracking-widest text-violet-400/80">
+          MVP 79 · Integrated Daily AI Self-Review
+        </p>
+        <IntegratedDailySelfReviewPanel dailyReview={snapshot?.integratedDailySelfReview} />
+      </div>
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <OpsKpi
@@ -657,6 +711,12 @@ export default function TestnetMonitorDashboard({
               <p className="font-mono text-zinc-200">
                 {snapshot?.agentScoreboardSegment.totalLearned ?? 0} learned
               </p>
+              {(snapshot?.agentScoreboardSegment.rows[0]?.avgQualityScore ?? null) != null && (
+                <p className="mt-1 font-mono text-[10px] text-indigo-300">
+                  top agent quality{" "}
+                  {snapshot?.agentScoreboardSegment.rows[0]?.avgQualityScore}/100
+                </p>
+              )}
             </div>
             <div className="rounded border border-zinc-800/80 p-2">
               <p className="text-zinc-500">TESTNET Strategy performance</p>

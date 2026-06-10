@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import GovernanceDashboard from "@/components/governance/GovernanceDashboard";
 
 export const metadata = {
@@ -8,7 +9,9 @@ export const metadata = {
 export default function GovernancePage() {
   return (
     <main className="min-h-full bg-zinc-950">
-      <GovernanceDashboard />
+      <AdvancedModuleLayout moduleId="governance">
+        <GovernanceDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

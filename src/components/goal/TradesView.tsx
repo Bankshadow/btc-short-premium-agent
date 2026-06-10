@@ -9,7 +9,6 @@ import type { GoalTradeRow } from "@/lib/goal-engine/build-trade-list";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 
 type EnvFilter = "PRACTICE" | "ALL" | "PAPER" | "SHADOW" | "TESTNET" | "LIVE";
-type StateFilter = "ALL" | "OPEN" | "CLOSED";
 
 function usd(n: number): string {
   const sign = n < 0 ? "-" : "+";
@@ -21,6 +20,53 @@ function resultClass(result: GoalTradeRow["result"]): string {
   if (result === "LOSS") return "text-rose-300";
   if (result === "OPEN") return "text-cyan-300";
   return "text-zinc-400";
+}
+
+function TradesTable({ trades, emptyLabel }: { trades: GoalTradeRow[]; emptyLabel: string }) {
+  if (trades.length === 0) {
+    return <p className="text-xs text-zinc-500">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[800px] text-left text-xs text-zinc-300">
+        <thead>
+          <tr className="text-zinc-500">
+            <th className="pb-2 pr-3">Date</th>
+            <th className="pb-2 pr-3">Env</th>
+            <th className="pb-2 pr-3">Symbol</th>
+            <th className="pb-2 pr-3">Side</th>
+            <th className="pb-2 pr-3">PnL</th>
+            <th className="pb-2 pr-3">Result</th>
+            <th className="pb-2">Trade detail timeline</th>
+          </tr>
+        </thead>
+        <tbody>
+          {trades.map((t) => (
+            <tr key={`${t.environment}-${t.id}`} className="border-t border-zinc-800/70">
+              <td className="py-2 pr-3 text-zinc-400">
+                {t.date ? new Date(t.date).toLocaleString() : "—"}
+              </td>
+              <td className="py-2 pr-3">{t.environment}</td>
+              <td className="py-2 pr-3 text-zinc-200">{t.symbol}</td>
+              <td className="py-2 pr-3">{t.side}</td>
+              <td
+                className={`py-2 pr-3 font-mono ${t.pnlUsd >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+              >
+                {usd(t.pnlUsd)}
+              </td>
+              <td className={`py-2 pr-3 ${resultClass(t.result)}`}>{t.result}</td>
+              <td className="py-2">
+                <Link href={`/trades/${t.id}`} className="text-emerald-300 hover:underline">
+                  View timeline →
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export default function TradesView() {
@@ -36,7 +82,6 @@ export default function TradesView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [env, setEnv] = useState<EnvFilter>("PRACTICE");
-  const [state, setState] = useState<StateFilter>("ALL");
   const [closeModalOpen, setCloseModalOpen] = useState(false);
 
   const refreshTrades = useCallback(async () => {
@@ -66,22 +111,21 @@ export default function TradesView() {
     return trades.filter((t) => {
       if (env === "PRACTICE" && t.environment === "LIVE") return false;
       if (env !== "ALL" && env !== "PRACTICE" && t.environment !== env) return false;
-      if (state === "OPEN" && t.result !== "OPEN") return false;
-      if (state === "CLOSED" && t.result === "OPEN") return false;
       return true;
     });
-  }, [trades, env, state]);
+  }, [trades, env]);
 
-  const useMissionTotals = env === "PRACTICE" && state === "ALL";
-  const emptyNextAction =
-    m.binanceTestnet.status !== "CONNECTED"
-      ? "Connect Binance Testnet"
-      : "Autopilot will trade on the next TRADE verdict";
+  const openTrades = filtered.filter((t) => t.result === "OPEN");
+  const closedTrades = filtered.filter((t) => t.result !== "OPEN");
+  const useMissionTotals = env === "PRACTICE";
+  const netPnl = useMissionTotals
+    ? m.netPnl
+    : closedTrades.reduce((s, t) => s + t.pnlUsd, 0);
 
   return (
     <GoalShell
       title="Trades"
-      subtitle="Every trade the AI has taken, across practice and testnet. Live trades are labeled separately."
+      subtitle="Open and closed trades, PnL, and full lifecycle timelines."
       activePath="/trades"
       missionSnapshot={m}
       actions={
@@ -102,33 +146,39 @@ export default function TradesView() {
         snapshot={m}
       />
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
-          <p className="text-[10px] uppercase text-zinc-500">Total closed</p>
-          <p className="font-mono text-lg text-zinc-100">
-            {useMissionTotals ? m.closedTrades : filtered.filter((t) => t.result !== "OPEN").length}
-          </p>
+      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">PnL</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-500">Net PnL</p>
+            <p
+              className={`font-mono text-lg ${netPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}
+            >
+              {usd(netPnl)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-500">Open</p>
+            <p className="font-mono text-lg text-cyan-300">
+              {useMissionTotals ? m.openTrades : openTrades.length}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-500">Closed</p>
+            <p className="font-mono text-lg text-zinc-100">
+              {useMissionTotals ? m.closedTrades : closedTrades.length}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
+            <p className="text-[10px] uppercase text-zinc-500">Win / Loss</p>
+            <p className="font-mono text-lg text-zinc-100">
+              {useMissionTotals
+                ? `${m.wins} / ${m.losses}`
+                : `${closedTrades.filter((t) => t.result === "WIN").length} / ${closedTrades.filter((t) => t.result === "LOSS").length}`}
+            </p>
+          </div>
         </div>
-        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
-          <p className="text-[10px] uppercase text-zinc-500">Open / Closed</p>
-          <p className="font-mono text-lg text-zinc-100">
-            {useMissionTotals ? m.openTrades : filtered.filter((t) => t.result === "OPEN").length} /{" "}
-            {useMissionTotals ? m.closedTrades : filtered.filter((t) => t.result !== "OPEN").length}
-          </p>
-        </div>
-        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
-          <p className="text-[10px] uppercase text-zinc-500">Win / Loss</p>
-          <p className="font-mono text-lg text-zinc-100">
-            {useMissionTotals ? `${m.wins} / ${m.losses}` : `${filtered.filter((t) => t.result === "WIN").length} / ${filtered.filter((t) => t.result === "LOSS").length}`}
-          </p>
-        </div>
-        <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 px-3 py-2">
-          <p className="text-[10px] uppercase text-zinc-500">Net PnL</p>
-          <p className={`font-mono text-lg ${(useMissionTotals ? m.netPnl : filtered.reduce((s, t) => s + t.pnlUsd, 0)) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-            {usd(useMissionTotals ? m.netPnl : filtered.reduce((s, t) => s + t.pnlUsd, 0))}
-          </p>
-        </div>
-      </div>
+      </section>
 
       {m.currentPosition?.canCloseOnTestnet && (
         <section className="rounded-xl border border-amber-900/40 bg-amber-950/20 p-4">
@@ -141,19 +191,6 @@ export default function TradesView() {
           >
             Close position (double confirm)
           </button>
-        </section>
-      )}
-
-      {m.pendingTestnetPreview && !m.pendingTestnetPreview.blocked && (
-        <section className="rounded-xl border border-cyan-900/40 bg-cyan-950/20 p-4">
-          <p className="text-xs text-zinc-400">Pending testnet preview</p>
-          <p className="mt-1 font-mono text-sm text-zinc-100">
-            {m.pendingTestnetPreview.symbol} {m.pendingTestnetPreview.side} · $
-            {m.pendingTestnetPreview.notionalUsd}
-          </p>
-          <Link href="/" className="mt-2 inline-block text-xs text-cyan-300 hover:underline">
-            Review on Dashboard →
-          </Link>
         </section>
       )}
 
@@ -170,76 +207,27 @@ export default function TradesView() {
           <option value="TESTNET">Testnet</option>
           <option value="LIVE">Live</option>
         </select>
-        <select
-          value={state}
-          onChange={(e) => setState(e.target.value as StateFilter)}
-          className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-200"
-        >
-          <option value="ALL">Open + closed</option>
-          <option value="OPEN">Open only</option>
-          <option value="CLOSED">Closed only</option>
-        </select>
       </div>
 
       <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
-        {filtered.length === 0 ? (
-          <div className="text-xs text-zinc-500">
-            <p>No trades recorded yet.</p>
-            <p className="mt-2 text-amber-300/90">Next: {emptyNextAction}</p>
-            {m.binanceTestnet.status !== "CONNECTED" ? (
-              <Link href="/binance-testnet" className="mt-2 inline-block text-emerald-300 hover:underline">
-                Connect Binance Testnet →
-              </Link>
-            ) : (
-              <Link href="/" className="mt-2 inline-block text-emerald-300 hover:underline">
-                View autopilot on Dashboard →
-              </Link>
-            )}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-xs text-zinc-300">
-              <thead>
-                <tr className="text-zinc-500">
-                  <th className="pb-2 pr-3">Date</th>
-                  <th className="pb-2 pr-3">Env</th>
-                  <th className="pb-2 pr-3">Symbol</th>
-                  <th className="pb-2 pr-3">Side</th>
-                  <th className="pb-2 pr-3">PnL</th>
-                  <th className="pb-2 pr-3">Result</th>
-                  <th className="pb-2 pr-3">Tags</th>
-                  <th className="pb-2">Lifecycle</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((t) => (
-                  <tr key={`${t.environment}-${t.id}`} className="border-t border-zinc-800/70">
-                    <td className="py-2 pr-3 text-zinc-400">
-                      {t.date ? new Date(t.date).toLocaleString() : "—"}
-                    </td>
-                    <td className="py-2 pr-3">{t.environment}</td>
-                    <td className="py-2 pr-3 text-zinc-200">{t.symbol}</td>
-                    <td className="py-2 pr-3">{t.side}</td>
-                    <td className={`py-2 pr-3 font-mono ${t.pnlUsd >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                      {usd(t.pnlUsd)}
-                    </td>
-                    <td className={`py-2 pr-3 ${resultClass(t.result)}`}>{t.result}</td>
-                    <td className="py-2 pr-3 text-[10px] text-zinc-500">
-                      {t.autopilot && <span className="text-cyan-400/90">autopilot </span>}
-                      {t.learned && <span className="text-violet-400/90">learned</span>}
-                      {!t.autopilot && !t.learned && "—"}
-                    </td>
-                    <td className="py-2">
-                      <Link href={`/trades/${t.id}`} className="text-emerald-300 hover:underline">
-                        View full lifecycle →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Open trades
+        </h2>
+        <div className="mt-3">
+          <TradesTable trades={openTrades} emptyLabel="No open trades." />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Closed trades
+        </h2>
+        <div className="mt-3">
+          <TradesTable
+            trades={closedTrades}
+            emptyLabel="No closed trades yet — run Start AI on Dashboard."
+          />
+        </div>
       </section>
 
       <TestnetTradeModal

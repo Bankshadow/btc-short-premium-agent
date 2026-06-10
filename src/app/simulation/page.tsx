@@ -1,3 +1,4 @@
+import AdvancedModuleLayout from "@/components/advanced/AdvancedModuleLayout";
 import SimulationDashboard from "@/components/simulation/SimulationDashboard";
 
 export const metadata = {
@@ -8,7 +9,9 @@ export const metadata = {
 export default function SimulationPage() {
   return (
     <main className="desk-root min-h-screen">
-      <SimulationDashboard />
+      <AdvancedModuleLayout moduleId="simulation">
+        <SimulationDashboard />
+      </AdvancedModuleLayout>
     </main>
   );
 }

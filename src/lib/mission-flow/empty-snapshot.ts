@@ -1,3 +1,18 @@
+import { emptyEvidenceProgress } from "@/lib/evidence-progress";
+import { emptyLearningProgress } from "@/lib/learning-queue/empty-snapshot";
+import { emptyIntegratedStrategyHealth } from "@/lib/integrated-strategy-health/empty-snapshot";
+import { emptyMicroLiveReadiness } from "@/lib/micro-live-readiness/empty-snapshot";
+import { emptyIntegratedTradeQuality } from "@/lib/trade-quality-score/empty-snapshot";
+import { emptyIntegratedConfidenceCalibration } from "@/lib/integrated-confidence-calibration/empty-snapshot";
+import { emptyIntegratedRiskBudget } from "@/lib/integrated-risk-budget/empty-snapshot";
+import { emptyIntegratedDailySelfReview } from "@/lib/integrated-daily-self-review/empty-snapshot";
+import { emptyEvidenceQualitySnapshot } from "@/lib/evidence-quality/build-evidence-quality";
+import { emptyIntegratedQualityCalibration } from "@/lib/integrated-quality-calibration/build-integrated-quality-calibration";
+import { emptyIntegratedStrategyAgentHealth } from "@/lib/integrated-strategy-agent-health/build-integrated-strategy-agent-health";
+import { emptyMissionControllerRiskBudget } from "@/lib/mission-controller-risk-budget/empty-snapshot";
+import { emptyAlwaysOnOperatorLayer } from "@/lib/always-on-operator-layer/empty-snapshot";
+import { emptyMicroLiveReadinessReview } from "@/lib/micro-live-readiness-review/empty-snapshot";
+import { emptyMonitorReliabilitySnapshot } from "@/lib/monitor-reliability/empty-snapshot";
 import {
   GOAL_MIN_TRADES_FOR_TRUST,
   GOAL_START_CAPITAL,
@@ -85,6 +100,21 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
     },
     strategyHealth: null,
     trustNotionalUsd: 55,
+    evidenceProgress: emptyEvidenceProgress(),
+    monitorReliability: emptyMonitorReliabilitySnapshot(),
+    learningProgress: emptyLearningProgress(),
+    integratedStrategyHealth: emptyIntegratedStrategyHealth(),
+    microLiveReadiness: emptyMicroLiveReadiness(),
+    integratedTradeQuality: emptyIntegratedTradeQuality(),
+    integratedConfidenceCalibration: emptyIntegratedConfidenceCalibration(),
+    integratedRiskBudget: emptyIntegratedRiskBudget(),
+    integratedDailySelfReview: emptyIntegratedDailySelfReview(),
+    evidenceQuality: emptyEvidenceQualitySnapshot(),
+    integratedQualityCalibration: emptyIntegratedQualityCalibration(),
+    integratedStrategyAgentHealth: emptyIntegratedStrategyAgentHealth(),
+    missionControllerRiskBudget: emptyMissionControllerRiskBudget(),
+    alwaysOnOperatorLayer: emptyAlwaysOnOperatorLayer(),
+    microLiveReadinessReview: emptyMicroLiveReadinessReview(),
     selfLearning: {
       serverEvaluated: 0,
       lastTopAgent: null,

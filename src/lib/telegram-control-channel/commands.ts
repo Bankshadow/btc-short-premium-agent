@@ -231,7 +231,11 @@ export async function handleTelegramCommand(input: {
       await pauseAutomation(true);
       invalidateMissionSnapshotCache();
       await syncTelegramControlChannel({ chatId: input.chatId, sendPermissionPrompt: false });
-      return { ok: true, reply: "Autopilot paused. Use web or automation settings to resume." };
+      return {
+        ok: true,
+        reply:
+          "Autopilot paused. Resume via web Settings — Telegram cannot enable live trading.",
+      };
     }
     case "/approve": {
       return handleApprove(input.chatId);

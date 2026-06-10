@@ -71,6 +71,15 @@ function TimelineRow({ entry }: { entry: TradeBlackBoxTimelineEntry }) {
   );
 }
 
+function gradeClass(grade: string | null | undefined): string {
+  if (grade === "A") return "text-emerald-300";
+  if (grade === "B") return "text-teal-300";
+  if (grade === "C") return "text-amber-300";
+  if (grade === "D") return "text-orange-300";
+  if (grade === "F") return "text-rose-300";
+  return "text-zinc-200";
+}
+
 export default function TradeBlackBoxPanel({ tradeId }: { tradeId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +176,7 @@ export default function TradeBlackBoxPanel({ tradeId }: { tradeId: string }) {
             </div>
             <div className="rounded border border-zinc-800/80 bg-zinc-900/30 p-3">
               <p className="text-[10px] uppercase text-zinc-500">Quality grade</p>
-              <p className="text-sm font-medium text-zinc-200">
+              <p className={`text-sm font-medium ${gradeClass(record.tradeQualityGrade)}`}>
                 {record.tradeQualityGrade ?? "—"}
               </p>
             </div>

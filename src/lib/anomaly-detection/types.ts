@@ -19,7 +19,11 @@ export type AnomalyType =
   | "testnet_live_flag_mismatch"
   | "unexpected_open_position"
   | "close_reduce_only_failed"
-  | "execution_quality_degraded";
+  | "execution_quality_degraded"
+  | "monitor_reliability_degraded"
+  | "strategy_health_governance"
+  | "micro_live_readiness_blocked"
+  | "risk_budget_governance";
 
 export type IncidentActor = "AI" | "USER" | "SYSTEM";
 

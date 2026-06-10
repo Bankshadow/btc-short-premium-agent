@@ -5,7 +5,7 @@ import { loadServerAnalysisJournal } from "@/lib/journal/journal-server-store";
 import { filterProductionEntries } from "@/lib/journal/production-filter";
 import { buildTestnetMonitorSnapshot } from "@/lib/testnet-monitor";
 import { loadMonitorJournalEvents } from "@/lib/testnet-monitor/monitor-journal-server";
-import { getTradeQualityByDecisionId } from "@/lib/trade-quality-score/quality-store";
+import { getTradeQualityByDecisionId, getTradeQualityByTradeId } from "@/lib/trade-quality-score/quality-store";
 import { buildTradeBlackBox } from "./build-black-box";
 import { loadTradeBlackBoxStore, upsertTradeBlackBoxRecord } from "./black-box-store";
 import type { TradeBlackBoxRecord, TradeBlackBoxStatus } from "./types";
@@ -46,9 +46,11 @@ export async function captureTradeBlackBox(
   const decisionLogId =
     timelineTrade?.decisionId ?? binance?.decisionLogId ?? null;
   const decision = decisionLogId ? ctx.entryMap.get(decisionLogId) ?? null : null;
-  const tradeQuality = decisionLogId
-    ? await getTradeQualityByDecisionId(decisionLogId, workspaceId)
-    : null;
+  const tradeQuality =
+    (decisionLogId
+      ? await getTradeQualityByDecisionId(decisionLogId, workspaceId)
+      : null) ??
+    (await getTradeQualityByTradeId(lookupId, workspaceId));
 
   const record = buildTradeBlackBox({
     lookupId,

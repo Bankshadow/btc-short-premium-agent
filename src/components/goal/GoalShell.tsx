@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import TrustMeter from "./TrustMeter";
 import type { MissionFlowSnapshot } from "@/lib/mission-flow/types";
 import { useGoalShellMotion } from "@/hooks/useHomePageMotion";
@@ -17,43 +17,19 @@ export const GOAL_PRIMARY_NAV: GoalNavLink[] = [
   { href: "/ai-status", label: "AI Status" },
   { href: "/reports", label: "Reports" },
   { href: "/settings", label: "Settings" },
+  { href: "/advanced", label: "Advanced" },
 ];
 
+import { GOAL_ADVANCED_MODULES } from "@/lib/ux/goal-nav-spec";
+
 export const GOAL_ADVANCED_NAV: GoalNavLink[] = [
-  { href: "/cockpit", label: "Cockpit (legacy)" },
-  { href: "/autopilot", label: "Autopilot internals" },
-  { href: "/portfolio", label: "Portfolio (raw)" },
-  { href: "/actions", label: "Actions (raw)" },
-  { href: "/notifications", label: "Notifications (raw)" },
-  { href: "/strategies", label: "Strategies" },
-  { href: "/strategy-garage", label: "Strategy Garage" },
-  { href: "/strategy-lab/imports", label: "Quant Imports" },
-  { href: "/strategy-lab/backtest", label: "Quant Backtest" },
-  { href: "/strategy-lab/tournament", label: "Tournament" },
-  { href: "/strategy-lab/shadow", label: "Shadow" },
-  { href: "/validation", label: "Validation" },
+  ...GOAL_ADVANCED_MODULES.map((m) => ({ href: m.href, label: m.label })),
   { href: "/capital", label: "Capital" },
-  { href: "/ledger", label: "Ledger" },
-  { href: "/workspace", label: "Workspace" },
-  { href: "/data", label: "Data" },
-  { href: "/automation-control", label: "Automation Control" },
-  { href: "/policies", label: "Policies" },
-  { href: "/governance", label: "Governance" },
-  { href: "/audit", label: "Audit" },
-  { href: "/admin/health", label: "Admin" },
-  { href: "/council", label: "Agents / Council" },
-  { href: "/simulation", label: "Simulation" },
-  { href: "/war-room", label: "War Room" },
-  { href: "/api-docs", label: "API Docs" },
-  { href: "/binance-testnet", label: "Binance Testnet Debug" },
-  { href: "/testnet-monitor", label: "Testnet Monitor Debug" },
-  { href: "/strategy-health", label: "Strategy Health" },
-  { href: "/execution-quality", label: "Execution Quality" },
-  { href: "/live-evidence", label: "Live Evidence" },
-  { href: "/live-readiness", label: "Live Readiness" },
-  { href: "/learning", label: "Learning" },
+  { href: "/automation", label: "Automation" },
+  { href: "/testnet-monitor", label: "Debug (Testnet Monitor)" },
+  { href: "/cockpit", label: "Cockpit (legacy)" },
   { href: "/command-center", label: "Command Center" },
-  { href: "/project-strategist", label: "Project Strategist" },
+  { href: "/learning", label: "Learning" },
 ];
 
 export default function GoalShell({
@@ -73,7 +49,6 @@ export default function GoalShell({
   enableMotion?: boolean;
   children: ReactNode;
 }) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const shellRef = useGoalShellMotion(enableMotion);
 
   return (
@@ -116,28 +91,7 @@ export default function GoalShell({
               </Link>
             );
           })}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="ml-auto rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-300"
-          >
-            {showAdvanced ? "Hide advanced" : "Advanced"}
-          </button>
         </nav>
-
-        {showAdvanced && (
-          <div className="relative mt-3 flex flex-wrap gap-1.5 border-t border-zinc-900 pt-3">
-            {GOAL_ADVANCED_NAV.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="rounded-md border border-zinc-800/80 px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500 transition hover:text-zinc-300"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        )}
       </header>
 
       {missionSnapshot && (

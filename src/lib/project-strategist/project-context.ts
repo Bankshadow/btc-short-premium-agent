@@ -20,6 +20,8 @@ export interface ProjectStrategistContext {
   apiList: string[];
   featureStatus: string[];
   knownGaps: string[];
+  /** MVP 79 — integrated daily self-review suggested Cursor task. */
+  suggestedDailyReviewTask: string | null;
   strategyHealthSummary: {
     totalStrategies: number;
     reviewRequired: number;
@@ -198,6 +200,8 @@ export async function buildProjectStrategistContext(): Promise<ProjectStrategist
       "BTC short-premium desk with multi-agent analysis, paper/testnet loops, governance, and automation.",
     routeList: routes,
     apiList: apis,
+    suggestedDailyReviewTask:
+      latestTestnetMonitor?.integratedDailySelfReview?.review?.suggestedCursorTask ?? null,
     featureStatus: detectFeatureStatus({
       routes,
       latestTestnetMonitor,

@@ -103,7 +103,7 @@ describe("One Button AI Mode", () => {
         },
       }),
     });
-    assert.equal(state.label, "Approve Testnet Order");
+    assert.equal(state.label, "Approve testnet order");
     assert.equal(state.action, "ASK_PERMISSION_EXECUTE");
     assert.equal(state.requiresClientConfirm, true);
     assert.equal(state.confirmMode, "execute");
@@ -136,7 +136,7 @@ describe("One Button AI Mode", () => {
         committeeSummary: null,
       },
     });
-    assert.equal(state.label, "Resolve Issue");
+    assert.equal(state.label, "Resolve blocker");
     assert.equal(state.action, "PAUSE_IF_RISK");
     assert.ok(blockers.length > 0);
   });
@@ -158,7 +158,7 @@ describe("One Button AI Mode", () => {
         },
       }),
     });
-    assert.equal(state.label, "Continue Monitoring");
+    assert.equal(state.label, "Monitor position");
     assert.equal(state.action, "MONITOR_POSITION");
   });
 
@@ -180,7 +180,7 @@ describe("One Button AI Mode", () => {
         },
       }),
     });
-    assert.equal(state.label, "Review Trade");
+    assert.equal(state.label, "Review preview");
     assert.equal(state.action, "REVIEW_TRADE");
   });
 });

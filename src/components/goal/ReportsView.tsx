@@ -1,255 +1,421 @@
 "use client";
 
+
+
 import { useCallback, useEffect, useState } from "react";
+
 import Link from "next/link";
+
 import GoalErrorBanner from "./GoalErrorBanner";
+
 import GoalShell from "./GoalShell";
-import DailySelfReviewPanel from "./DailySelfReviewPanel";
-import TradeQualityPanel from "@/components/learning/TradeQualityPanel";
-import type { TradeQualitySummary } from "@/lib/trade-quality-score/types";
-import LearningInsightsPanel from "./LearningInsightsPanel";
-import MissionActivityFeed from "./MissionActivityFeed";
+
+import MicroLiveReadinessChecklist from "@/components/micro-live-readiness/MicroLiveReadinessChecklist";
+
+import StrategyHealthReportPanel from "@/components/integrated-strategy-health/StrategyHealthReportPanel";
+
+import AgentScoreboardV2Panel from "@/components/integrated-strategy-agent-health/AgentScoreboardV2Panel";
+
+import EvidenceQualityPanel from "@/components/evidence-quality/EvidenceQualityPanel";
+
+import IntegratedQualityCalibrationPanel from "@/components/integrated-quality-calibration/IntegratedQualityCalibrationPanel";
+
+import LearningQueuePanel from "@/components/learning-queue/LearningQueuePanel";
+
+import { IntegratedRiskBudgetPanel } from "@/components/integrated-risk-budget/IntegratedRiskBudgetPanel";
+
+import {
+  MissionControllerRiskBudgetPanel,
+} from "@/components/mission-controller-risk-budget/MissionControllerRiskBudgetPanel";
+
+import { AlwaysOnOperatorLayerPanel } from "@/components/always-on-operator-layer/AlwaysOnOperatorLayerPanel";
+
+import {
+  MicroLiveReadinessReviewPanel,
+} from "@/components/micro-live-readiness-review/MicroLiveReadinessReviewPanel";
+
+import { IntegratedDailySelfReviewPanel } from "@/components/integrated-daily-self-review/IntegratedDailySelfReviewPanel";
+
 import { useMissionSnapshot } from "./use-mission-snapshot";
-import type { DailySelfReviewRecord } from "@/lib/daily-self-review/types";
+
+import { useAnalysisState } from "@/hooks/useAnalysisState";
+
+
 
 function usd(n: number): string {
+
   const sign = n < 0 ? "-" : "";
+
   return `${sign}$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+
+
+function ReportSection({
+
+  title,
+
+  summary,
+
+  children,
+
+}: {
+
+  title: string;
+
+  summary?: string;
+
+  children: React.ReactNode;
+
+}) {
+
   return (
+
     <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{title}</h2>
-      <div className="mt-3 text-sm text-zinc-300">{children}</div>
+
+      <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+
+        {title}
+
+      </h2>
+
+      {summary && <p className="mt-2 text-sm text-zinc-400">{summary}</p>}
+
+      <div className="mt-3">{children}</div>
+
     </section>
+
   );
+
 }
+
+
 
 export default function ReportsView() {
+
   const { snapshot: m, busy, error, degraded, warnings, refresh } =
+
     useMissionSnapshot();
+
+  const analysis = useAnalysisState(15000);
+
   const [digest, setDigest] = useState<string | null>(null);
-  const [digestBusy, setDigestBusy] = useState(false);
-  const [dailyReview, setDailyReview] = useState<DailySelfReviewRecord | null>(null);
-  const [reviewBusy, setReviewBusy] = useState(false);
-  const [tradeQuality, setTradeQuality] = useState<TradeQualitySummary | null>(null);
+
+
 
   const loadDigest = useCallback(async () => {
-    setDigestBusy(true);
+
     try {
+
       const res = await fetch("/api/mission/digest", { cache: "no-store" });
+
       const json = await res.json();
+
       if (res.ok && json.ok) setDigest(json.digest as string);
+
     } catch {
+
       /* optional */
-    } finally {
-      setDigestBusy(false);
+
     }
+
   }, []);
 
-  const loadDailyReview = useCallback(async () => {
-    try {
-      const res = await fetch("/api/daily-self-review/latest", { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        setDailyReview((json.status?.latest as DailySelfReviewRecord | null) ?? null);
-      }
-    } catch {
-      /* optional */
-    }
-  }, []);
 
-  const runDailyReview = useCallback(async (force = false) => {
-    setReviewBusy(true);
-    try {
-      const res = await fetch("/api/daily-self-review/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force }),
-      });
-      const json = await res.json();
-      if (res.ok && json.ok && json.record) {
-        setDailyReview(json.record as DailySelfReviewRecord);
-      }
-    } finally {
-      setReviewBusy(false);
-    }
-  }, []);
-
-  const loadTradeQuality = useCallback(async () => {
-    try {
-      const res = await fetch("/api/trade-quality-score/status", { cache: "no-store" });
-      const json = await res.json();
-      if (res.ok && json.ok) {
-        setTradeQuality((json.status?.summary as TradeQualitySummary | null) ?? null);
-      }
-    } catch {
-      /* optional */
-    }
-  }, []);
 
   useEffect(() => {
+
     void loadDigest();
-    void loadDailyReview();
-    void loadTradeQuality();
-  }, [loadDigest, loadDailyReview, loadTradeQuality, m.lastUpdatedAt]);
+
+  }, [loadDigest, m.lastUpdatedAt]);
+
+
 
   const dailySummary =
-    m.closedTrades > 0
-      ? `${m.closedTrades} completed trade(s) · ${m.wins}W / ${m.losses}L · net ${usd(m.netPnl)}`
-      : "No trades yet — autopilot analyzes every 15 minutes.";
 
-  const weeklySummary = m.trust.ready
-    ? `Performance is statistically meaningful (${m.trust.completedTrades} trades). Win rate ${m.winRate ?? 0}%.`
-    : `${m.trust.completedTrades} / ${m.trust.minRequired} completed trades — AI needs ${m.trust.minRequired} before weekly performance can be trusted.`;
+    m.integratedDailySelfReview?.review?.oneLineSummary ??
 
-  const learningSummary =
-    m.learnedTrades > 0
-      ? `${m.learnedTrades} trade(s) learned · ${m.pendingLearningReview} pending review.`
-      : `${m.trust.completedTrades} / ${m.trust.minRequired} completed trades for trusted performance.`;
+    (m.closedTrades > 0
+
+      ? `${m.closedTrades} closed · ${m.wins}W/${m.losses}L · net ${usd(m.netPnl)}`
+
+      : "No trades yet — run Start AI on Dashboard.");
+
+
+
+  const incidentOpen = analysis.state?.context?.incidentState.openCount ?? 0;
+
+
 
   return (
+
     <GoalShell
+
       title="Reports"
-      subtitle="Daily and weekly summaries, goal progress, and what AI recommends next."
+
+      subtitle="Daily summary, evidence, strategy health, learning, and readiness."
+
       activePath="/reports"
+
       missionSnapshot={m}
+
       actions={
-        <>
-          <button
-            type="button"
-            disabled={digestBusy}
-            onClick={() => void loadDigest()}
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
-          >
-            {digestBusy ? "..." : "Load digest"}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void refresh(true)}
-            className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
-          >
-            {busy ? "Refreshing..." : "Refresh"}
-          </button>
-        </>
+
+        <button
+
+          type="button"
+
+          disabled={busy}
+
+          onClick={() => {
+
+            void refresh(true);
+
+            void analysis.refresh(true);
+
+            void loadDigest();
+
+          }}
+
+          className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-200 hover:bg-zinc-900/60 disabled:opacity-50"
+
+        >
+
+          {busy ? "Refreshing..." : "Refresh"}
+
+        </button>
+
       }
+
     >
+
       <GoalErrorBanner
-        error={error}
+
+        error={error ?? analysis.error}
+
         degraded={degraded}
+
         warnings={warnings}
+
         snapshot={m}
+
       />
 
-      <Section title="Trade quality score">
-        <TradeQualityPanel summary={tradeQuality} />
-        <Link href="/learning" className="mt-2 inline-block text-xs text-indigo-300 hover:underline">
-          Full trade quality on Learning →
-        </Link>
-      </Section>
 
-      <Section title="Daily AI self-review">
-        <DailySelfReviewPanel
-          review={dailyReview}
-          busy={reviewBusy}
-          onRun={() => void runDailyReview(true)}
-        />
-      </Section>
 
-      {digest && (
-        <Section title="Mission digest">
-          <pre className="whitespace-pre-wrap font-mono text-[11px] text-zinc-400">
-            {digest}
+      <ReportSection title="Daily summary" summary={dailySummary}>
+
+        <IntegratedDailySelfReviewPanel dailyReview={m.integratedDailySelfReview} />
+
+        {digest && (
+
+          <pre className="mt-3 whitespace-pre-wrap font-mono text-[11px] text-zinc-500">
+
+            {digest.slice(0, 1200)}
+
+            {digest.length > 1200 ? "…" : ""}
+
           </pre>
-          {m.notifications.telegramConfigured && (
-            <button
-              type="button"
-              disabled={digestBusy}
-              onClick={async () => {
-                setDigestBusy(true);
-                try {
-                  await fetch("/api/mission/digest?send=1", { cache: "no-store" });
-                } finally {
-                  setDigestBusy(false);
-                }
-              }}
-              className="mt-3 rounded-lg border border-cyan-800/60 px-3 py-1.5 text-xs text-cyan-200 hover:bg-cyan-950/40 disabled:opacity-50"
-            >
-              Send digest to Telegram
-            </button>
-          )}
-        </Section>
-      )}
 
-      <MissionActivityFeed items={m.recentActivity} />
-      <LearningInsightsPanel insights={m.learningInsights} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Daily summary">
-          <p>{dailySummary}</p>
-          <p className="mt-2 text-xs text-zinc-500">
-            AI: {m.aiStatus.state} — {m.aiStatus.lastAction}
-          </p>
-        </Section>
-
-        <Section title="Weekly summary">
-          <p>{weeklySummary}</p>
-        </Section>
-
-        <Section title="Goal progress">
-          <ul className="space-y-1 text-xs">
-            <li>
-              Mission: {usd(m.startCapital)} → {usd(m.targetCapital)}
-            </li>
-            <li>Current equity: {usd(m.currentEquity)}</li>
-            <li>Progress: {m.progressPct}%</li>
-            <li>Remaining: {usd(m.remainingToTarget)}</li>
-          </ul>
-        </Section>
-
-        <Section title="PnL summary">
-          <ul className="space-y-1 text-xs">
-            <li>Net PnL: {usd(m.netPnl)}</li>
-            <li>Realized: {usd(m.realizedPnl)}</li>
-            <li>Unrealized: {usd(m.unrealizedPnl)}</li>
-            <li>Max drawdown: {usd(-m.maxDrawdown)}</li>
-          </ul>
-        </Section>
-
-        <Section title="Trades summary">
-          <ul className="space-y-1 text-xs">
-            <li>Total closed: {m.closedTrades}</li>
-            <li>
-              Wins / Losses / Breakeven: {m.wins} / {m.losses} / {m.breakeven}
-            </li>
-            <li>Win rate: {m.winRate != null ? `${m.winRate}%` : "—"}</li>
-            <li>Open positions: {m.openTrades}</li>
-          </ul>
-          <Link href="/trades" className="mt-2 inline-block text-xs text-emerald-300 hover:underline">
-            View all trades →
-          </Link>
-        </Section>
-
-        <Section title="AI learning summary">
-          <p>{learningSummary}</p>
-          {m.pendingLearningReview > 0 && (
-            <Link href="/" className="mt-2 inline-block text-xs text-amber-300 hover:underline">
-              Review {m.pendingLearningReview} pending trade(s) on Dashboard →
-            </Link>
-          )}
-        </Section>
-      </div>
-
-      <Section title="Next recommendation">
-        <p>{m.nextRecommendation}</p>
-        {m.binanceTestnet.status !== "CONNECTED" && (
-          <Link href="/binance-testnet" className="mt-2 inline-block text-sm font-semibold text-emerald-300 hover:underline">
-            Connect Binance Testnet →
-          </Link>
         )}
-      </Section>
+
+      </ReportSection>
+
+
+
+      <ReportSection
+
+        title="Evidence progress"
+
+        summary={`${m.evidenceProgress.completedTrades} / ${m.evidenceProgress.requiredTrades} valid trades · ${m.evidenceQuality.validEvidenceCount} evidence-quality valid · ${m.evidenceProgress.nextExpectedAction}`}
+
+      >
+
+        <EvidenceQualityPanel quality={m.evidenceQuality} compact />
+
+        <ul className="mt-3 space-y-1 text-xs text-zinc-400">
+
+          <li>Evidence ready: {m.evidenceProgress.evidenceSetReady ? "Yes" : "No"}</li>
+
+          <li>Realized PnL (evidence): {usd(m.evidenceProgress.realizedPnl)}</li>
+
+          {m.evidenceProgress.currentBlocker && (
+
+            <li className="text-amber-300">{m.evidenceProgress.currentBlocker}</li>
+
+          )}
+
+        </ul>
+
+      </ReportSection>
+
+
+
+      <ReportSection
+
+        title="Trade quality & calibration"
+
+        summary={
+
+          m.integratedQualityCalibration?.strategyImprovementSuggestion ??
+
+          m.integratedTradeQuality?.summary.headline ??
+
+          "Measure decision quality and AI confidence accuracy from completed trades."
+
+        }
+
+      >
+
+        <IntegratedQualityCalibrationPanel
+
+          qualityCalibration={m.integratedQualityCalibration}
+
+          tradeQuality={m.integratedTradeQuality}
+
+          confidenceCalibration={m.integratedConfidenceCalibration}
+
+        />
+
+      </ReportSection>
+
+
+
+      <ReportSection
+
+        title="Strategy health"
+
+        summary={
+
+          m.integratedStrategyHealth?.primaryReport?.recommendation ??
+
+          m.strategyHealth?.recommendation
+
+        }
+
+      >
+
+        <StrategyHealthReportPanel
+          health={m.integratedStrategyHealth}
+          agentHealth={m.integratedStrategyAgentHealth}
+        />
+
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-wide text-zinc-500">
+            Agent scoreboard v2
+          </p>
+          <AgentScoreboardV2Panel
+            scoreboard={m.integratedStrategyAgentHealth?.agentScoreboardV2}
+          />
+        </div>
+
+      </ReportSection>
+
+
+
+      <ReportSection
+
+        title="Learning"
+
+        summary={`${m.learnedTrades} learned · ${m.pendingLearningReview} pending review`}
+
+      >
+
+        <LearningQueuePanel progress={m.learningProgress} showTable />
+
+      </ReportSection>
+
+
+
+      <ReportSection
+
+        title="Risk/readiness"
+
+        summary={
+
+          m.microLiveReadinessReview.readinessStatus === "READY_FOR_REVIEW"
+
+            ? "MVP 94 readiness review passed — schedule human review"
+
+            : m.microLiveReadinessReview.readinessStatus === "BLOCKED"
+
+              ? "Readiness BLOCKED — live safety violation"
+
+              : incidentOpen > 0
+
+                ? `${incidentOpen} open incident(s) · review readiness checklist`
+
+                : m.microLiveReadiness.readinessStatus === "READY_FOR_REVIEW"
+
+                  ? "Readiness checklist passed"
+
+                  : "Readiness gaps remain — advisory only"
+
+        }
+
+      >
+
+        <MicroLiveReadinessChecklist readiness={m.microLiveReadiness} />
+
+        <div className="mt-4 border-t border-zinc-800/80 pt-4">
+
+          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Micro-live readiness review (MVP 94)
+          </h3>
+
+          <MicroLiveReadinessReviewPanel review={m.microLiveReadinessReview} />
+
+        </div>
+
+        <div className="mt-4 border-t border-zinc-800/80 pt-4">
+
+          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Always-on operator layer
+          </h3>
+
+          <AlwaysOnOperatorLayerPanel snapshot={m.alwaysOnOperatorLayer} />
+
+        </div>
+
+        <div className="mt-4 border-t border-zinc-800/80 pt-4">
+
+          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Mission controller & risk budget
+          </h3>
+
+          <MissionControllerRiskBudgetPanel snapshot={m.missionControllerRiskBudget} />
+
+        </div>
+
+        <div className="mt-4 border-t border-zinc-800/80 pt-4">
+
+          <IntegratedRiskBudgetPanel riskBudget={m.integratedRiskBudget} />
+
+        </div>
+
+        {incidentOpen > 0 && (
+
+          <Link
+
+            href="/incidents"
+
+            className="mt-3 inline-block text-xs text-emerald-300 hover:underline"
+
+          >
+
+            Open incidents →
+
+          </Link>
+
+        )}
+
+      </ReportSection>
+
     </GoalShell>
+
   );
+
 }
+
+

@@ -1,3 +1,4 @@
+import { getCachedRiskBudgetRecommendation } from "@/lib/integrated-risk-budget/risk-budget-cache";
 import { evaluateKillSwitch } from "@/lib/validation/kill-switch";
 import {
   buildStrategyHealthSignal,
@@ -622,6 +623,25 @@ export function evaluateRealTimeRisk(input: RealTimeRiskInput): RealTimeRiskRepo
     recommendedActions.push("Review margin usage on /real-time-risk.");
   }
   if (volShock) recommendedActions.push("Reduce position sizes — volatility shock regime.");
+
+  const integratedRisk = getCachedRiskBudgetRecommendation();
+  if (integratedRisk) {
+    if (integratedRisk.mode === "COOLDOWN" || integratedRisk.mode === "DEFENSIVE") {
+      recommendedActions.push(
+        `Integrated risk budget ${integratedRisk.mode}: max notional $${integratedRisk.recommendedMaxNotional} (advisory).`,
+      );
+      checks.push(
+        check(
+          "strategy_health_guard",
+          "Integrated risk budget",
+          integratedRisk.mode === "COOLDOWN" ? "WARNING" : "WARNING",
+          integratedRisk.reasons[0] ?? `Mode ${integratedRisk.mode}`,
+          false,
+          "integrated_risk_budget",
+        ),
+      );
+    }
+  }
 
   for (const limit of triggeredLimits) {
     riskEvents.push({
