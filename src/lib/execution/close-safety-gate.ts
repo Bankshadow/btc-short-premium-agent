@@ -198,7 +198,7 @@ export async function reviewCloseSafety(input: {
   if (allowed) {
     warnings.push({
       code: "TESTNET_ONLY",
-      message: "Close execution remains disabled until MVP 5C.",
+      message: "Reduce-only testnet close — double confirm required at execution.",
     });
   }
 

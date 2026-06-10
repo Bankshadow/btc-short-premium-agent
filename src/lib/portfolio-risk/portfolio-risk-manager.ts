@@ -4,6 +4,7 @@ import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
 import { getReconciliationStatus } from "@/lib/positions/position-monitor";
 import { maxPreviewNotionalUsd } from "@/lib/risk/risk-gate";
 import { getTradesSummary } from "@/lib/trades/trade-query";
+import { sumDailyPnl } from "@/lib/pnl/daily-pnl";
 import type { PortfolioRiskIssue, PortfolioRiskReport } from "./portfolio-risk-types";
 
 const DAILY_LOSS_LIMIT = 25;
@@ -13,19 +14,6 @@ const MAX_CONSECUTIVE_LOSSES = 3;
 const COOLDOWN_MS = 30 * 60 * 1000;
 
 let cooldownUntil: string | null = null;
-
-function utcDayBounds(now = new Date()): { start: string; end: string } {
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
-  return { start, end };
-}
-
-function sumDailyPnl(events: Awaited<ReturnType<typeof getEvents>>, now = new Date()): number {
-  const { start, end } = utcDayBounds(now);
-  return events
-    .filter((e) => e.type === "PNL_REALIZED" && e.timestamp >= start && e.timestamp < end)
-    .reduce((sum, e) => sum + Number((e.payload as { netPnl?: number }).netPnl ?? 0), 0);
-}
 
 function loadCooldownUntil(events: Awaited<ReturnType<typeof getEvents>>): string | null {
   const latest = [...events]
