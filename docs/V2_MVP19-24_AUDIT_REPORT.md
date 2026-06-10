@@ -2,6 +2,7 @@
 
 **Branch:** `v2-core`  
 **Checked:** 2026-06-06  
+**Updated:** 2026-06-06 (post P0/P1 fixes)  
 **Scope:** MVP 19 (Operator Control Center), MVP 20 (Briefing + Session Replay), MVP 21 (Portfolio Risk Manager), MVP 22 (Micro-Live Readiness), MVP 23 (Live Sandbox), MVP 24 (Audit Pack + Production Hardening)
 
 ---
@@ -10,14 +11,14 @@
 
 | Item | Result |
 |------|--------|
-| **Overall MVP 19–24 status** | **MOSTLY COMPLETE** — core libs, APIs, and tests exist |
-| **Recommendation** | **NOT_READY_FOR_MICRO_LIVE** until P0/P1 fixes land |
-| **Tests** | 130/130 pass (`npm test`) |
+| **Overall MVP 19–24 status** | **COMPLETE** for P0/P1 scope |
+| **Recommendation** | **NOT_READY_FOR_MICRO_LIVE** (by design — readiness gaps expected until evidence collected) |
+| **Tests** | 136/136 pass (`npm test`) |
 | **Build** | Pass (`npm run build`) |
-| **Live trading** | Locked (`isLiveEnabled()` false in execution paths) |
+| **Live trading** | Locked |
 | **Real live orders** | Not possible via sandbox dry-run |
 
-Core backend loops are implemented. The main risks are **kill-switch state not reliably hydrated from the journal on cold start**, **env override bypassing journal ON state**, and **portfolio/operator governance gaps on close paths and daily-loss semantics**.
+P0 safety issues (kill-switch hydration and env override) and P1 exit-criteria gaps are resolved. P2/P3 items remain deferred.
 
 ---
 
@@ -34,47 +35,45 @@ Core backend loops are implemented. The main risks are **kill-switch state not r
 
 ## P0 — Safety / correctness
 
-| # | Issue | Status | Evidence |
-|---|-------|--------|----------|
-| P0-1 | Kill switch journal state not loaded on cold start | **OPEN** | `getKillSwitchState()` returns `journalCache ?? { active: false }` without journal read unless `refreshKillSwitchFromJournal()` ran earlier. Preview/close gates call sync `getKillSwitchState()` directly. |
-| P0-2 | `KILL_SWITCH_ACTIVE=false` env overrides journal-enabled kill switch | **OPEN** | `envKillSwitchOverride()` returns `{ active: false }` before journal cache is consulted. |
+| # | Issue | Status | Fix |
+|---|-------|--------|-----|
+| P0-1 | Kill switch journal state not loaded on cold start | **FIXED** | `hydrateOperatorGateState()` called before all preview/execution/close gates and binance status |
+| P0-2 | `KILL_SWITCH_ACTIVE=false` env overrides journal-enabled kill switch | **FIXED** | Env override is force-ON only; journal is source of truth otherwise |
 
-**Files:** `src/lib/operator/kill-switch.ts`, `src/lib/execution/create-preview.ts`, `src/lib/execution/create-close-preview.ts`, `src/lib/execution/execution-safety-gate.ts`, `src/lib/execution/close-safety-gate.ts`, `src/app/api/binance/status/route.ts`
-
-**Recommended fix:** Refresh journal before every gate read; treat env `true` as force-ON only (ignore env `false`).
+**Commits:** `033adc3` — `fix(P0): hydrate kill switch from journal before all gates`
 
 ---
 
 ## P1 — Exit criteria / API / test gaps
 
-| # | Issue | Status | Evidence |
-|---|-------|--------|----------|
-| P1-1 | Portfolio “daily loss” uses cumulative PnL, not calendar-day PnL | **OPEN** | `dailyPnl = mission.netPnl` in `portfolio-risk-manager.ts` |
-| P1-2 | Cooldown state is in-memory only (lost on restart) | **OPEN** | `let cooldownUntil` module var; not hydrated from `COOLDOWN_STARTED` events |
-| P1-3 | Engine pause does not block close paths | **OPEN** | `isOperatorBlocked()` not used in close preview/safety/execute modules |
-| P1-4 | `mvp19-24-loops.test.ts` missing critical path coverage | **OPEN** | Kill-switch cold-start, double-confirm rejection, close-path block, portfolio blocks execute |
-| P1-5 | No UI to create briefing or session replay | **OPEN** | Reports shows `latestBriefing` read-only; no replay panel |
-| P1-6 | Portfolio risk journal events only on explicit evaluate | **OPEN** | Reports/dashboard use `buildPortfolioRiskView()`; history empty until POST evaluate |
-| P1-7 | `enableKillSwitch` rejects when `isLiveEnabled()` is true | **OPEN** | Operator cannot enable kill switch when live env flag set — opposite of safety intent |
+| # | Issue | Status | Fix |
+|---|-------|--------|-----|
+| P1-1 | Portfolio “daily loss” uses cumulative PnL | **FIXED** | `sumDailyPnl()` filters `PNL_REALIZED` by UTC calendar day |
+| P1-2 | Cooldown state in-memory only | **FIXED** | `loadCooldownUntil()` hydrates from `COOLDOWN_STARTED` events |
+| P1-3 | Engine pause does not block close paths | **FIXED** | `isOperatorBlocked()` in close preview and close safety gate |
+| P1-4 | `mvp19-24-loops.test.ts` missing critical coverage | **FIXED** | Added stale-cache, double-confirm, engine pause, portfolio block, cooldown, security tests |
+| P1-5 | No UI to create briefing or session replay | **FIXED** | Reports page: Generate briefing, Create replay, session list |
+| P1-6 | Portfolio risk events only on explicit evaluate | **FIXED** | Reports page: “Evaluate portfolio risk” button (POST evaluate) |
+| P1-7 | `enableKillSwitch` rejects when live env flag set | **FIXED** | Removed `isLiveEnabled()` gate on enable — kill switch always available |
 
-**Files:** `src/lib/portfolio-risk/portfolio-risk-manager.ts`, `src/lib/execution/create-close-preview.ts`, `src/lib/execution/close-safety-gate.ts`, `src/lib/mvp19-24-loops.test.ts`, `src/app/reports/page.tsx`, `src/lib/operator/operator-actions.ts`
+**Commits:** `4d037c2`, `90127ce`
 
 ---
 
-## P2 — UI polish / inconsistencies
+## P2 — UI polish / inconsistencies (deferred)
 
 | # | Issue | Status |
 |---|-------|--------|
 | P2-1 | Dashboard missing kill-switch badge | **OPEN** |
 | P2-2 | Operator page has no operator events feed | **OPEN** |
 | P2-3 | Live sandbox preflight/dry-run and readiness evaluate not wired in UI | **OPEN** |
-| P2-4 | Settings kill-switch display may be stale (same root as P0-1) | **OPEN** |
+| P2-4 | Settings kill-switch display may be stale | **FIXED** (via P0-1 hydration on binance status) |
 | P2-5 | `riskMode` is display-only (no gate effect) | **OPEN** — document or wire |
 | P2-6 | Inconsistent sprint labels across pages | **OPEN** |
 
 ---
 
-## P3 — Nice-to-have
+## P3 — Nice-to-have (deferred)
 
 | # | Issue | Status |
 |---|-------|--------|
@@ -84,52 +83,40 @@ Core backend loops are implemented. The main risks are **kill-switch state not r
 
 ---
 
-## Integration matrix (pre-fix)
+## Integration matrix (post-fix)
 
 | Path | Kill switch | Engine pause | Portfolio risk |
 |------|-------------|--------------|----------------|
-| Analysis verdict | ✅ (after `getOperatorStatus`) | ✅ sync cache | N/A |
-| Open preview | ✅ sync cache | ✅ sync cache | N/A |
-| Open execute | ✅ refreshed | ✅ via operator status | ✅ |
-| Close preview | ✅ sync cache | ❌ | ❌ |
-| Close execute | ✅ sync cache | ❌ | ❌ |
-
----
-
-## What is working (no issue filed)
-
-- Operator APIs with double-confirm for critical actions
-- Journal events: `OPERATOR_ACTION_RECORDED`, `KILL_SWITCH_*`, `RISK_MODE_CHANGED`, `MANUAL_NOTE_CREATED`, `ENGINE_PAUSED/RESUMED`
-- Briefing and replay are read-only; replay never places orders
-- Micro-live readiness GET is read-only; POST evaluate writes events
-- Live sandbox dry-run always `simulatedOrder: null`, `liveLocked: true`
-- Audit pack redacts secrets; production/security checks write events
-- `/operator`, `/reports`, `/settings` wired; dashboard portfolio risk badge
-- 130 tests pass including `mvp19-24-loops.test.ts` baseline coverage
-
----
-
-## Fix order (this sprint)
-
-1. **P0** — Kill-switch hydration + env override semantics
-2. **P1** — Daily PnL, cooldown hydration, close-path operator block, tests, briefing/replay UI, evaluate button, enable kill switch when live flag set
-3. **Update this report** — mark P0/P1 resolved before P2 work
-4. **P2/P3** — deferred
+| Analysis verdict | ✅ hydrated | ✅ hydrated | N/A |
+| Open preview | ✅ hydrated | ✅ hydrated | N/A |
+| Open execute | ✅ hydrated | ✅ hydrated | ✅ |
+| Close preview | ✅ hydrated | ✅ hydrated | N/A |
+| Close execute | ✅ hydrated | ✅ hydrated | N/A |
 
 ---
 
 ## Exit criteria checklist
 
-| MVP | Criterion | Pre-audit |
-|-----|-----------|-----------|
-| 19 | Operator can pause/block system | Partial — close path gaps |
-| 19 | All actions auditable | ✅ |
-| 20 | Daily briefing visible | Partial — no create UI |
-| 20 | Session replay reconstructs lifecycle | ✅ API; no UI |
-| 21 | Portfolio risk controls trade eligibility | Partial — daily loss semantics |
-| 22 | Readiness report explains gaps | ✅ |
-| 22 | Live remains disabled | ✅ |
-| 23 | Live dry-run exists | ✅ |
-| 23 | No live order possible | ✅ |
-| 24 | Audit pack export exists | ✅ |
-| 24 | Production hardening report exists | ✅ |
+| MVP | Criterion | Status |
+|-----|-----------|--------|
+| 19 | Operator can pause/block system | **PASS** |
+| 19 | All actions auditable | **PASS** |
+| 20 | Daily briefing visible | **PASS** |
+| 20 | Session replay reconstructs lifecycle | **PASS** |
+| 21 | Portfolio risk controls trade eligibility | **PASS** |
+| 22 | Readiness report explains gaps | **PASS** |
+| 22 | Live remains disabled | **PASS** |
+| 23 | Live dry-run exists | **PASS** |
+| 23 | No live order possible | **PASS** |
+| 24 | Audit pack export exists | **PASS** |
+| 24 | Production hardening report exists | **PASS** |
+
+---
+
+## Next steps (P2/P3 only)
+
+1. Dashboard kill-switch badge
+2. Operator events timeline on `/operator`
+3. Settings/Reports buttons for sandbox preflight, dry-run, readiness evaluate
+4. Remove or redirect legacy `/api/risk/kill-switch`
+5. Align docs with implemented MVP 19–24 scope
