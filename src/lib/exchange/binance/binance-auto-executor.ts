@@ -136,6 +136,7 @@ export async function runBinanceTestnetAutoExecute(input: {
       connected: true,
       autoExecuteEnabled: true,
       autoRecover: false,
+      runId: input.runId ?? null,
     });
 
     const closedTrades = buildClosedTradesFromJournal(journalForReliability);

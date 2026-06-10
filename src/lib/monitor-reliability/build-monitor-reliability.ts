@@ -4,6 +4,7 @@ import type { BinanceOrderPreview } from "@/lib/exchange/binance/binance-types";
 import {
   detectMonitorIssues,
   resolveMonitorHealth,
+  resolvePrimaryMonitorIssueMessage,
 } from "./detect-monitor-issues";
 import {
   markIssuesRecovered,
@@ -63,6 +64,7 @@ export async function buildMonitorReliabilitySnapshot(
     autoExecuteEnabled,
     heartbeat,
     previewCache,
+    currentRunId: input.runId ?? null,
   });
 
   if (input.autoRecover && recoveredCount > 0) {
@@ -82,7 +84,7 @@ export async function buildMonitorReliabilitySnapshot(
   const blocksNewEntries = positionStateUncertain;
 
   const currentIssue =
-    unresolved[0]?.message ??
+    resolvePrimaryMonitorIssueMessage(unresolved) ??
     (health === "OK" ? null : "Monitor state needs attention.");
 
   return {

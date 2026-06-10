@@ -143,7 +143,7 @@ export default function ReconciliationDashboard() {
                 {autoFixBusy ? "Running auto-fix…" : "Run safe auto-fix"}
               </button>
               <span className="text-[10px] text-zinc-500">
-                Journal reconcile, backfill, decision links, learning sync — no orders placed.
+                Runs automatically on monitor/cron when fixes are available. Manual run forces immediate apply — journal reconcile, backfill, decision links, learning sync; no orders placed.
               </span>
             </div>
           )}

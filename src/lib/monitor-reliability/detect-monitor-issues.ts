@@ -3,6 +3,40 @@ import { reconcileBinancePositions } from "@/lib/exchange/binance/binance-positi
 import type { MonitorHeartbeat, MonitorIssue, MonitorIssueKind } from "./types";
 import { MONITOR_STALE_MS } from "./types";
 
+const PRIMARY_ISSUE_KINDS: MonitorIssueKind[] = [
+  "position_state_uncertain",
+  "exchange_closed_not_journaled",
+  "duplicate_close_attempt",
+  "monitor_not_running",
+  "position_not_monitored",
+  "stale_mark_price",
+  "closed_journal_missing_pnl",
+  "expired_preview_executable",
+];
+
+export function resolvePrimaryMonitorIssueMessage(
+  issues: MonitorIssue[],
+): string | null {
+  const unresolved = issues.filter((i) => !i.recovered);
+  if (unresolved.length === 0) return null;
+  for (const kind of PRIMARY_ISSUE_KINDS) {
+    const match = unresolved.find((i) => i.kind === kind);
+    if (match) return match.message;
+  }
+  return unresolved[0]?.message ?? null;
+}
+
+function heartbeatFreshForRun(
+  heartbeat: MonitorHeartbeat,
+  currentRunId: string | null | undefined,
+): boolean {
+  return Boolean(
+    currentRunId &&
+      heartbeat.lastRunId === currentRunId &&
+      heartbeat.lastMonitorRunAt,
+  );
+}
+
 const EXECUTED_STATUSES = new Set(["SUBMITTED", "FILLED", "CLOSING", "CLOSED"]);
 
 function issue(
@@ -49,6 +83,7 @@ export function detectMonitorIssues(input: {
   autoExecuteEnabled: boolean;
   heartbeat: MonitorHeartbeat;
   previewCache?: Record<string, BinanceOrderPreview>;
+  currentRunId?: string | null;
 }): MonitorIssue[] {
   const issues: MonitorIssue[] = [];
   const openPositions = input.positions.filter(
@@ -58,10 +93,17 @@ export function detectMonitorIssues(input: {
   const now = Date.now();
 
   if (input.autoExecuteEnabled && input.connected && openPositions.length > 0) {
+    const heartbeatFresh = heartbeatFreshForRun(
+      input.heartbeat,
+      input.currentRunId,
+    );
     const lastRun = input.heartbeat.lastMonitorRunAt
       ? Date.parse(input.heartbeat.lastMonitorRunAt)
       : null;
-    if (!lastRun || now - lastRun > MONITOR_STALE_MS) {
+    if (
+      !heartbeatFresh &&
+      (!lastRun || now - lastRun > MONITOR_STALE_MS)
+    ) {
       issues.push(
         issue(
           "monitor_not_running",

@@ -23,6 +23,7 @@ import type {
 } from "@/lib/memory-graph/types";
 import { LIQUIDATION_SKIP } from "@/lib/decision/thresholds";
 import { riskDailyLossStreakFlag } from "@/lib/desk/desk-risk-policy";
+import { isBinanceFuturesOnlyMode } from "@/lib/market-data/provider";
 
 export const TRADING_DESK_DISCLAIMER =
   "TradingAgents-style crypto desk (Bybit) — analysis only. Human approval required. No auto execution.";
@@ -90,13 +91,16 @@ export function getMissingDataLabels(ctx: TradingDeskContext): string[] {
 
   const labels: string[] = [];
   const market = ctx.input.market;
+  const futuresOnly = isBinanceFuturesOnlyMode();
   if (market.spotPrice <= 0) labels.push("BTC spot price");
-  if (market.hv30 <= 0) labels.push("HV30");
-  if (market.iv <= 0) labels.push("IV");
-  if (market.ivHvRatio <= 0) labels.push("IV/HV ratio");
-  if (ctx.input.optionCandidates.length === 0) labels.push("option chain");
-  if (ctx.input.liquidation.liquidation24h == null) {
-    labels.push("liquidation 24h");
+  if (!futuresOnly) {
+    if (market.hv30 <= 0) labels.push("HV30");
+    if (market.iv <= 0) labels.push("IV");
+    if (market.ivHvRatio <= 0) labels.push("IV/HV ratio");
+    if (ctx.input.optionCandidates.length === 0) labels.push("option chain");
+    if (ctx.input.liquidation.liquidation24h == null) {
+      labels.push("liquidation 24h");
+    }
   }
   return labels;
 }

@@ -20,5 +20,12 @@ export { assembleEngineConsistencySnapshot } from "./assemble-engine-consistency
 export { emptyEngineConsistencySnapshot } from "./empty-engine-consistency";
 export { applyConsistencyAutoFix } from "./apply-consistency-auto-fix";
 export type { ApplyConsistencyAutoFixResult } from "./apply-consistency-auto-fix";
+export {
+  loadServerEngineConsistencySnapshot,
+  runRecommendedConsistencyAutoFixFromAutomation,
+  runRecommendedConsistencyAutoFixIfNeeded,
+  shouldSkipConsistencyAutoFixCooldown,
+} from "./run-recommended-consistency-auto-fix";
+export type { RunRecommendedConsistencyAutoFixResult } from "./run-recommended-consistency-auto-fix";
 export { resolveConsistencyStatus } from "./resolve-consistency-status";
 export { buildCombinedEngineStatus } from "./build-combined-engine-status";

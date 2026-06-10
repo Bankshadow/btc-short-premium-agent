@@ -122,4 +122,32 @@ describe("P-MVP 4 Automation Control Plane", () => {
     if (prevMode === undefined) delete process.env.AUTOMATION_PRIMARY_MODE;
     else process.env.AUTOMATION_PRIMARY_MODE = prevMode;
   });
+
+  it("skips data-quality lockout backbone blockers for DESK_ANALYZE in testnet primary", async () => {
+    const prevMode = process.env.AUTOMATION_PRIMARY_MODE;
+    process.env.AUTOMATION_PRIMARY_MODE = "testnet_perp";
+    const {
+      shouldBlockDeskAnalyzeOnBackbone,
+      isRecoverableDeskAnalyzeFailureError,
+    } = await import("./analyze-backbone-gate");
+    assert.equal(
+      shouldBlockDeskAnalyzeOnBackbone({
+        healthy: false,
+        health: {
+          healthy: false,
+          writeBlockers: ["Data quality 2/100 below lockout."],
+          staleWarning: null,
+          lastWriteAt: null,
+          source: "hybrid",
+        },
+      }),
+      false,
+    );
+    assert.equal(
+      isRecoverableDeskAnalyzeFailureError("Data quality 2/100 below lockout."),
+      true,
+    );
+    if (prevMode === undefined) delete process.env.AUTOMATION_PRIMARY_MODE;
+    else process.env.AUTOMATION_PRIMARY_MODE = prevMode;
+  });
 });

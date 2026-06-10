@@ -52,6 +52,7 @@ import {
   buildStrategyPerformanceSegmentFromRecords,
   buildValidationMetricsSegmentFromRecords,
   syncLearningRecordsFromClosedTradesServer,
+  loadLearningRecordsServer,
   saveLearningRecordsServer,
 } from "./learning-records-server";
 import {
@@ -442,6 +443,27 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
     dashboardNetPnl: summary.netPnl,
   });
 
+  const consistencyAutoFix = await (
+    await import("@/lib/engine-consistency/run-recommended-consistency-auto-fix")
+  ).runRecommendedConsistencyAutoFixIfNeeded(engineConsistency);
+
+  let engineConsistencyFinal = engineConsistency;
+  if (consistencyAutoFix.appliedCount > 0) {
+    journal = await loadServerBinanceTestnetJournal().catch(() => journal);
+    learningRecords = await loadLearningRecordsServer().catch(() => learningRecords);
+    engineConsistencyFinal = await buildEngineConsistencyFromTestnet({
+      connected,
+      positions,
+      journal,
+      positionMismatches: reconcileBinancePositions({ positions, journal }).mismatches,
+      closedTrades: buildClosedTradesFromJournal(journal),
+      learningRecords,
+      monitorEvents: await loadMonitorJournalEvents().catch(() => monitorEventsForEvidence),
+      decisions,
+      dashboardNetPnl: summary.netPnl,
+    });
+  }
+
   const integratedRiskBudget = await buildIntegratedRiskBudget({
     evidenceProgress,
     strategyHealth: integratedStrategyHealth,
@@ -501,7 +523,7 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
     integratedStrategyHealth,
     integratedRiskBudget,
     monitorReliability,
-    engineConsistency,
+    engineConsistency: engineConsistencyFinal,
     microLiveReadiness,
     alwaysOnOperatorLayer,
     criticalIncidentOpen: Boolean(criticalIncident),
@@ -541,7 +563,7 @@ export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMoni
     integratedQualityCalibration,
     integratedStrategyAgentHealth,
     missionControllerRiskBudget,
-    engineConsistency,
+    engineConsistency: engineConsistencyFinal,
     alwaysOnOperatorLayer,
     microLiveReadinessReview,
     lastUpdatedAt: new Date().toISOString(),

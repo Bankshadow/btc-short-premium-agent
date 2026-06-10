@@ -153,13 +153,18 @@ export async function runBinanceTestnetAutoMonitor(input: {
 
     const open = positions.filter((p) => Math.abs(Number(p.positionAmt)) > 0);
     if (open.length === 0) {
-      await recordMonitorCycleHeartbeat({
-        runId: input.runId,
-        positionRefreshAt,
-        closeCheckAt: positionRefreshAt,
-        journalWriteAt: reliability.recoveredCount > 0 ? new Date().toISOString() : undefined,
-      });
-      reliability = await buildMonitorReliabilitySnapshot({
+    await recordMonitorCycleHeartbeat({
+      runId: input.runId,
+      positionRefreshAt,
+      closeCheckAt: positionRefreshAt,
+      journalWriteAt: reliability.recoveredCount > 0 ? new Date().toISOString() : undefined,
+    });
+    await (
+      await import("@/lib/engine-consistency/run-recommended-consistency-auto-fix")
+    )
+      .runRecommendedConsistencyAutoFixFromAutomation()
+      .catch(() => null);
+    reliability = await buildMonitorReliabilitySnapshot({
         journal,
         positions: [],
         connected: true,
@@ -292,6 +297,16 @@ export async function runBinanceTestnetAutoMonitor(input: {
       closeCheckAt,
       journalWriteAt,
     });
+
+    const autoFixOutcome = await (
+      await import("@/lib/engine-consistency/run-recommended-consistency-auto-fix")
+    )
+      .runRecommendedConsistencyAutoFixFromAutomation()
+      .catch(() => null);
+    if (autoFixOutcome && autoFixOutcome.appliedCount > 0) {
+      journal = await loadServerBinanceTestnetJournal().catch(() => journal);
+      positions = await getPositions().catch(() => positions);
+    }
 
     reliability = await buildMonitorReliabilitySnapshot({
       journal,

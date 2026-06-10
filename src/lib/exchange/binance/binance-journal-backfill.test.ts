@@ -67,4 +67,27 @@ describe("Binance journal backfill", () => {
     });
     assert.equal(entry.side, "SELL");
   });
+
+  it("re-backfills when only a CLOSED backfill row exists but exchange is still open", () => {
+    const pos: BinancePosition = {
+      symbol: "DOGEUSDT",
+      positionAmt: "-647",
+      entryPrice: "0.085",
+      markPrice: "0.084",
+      unRealizedProfit: "1",
+      leverage: "5",
+      positionSide: "BOTH",
+      notional: "54",
+    };
+    const closedBackfill = buildBackfillJournalEntry(pos);
+    closedBackfill.status = "CLOSED";
+    closedBackfill.closedAt = "2026-06-09T00:00:00.000Z";
+    const { journal, backfilledSymbols } = backfillOrphanBinanceJournalEntries({
+      positions: [pos],
+      journal: [closedBackfill],
+    });
+    assert.deepEqual(backfilledSymbols, ["DOGEUSDT"]);
+    assert.equal(journal.length, 2);
+    assert.equal(journal[0]?.status, "FILLED");
+  });
 });

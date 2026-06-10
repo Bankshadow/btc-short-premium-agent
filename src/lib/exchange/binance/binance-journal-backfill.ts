@@ -76,9 +76,6 @@ export function backfillOrphanBinanceJournalEntries(input: {
 
   for (const pos of openPositions) {
     if (openJournalForSymbol(journal, pos.symbol)) continue;
-    if (journal.some((j) => j.previewId === backfillPreviewId(pos.symbol))) {
-      continue;
-    }
     journal = [buildBackfillJournalEntry(pos), ...journal];
     backfilledSymbols.push(pos.symbol);
   }

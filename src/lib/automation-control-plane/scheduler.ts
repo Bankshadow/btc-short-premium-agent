@@ -8,7 +8,7 @@ import {
   resolveDefaultAutomationJobs,
   resolveTestnetPrimaryModuleToggles,
 } from "./primary-mode";
-import { isLiveScalingAnalyzeFailureError } from "./analyze-backbone-gate";
+import { isRecoverableDeskAnalyzeFailureError } from "./analyze-backbone-gate";
 import { handleAutomationJobFailure } from "./failure-actions";
 import { runAutomationJob } from "./run-job";
 import { loadAutomationServerContext } from "./server-context";
@@ -93,6 +93,7 @@ async function acquireRunLock(
         reason: "Automation run lock held — duplicate prevented.",
       };
     }
+    state.lock = { held: false, runId: null, acquiredAt: null, expiresAt: null };
   }
   const acquiredAt = new Date().toISOString();
   const expiresAt = new Date(now + 5 * 60_000).toISOString();
@@ -124,7 +125,7 @@ function isJobInBackoff(
     jobType === "DESK_ANALYZE" &&
     isTestnetPrimaryAutomation() &&
     latest.error &&
-    isLiveScalingAnalyzeFailureError(latest.error)
+    isRecoverableDeskAnalyzeFailureError(latest.error)
   ) {
     return false;
   }

@@ -3,6 +3,9 @@ import {
   applyConsistencyAutoFix,
 } from "@/lib/engine-consistency/apply-consistency-auto-fix";
 import { buildEngineConsistencySnapshot } from "@/lib/engine-consistency/build-engine-consistency";
+import {
+  runRecommendedConsistencyAutoFixIfNeeded,
+} from "@/lib/engine-consistency/run-recommended-consistency-auto-fix";
 import type { ConsistencyAutoFixId } from "@/lib/engine-consistency/types";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +30,19 @@ export async function POST(request: Request) {
 
     if (body.applyRecommended && actions.length === 0) {
       const snapshot = await buildEngineConsistencySnapshot();
-      actions = snapshot.autoFixActions.filter((a) => VALID_FIXES.has(a));
+      const outcome = await runRecommendedConsistencyAutoFixIfNeeded(snapshot, {
+        force: true,
+      });
+      return NextResponse.json({
+        ok: outcome.result?.ok ?? false,
+        result: outcome.result,
+        snapshot: await buildEngineConsistencySnapshot(),
+        liveTradingLocked: true,
+        tradesOpened: false,
+        automated: true,
+        skipped: outcome.skipped,
+        skipReason: outcome.skipReason,
+      });
     }
 
     if (actions.length === 0) {

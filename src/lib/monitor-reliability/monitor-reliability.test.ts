@@ -10,6 +10,7 @@ import {
   detectExpiredExecutablePreviews,
   detectMonitorIssues,
   resolveMonitorHealth,
+  resolvePrimaryMonitorIssueMessage,
 } from "./detect-monitor-issues";
 import { emptyMonitorReliabilitySnapshot } from "./empty-snapshot";
 import { emptyMonitorHeartbeat } from "./heartbeat-store";
@@ -221,5 +222,44 @@ describe("Monitor reliability (MVP 73B)", () => {
     };
     assert.equal(snapshot.blocksNewEntries, true);
     assert.equal(snapshot.health, "BLOCKED");
+  });
+
+  it("prioritizes position reconcile issue over stale heartbeat in primary message", () => {
+    const staleAt = new Date(Date.now() - MONITOR_STALE_MS - 60_000).toISOString();
+    const issues = detectMonitorIssues({
+      journal: [],
+      positions: [position({ symbol: "DOGEUSDT", positionAmt: "-647" })],
+      connected: true,
+      autoExecuteEnabled: true,
+      heartbeat: {
+        ...emptyMonitorHeartbeat(),
+        lastMonitorRunAt: staleAt,
+        lastRunId: "old-run",
+      },
+    });
+    const message = resolvePrimaryMonitorIssueMessage(issues);
+    assert.ok(message?.includes("DOGEUSDT"));
+    assert.ok(message?.includes("no matching journal"));
+  });
+
+  it("treats heartbeat as fresh within the same automation run", () => {
+    const staleAt = new Date(Date.now() - MONITOR_STALE_MS - 60_000).toISOString();
+    const runId = "acp-same-cycle";
+    const issues = detectMonitorIssues({
+      journal: [journalEntry({ symbol: "BTCUSDT", status: "FILLED" })],
+      positions: [position({ symbol: "BTCUSDT" })],
+      connected: true,
+      autoExecuteEnabled: true,
+      heartbeat: {
+        ...emptyMonitorHeartbeat(),
+        lastMonitorRunAt: staleAt,
+        lastRunId: runId,
+      },
+      currentRunId: runId,
+    });
+    assert.equal(
+      issues.some((i) => i.kind === "monitor_not_running"),
+      false,
+    );
   });
 });

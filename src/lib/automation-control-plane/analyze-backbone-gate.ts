@@ -22,19 +22,40 @@ const LIVE_SCALING_BACKBONE_PATTERNS = [
   /live connectivity unknown/i,
 ];
 
+/** Advisory data-quality lockout must not block testnet-perp analyze cycles. */
+const TESTNET_ADVISORY_ANALYZE_FAILURE = /data quality \d+\/100 below lockout/i;
+
 export function isLiveScalingBackboneBlocker(message: string): boolean {
   return LIVE_SCALING_BACKBONE_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+export function isDataQualityAnalyzeFailureError(error: string): boolean {
+  return TESTNET_ADVISORY_ANALYZE_FAILURE.test(error);
+}
+
+export function isRecoverableDeskAnalyzeFailureError(error: string): boolean {
+  return (
+    isLiveScalingAnalyzeFailureError(error) ||
+    isDataQualityAnalyzeFailureError(error)
+  );
 }
 
 export function isLiveScalingAnalyzeFailureError(error: string): boolean {
   return isLiveScalingBackboneBlocker(error);
 }
 
+function isTestnetAdvisoryBackboneBlocker(message: string): boolean {
+  return (
+    isLiveScalingBackboneBlocker(message) ||
+    isDataQualityAnalyzeFailureError(message)
+  );
+}
+
 export function getOperationalBackboneBlockers(
   health: DeskBackboneHealth,
 ): string[] {
   if (!isTestnetPrimaryAutomation()) return health.writeBlockers;
-  return health.writeBlockers.filter((b) => !isLiveScalingBackboneBlocker(b));
+  return health.writeBlockers.filter((b) => !isTestnetAdvisoryBackboneBlocker(b));
 }
 
 /** Whether DESK_ANALYZE should hard-stop on persisted backbone health. */

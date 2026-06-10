@@ -1,6 +1,7 @@
 import type { DecisionLogEntry } from "@/lib/journal/decision-log-types";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { DeskRiskProfile } from "@/lib/desk/desk-risk-policy";
+import { isTestnetPrimaryAutomation } from "@/lib/automation-control-plane/primary-mode";
 import { loadOperatorOverrides } from "@/lib/operator/operator-override";
 import { VALIDATION_THRESHOLDS } from "./validation-config";
 import type { AnalyzeApiResponse } from "@/lib/types/market";
@@ -142,7 +143,11 @@ export function evaluateKillSwitch(input: {
     reasons.push("loss_streak_cooldown");
     messages.push(`${lossStreak} consecutive losses — cooldown.`);
   }
-  if (dqScore != null && dqScore < t.dataQualityLockoutScore) {
+  if (
+    dqScore != null &&
+    dqScore < t.dataQualityLockoutScore &&
+    !isTestnetPrimaryAutomation()
+  ) {
     reasons.push("data_quality_lockout");
     messages.push(`Data quality ${dqScore}/100 below lockout.`);
   }
