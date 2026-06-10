@@ -26,6 +26,8 @@ export interface UnifiedTestnetTradeGateInput {
   consistencyIssue?: string | null;
   missionMode?: MissionMode | null;
   missionNextAction?: string | null;
+  /** Valid evidence below 12/12 with zero invalid — allow entries to complete the set. */
+  evidenceCollectionInProgress?: boolean;
 }
 
 export interface UnifiedTestnetTradeGateResult {
@@ -70,7 +72,11 @@ export function evaluateUnifiedTestnetTradeGate(
     );
   }
 
-  if (input.missionMode === "PAUSED" || input.missionMode === "COOLDOWN") {
+  if (
+    (input.missionMode === "PAUSED" || input.missionMode === "COOLDOWN") &&
+    !forceMax &&
+    !input.evidenceCollectionInProgress
+  ) {
     blockReasons.push(
       input.missionNextAction ??
         (input.missionMode === "COOLDOWN"

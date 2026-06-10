@@ -99,6 +99,34 @@ async function refreshSnapshot() {
   }).catch(() => null);
 }
 
+async function clearLoopGuard() {
+  const { res, data } = await fetchJson("/api/autopilot-loop-guard/clear", {
+    method: "POST",
+  });
+  if (res.ok && data.ok !== false) {
+    log("prep", "Loop guard cleared");
+  }
+}
+
+async function getPendingPreview() {
+  const { data } = await fetchJson("/api/mission/snapshot");
+  const preview = data.snapshot?.pendingTestnetPreview ?? data.pendingTestnetPreview ?? null;
+  return preview && !preview.blocked ? preview : null;
+}
+
+async function prepCycle() {
+  await clearLoopGuard();
+  await refreshSnapshot();
+  const pending = await getPendingPreview();
+  if (pending?.previewId) {
+    log("execute", `Pending preview ${pending.previewId} (${pending.symbol} ${pending.side})…`);
+    const exec = await executePreview(pending.previewId);
+    log("execute", exec.ok ? `filled ${pending.previewId}` : exec.data.error ?? "blocked");
+    await sleep(3_000);
+    await refreshSnapshot();
+  }
+}
+
 async function sleep(ms) {
   await new Promise((r) => setTimeout(r, ms));
 }
@@ -135,6 +163,8 @@ async function main() {
 
   for (let cycle = 1; cycle <= MAX_CYCLES && evidence.valid < TARGET_VALID; cycle += 1) {
     console.log(`\n--- Cycle ${cycle}/${MAX_CYCLES} ---`);
+
+    await prepCycle();
 
     try {
       log("automation", "Running automation cycle (analyze → autoexecute → monitor)…");

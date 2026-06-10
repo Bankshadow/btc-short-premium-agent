@@ -34,6 +34,7 @@ import {
   applyCalibratedConfidence,
   calibrationPenaltyPoints,
 } from "@/lib/confidence-calibration/apply-calibration";
+import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
 
 function deriveMode(input: MissionControllerInputs): {
   mode: MissionControllerMode;
@@ -240,8 +241,7 @@ export async function evaluateMissionController(): Promise<MissionControllerResu
 
   const dailyLossLimitHit =
     riskReport.blockNewTrades ||
-    riskReport.metrics.dailyPnlPct <= -3 ||
-    goal.risk.dailyLossStatus.toLowerCase().includes("limit reached");
+    riskReport.metrics.dailyPnlPct <= VALIDATION_THRESHOLDS.dailyLossLimitPct;
 
   const inputs: MissionControllerInputs = {
     currentEquity: goal.mission.currentEquity,

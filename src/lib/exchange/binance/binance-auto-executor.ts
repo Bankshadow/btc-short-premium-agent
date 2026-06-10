@@ -26,6 +26,7 @@ import { getBinanceStatus, getPositions } from "./binance-futures-testnet";
 import { pickAutopilotTradeCandidates } from "./pick-autopilot-symbols";
 import { recordAutopilotCycleOutcome } from "./symbol-rotation-store";
 import { evaluateUnifiedTestnetTradeGate } from "./unified-testnet-trade-gate";
+import { STRATEGY_HEALTH_EVIDENCE_REQUIRED } from "@/lib/integrated-strategy-health/types";
 import { resolveTestnetExecutionVerdict } from "./resolve-testnet-execution-verdict";
 import { buildMonitorReliabilitySnapshot } from "@/lib/monitor-reliability";
 import { buildIntegratedStrategyHealth } from "@/lib/integrated-strategy-health";
@@ -199,8 +200,12 @@ export async function runBinanceTestnetAutoExecute(input: {
       cachedTestnet?.engineConsistency ??
       null;
 
-    let missionMode = cachedMcr?.missionMode ?? null;
-    let missionNextAction = cachedMcr?.nextAction ?? null;
+    const evidenceCollectionInProgress =
+      evidenceQuality.validEvidenceCount < STRATEGY_HEALTH_EVIDENCE_REQUIRED &&
+      evidenceQuality.invalidEvidenceCount === 0;
+
+    let missionMode: ReturnType<typeof resolveMissionMode>["mode"];
+    let missionNextAction: string;
 
     if (dailyLossLimitHit(dailyPnlPct)) {
       missionMode = "PAUSED";
@@ -209,7 +214,7 @@ export async function runBinanceTestnetAutoExecute(input: {
         progressPct: cachedMcr?.inputs.progressPct ?? 0,
         modeReason: "Daily loss limit hit.",
       });
-    } else if (!missionMode) {
+    } else {
       const strategyStatus =
         integratedStrategyHealth.primaryReport?.status ?? null;
       const resolved = resolveMissionMode({
@@ -219,7 +224,9 @@ export async function runBinanceTestnetAutoExecute(input: {
         losingStreak,
         dailyPnlStressed: dailyPnlPct <= VALIDATION_THRESHOLDS.dailyLossLimitPct * 0.7,
         strategyStatus,
-        blocksNewTestnetEntries: integratedStrategyHealth.blocksNewTestnetEntries,
+        blocksNewTestnetEntries: evidenceCollectionInProgress
+          ? false
+          : integratedStrategyHealth.blocksNewTestnetEntries,
         riskBudgetMode: "NORMAL",
         drawdownPct: 0,
         overconfidence: false,
@@ -252,6 +259,7 @@ export async function runBinanceTestnetAutoExecute(input: {
         null,
       missionMode,
       missionNextAction,
+      evidenceCollectionInProgress,
     });
     if (!tradeGate.allowed) {
       return {
