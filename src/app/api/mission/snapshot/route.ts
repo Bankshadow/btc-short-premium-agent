@@ -1,29 +1,36 @@
 import { NextResponse } from "next/server";
-import { buildMissionFlowServerSnapshot } from "@/lib/mission-flow/build-server-snapshot";
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+import { buildMissionSnapshotView } from "@/lib/mission/build-mission-snapshot-view";
 
-export async function GET(request: Request) {
+import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
+
+import { defaultBinanceTestnetStatus, zeroMissionSnapshotView } from "@/lib/core/zero-state";
+
+
+
+export async function GET() {
+
   try {
-    const { searchParams } = new URL(request.url);
-    const fresh = searchParams.get("fresh") === "1";
-    const result = await buildMissionFlowServerSnapshot({ fresh });
-    return NextResponse.json({
-      ok: true,
-      snapshot: result.snapshot,
-      degraded: result.degraded,
-      warnings: result.warnings,
-      cached: result.cached,
-      safety: {
-        cannotEnableLive: true,
-        cannotAutoExecuteLive: true,
-        testnetRequiresDoubleConfirm: true,
-      },
+
+    const view = await buildMissionSnapshotView();
+
+    return NextResponse.json(view);
+
+  } catch {
+
+    const readiness = computeReadyForMvp5({
+
+      binanceStatus: defaultBinanceTestnetStatus(),
+
+      events: [],
+
+      openTradeCount: 0,
+
     });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Mission snapshot failed";
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+
+    return NextResponse.json(zeroMissionSnapshotView(readiness));
+
   }
+
 }
+

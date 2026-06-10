@@ -1,0 +1,378 @@
+import type { BinanceTestnetClient } from "@/lib/execution/binance-testnet-client";
+import { createBinanceTestnetClient } from "@/lib/execution/binance-testnet-client";
+import { isBinanceConnected } from "@/lib/execution/binance-testnet-status";
+import type { BinancePosition, BinanceTestnetStatus } from "@/lib/execution/binance-testnet-types";
+import { resolveTestnetConnectionStatus } from "@/lib/execution/testnet-status";
+import { appendEvent, getEvents } from "@/lib/journal/journal-query";
+import type { JournalEvent } from "@/lib/journal/journal-types";
+import { newPositionId } from "@/lib/journal/journal-types";
+import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
+import { buildOpenTradesFromEvents } from "@/lib/trades/trade-store";
+import type { OpenTrade } from "@/lib/trades/trade-types";
+import {
+  filterNonZeroBinancePositions,
+  getMaxOpenPositions,
+  reconcilePositions,
+} from "./position-reconcile";
+import type {
+  OpenPositionsResponse,
+  PositionSnapshot,
+  ReconciliationResult,
+} from "./position-types";
+import {
+  positionSideFromAmt,
+  tradeSideToPositionSide,
+} from "./position-types";
+
+function monitoredPayload(evt: JournalEvent): Partial<PositionSnapshot> {
+  return evt.payload as Partial<PositionSnapshot>;
+}
+
+export function snapshotFromMonitoredEvent(evt: JournalEvent): PositionSnapshot | null {
+  if (evt.type !== "POSITION_MONITORED" || !evt.tradeId) return null;
+  const p = monitoredPayload(evt);
+  return {
+    positionId: evt.positionId ?? String(p.positionId ?? ""),
+    tradeId: evt.tradeId,
+    previewId: evt.previewId ?? String(p.previewId ?? ""),
+    runId: evt.runId ?? String(p.runId ?? ""),
+    decisionLogId: evt.decisionLogId ?? String(p.decisionLogId ?? ""),
+    environment: "TESTNET",
+    symbol: String(p.symbol ?? ""),
+    side: (p.side as PositionSnapshot["side"]) ?? "SHORT",
+    qty: String(p.qty ?? "0"),
+    entryPrice: p.entryPrice != null ? Number(p.entryPrice) : null,
+    markPrice: p.markPrice != null ? Number(p.markPrice) : null,
+    notionalUsd: p.notionalUsd != null ? Number(p.notionalUsd) : null,
+    unrealizedPnl: p.unrealizedPnl != null ? Number(p.unrealizedPnl) : null,
+    unrealizedPnlPct: p.unrealizedPnlPct != null ? Number(p.unrealizedPnlPct) : null,
+    leverage: p.leverage != null ? Number(p.leverage) : null,
+    source: "BINANCE_TESTNET",
+    refreshedAt: String(p.refreshedAt ?? evt.timestamp),
+    status: (p.status as PositionSnapshot["status"]) ?? "UNKNOWN",
+  };
+}
+
+export function getLatestMonitoredSnapshots(
+  events: JournalEvent[],
+): Map<string, PositionSnapshot> {
+  const map = new Map<string, PositionSnapshot>();
+  for (const evt of events) {
+    if (evt.type !== "POSITION_MONITORED" || !evt.tradeId) continue;
+    const snap = snapshotFromMonitoredEvent(evt);
+    if (snap) map.set(evt.tradeId, snap);
+  }
+  return map;
+}
+
+export function getLatestMonitoredAt(events: JournalEvent[]): string | null {
+  const monitored = events.filter((e) => e.type === "POSITION_MONITORED");
+  if (monitored.length === 0) return null;
+  return monitored.reduce((latest, e) =>
+    e.timestamp.localeCompare(latest) > 0 ? e.timestamp : latest,
+  monitored[0].timestamp);
+}
+
+function buildSnapshotFromSources(input: {
+  trade: OpenTrade;
+  positionId: string;
+  binancePos: BinancePosition | null;
+  refreshedAt: string;
+  connected: boolean;
+}): PositionSnapshot {
+  const expectedSide = tradeSideToPositionSide(input.trade.side);
+  const amt = input.binancePos
+    ? Number.parseFloat(input.binancePos.positionAmt)
+    : Number.parseFloat(input.trade.qty);
+  const side = input.binancePos
+    ? positionSideFromAmt(amt) ?? expectedSide
+    : expectedSide;
+  const qty = input.binancePos
+    ? String(Math.abs(Number.parseFloat(input.binancePos.positionAmt)))
+    : input.trade.qty;
+  const entryPrice = input.binancePos
+    ? Number.parseFloat(input.binancePos.entryPrice) || input.trade.entryPrice
+    : input.trade.entryPrice;
+  const markPrice = input.binancePos?.markPrice
+    ? Number.parseFloat(input.binancePos.markPrice)
+    : null;
+  const unrealizedPnl = input.binancePos
+    ? Number.parseFloat(input.binancePos.unrealizedProfit)
+    : null;
+  const notionalUsd =
+    markPrice != null && qty
+      ? Number((Math.abs(Number.parseFloat(qty)) * markPrice).toFixed(4))
+      : input.trade.notionalUsd;
+  const unrealizedPnlPct =
+    entryPrice && entryPrice > 0 && unrealizedPnl != null && qty
+      ? Number(((unrealizedPnl / (Math.abs(Number.parseFloat(qty)) * entryPrice)) * 100).toFixed(4))
+      : null;
+  const leverage = input.binancePos?.leverage
+    ? Number.parseFloat(input.binancePos.leverage)
+    : null;
+
+  let status: PositionSnapshot["status"] = "UNKNOWN";
+  if (!input.connected) {
+    status = "UNKNOWN";
+  } else if (input.binancePos && Math.abs(Number.parseFloat(input.binancePos.positionAmt)) > 1e-8) {
+    status = "OPEN";
+  } else if (input.connected && !input.binancePos) {
+    status = "UNKNOWN";
+  } else {
+    status = "FLAT";
+  }
+
+  return {
+    positionId: input.positionId,
+    tradeId: input.trade.tradeId,
+    previewId: input.trade.previewId,
+    runId: input.trade.runId,
+    decisionLogId: input.trade.decisionLogId,
+    environment: "TESTNET",
+    symbol: input.trade.symbol,
+    side,
+    qty,
+    entryPrice: entryPrice ?? null,
+    markPrice,
+    notionalUsd,
+    unrealizedPnl,
+    unrealizedPnlPct,
+    leverage,
+    source: "BINANCE_TESTNET",
+    refreshedAt: input.refreshedAt,
+    status,
+  };
+}
+
+function findBinanceForTrade(
+  trade: OpenTrade,
+  positions: BinancePosition[],
+): BinancePosition | null {
+  const expectedSide = tradeSideToPositionSide(trade.side);
+  for (const pos of positions) {
+    if (pos.symbol.toUpperCase() !== trade.symbol.toUpperCase()) continue;
+    const side = positionSideFromAmt(Number.parseFloat(pos.positionAmt));
+    if (side === expectedSide) return pos;
+  }
+  return (
+    positions.find((p) => p.symbol.toUpperCase() === trade.symbol.toUpperCase()) ?? null
+  );
+}
+
+function resolvePositionId(
+  tradeId: string,
+  existing: Map<string, PositionSnapshot>,
+): string {
+  return existing.get(tradeId)?.positionId ?? newPositionId();
+}
+
+export async function getOpenPositionsView(): Promise<OpenPositionsResponse> {
+  const events = await getEvents();
+  const openTrades = buildOpenTradesFromEvents(events);
+
+  if (openTrades.length === 0) {
+    return {
+      snapshots: [],
+      reconciliation: {
+        status: "OK",
+        issues: [],
+        openTradeCount: 0,
+        binancePositionCount: 0,
+        lastMonitoredAt: null,
+      },
+      message: "No open trades — zero state.",
+    };
+  }
+
+  const latestSnapshots = getLatestMonitoredSnapshots(events);
+  const snapshots = openTrades.map(
+    (t) => latestSnapshots.get(t.tradeId) ?? buildUnknownSnapshot(t, latestSnapshots),
+  );
+  const lastMonitoredAt = getLatestMonitoredAt(events);
+  const reconciliation = reconcilePositions({
+    openTrades,
+    binancePositions: [],
+    snapshots,
+    lastMonitoredAt,
+    maxOpenPositions: getMaxOpenPositions(),
+    binanceConnected: false,
+  });
+
+  return {
+    snapshots,
+    reconciliation,
+    message:
+      snapshots.length > 0
+        ? "Open positions from journal — refresh to sync with Binance."
+        : "No open positions.",
+  };
+}
+
+function buildUnknownSnapshot(
+  trade: OpenTrade,
+  existing: Map<string, PositionSnapshot>,
+): PositionSnapshot {
+  return buildSnapshotFromSources({
+    trade,
+    positionId: resolvePositionId(trade.tradeId, existing),
+    binancePos: null,
+    refreshedAt: trade.openedAt,
+    connected: false,
+  });
+}
+
+export interface RefreshPositionsInput {
+  client?: BinanceTestnetClient;
+  getBinanceStatus?: () => Promise<BinanceTestnetStatus>;
+}
+
+export interface RefreshPositionsResult extends OpenPositionsResponse {
+  ok: boolean;
+}
+
+export async function refreshOpenPositions(
+  input: RefreshPositionsInput = {},
+): Promise<RefreshPositionsResult> {
+  const events = await getEvents();
+  const openTrades = buildOpenTradesFromEvents(events);
+  const refreshedAt = new Date().toISOString();
+  const existingSnapshots = getLatestMonitoredSnapshots(events);
+
+  if (openTrades.length === 0) {
+    return {
+      ok: true,
+      snapshots: [],
+      reconciliation: {
+        status: "OK",
+        issues: [],
+        openTradeCount: 0,
+        binancePositionCount: 0,
+        lastMonitoredAt: null,
+      },
+      message: "No open trades — zero state.",
+    };
+  }
+
+  const connected = input.getBinanceStatus
+    ? isBinanceConnected(await input.getBinanceStatus())
+    : (await resolveTestnetConnectionStatus()).connected;
+
+  let binancePositions: BinancePosition[] = [];
+  if (connected) {
+    try {
+      const client = input.client ?? createBinanceTestnetClient();
+      binancePositions = filterNonZeroBinancePositions(await client.getPositions());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch positions";
+      await appendEvent({
+        type: "ERROR_RECORDED",
+        environment: "testnet",
+        payload: { phase: "POSITION_REFRESH", message },
+      });
+    }
+  }
+
+  const snapshots: PositionSnapshot[] = [];
+
+  for (const trade of openTrades) {
+    const binancePos = connected ? findBinanceForTrade(trade, binancePositions) : null;
+    const positionId = resolvePositionId(trade.tradeId, existingSnapshots);
+    const snapshot = buildSnapshotFromSources({
+      trade,
+      positionId,
+      binancePos,
+      refreshedAt,
+      connected,
+    });
+    snapshots.push(snapshot);
+
+    await appendEvent({
+      type: "POSITION_MONITORED",
+      environment: "testnet",
+      runId: trade.runId,
+      decisionLogId: trade.decisionLogId,
+      previewId: trade.previewId,
+      tradeId: trade.tradeId,
+      positionId,
+      payload: { ...snapshot },
+    });
+  }
+
+  const reconciliation = reconcilePositions({
+    openTrades,
+    binancePositions,
+    snapshots,
+    lastMonitoredAt: refreshedAt,
+    maxOpenPositions: getMaxOpenPositions(),
+    binanceConnected: connected,
+  });
+
+  if (reconciliation.issues.length > 0) {
+    const primary = openTrades[0];
+    await appendEvent({
+      type: "POSITION_RECONCILIATION_WARNING",
+      environment: "testnet",
+      runId: primary?.runId,
+      decisionLogId: primary?.decisionLogId,
+      tradeId: primary?.tradeId,
+      payload: {
+        status: reconciliation.status,
+        issues: reconciliation.issues,
+        openTradeCount: reconciliation.openTradeCount,
+        binancePositionCount: reconciliation.binancePositionCount,
+      },
+    });
+  }
+
+  const updatedEvents = await getEvents();
+  const mission = buildMissionSnapshot(updatedEvents);
+  const primary = openTrades[0];
+  await appendEvent({
+    type: "MISSION_SNAPSHOT_UPDATED",
+    environment: "testnet",
+    runId: primary?.runId,
+    decisionLogId: primary?.decisionLogId,
+    tradeId: primary?.tradeId,
+    payload: {
+      currentEquity: mission.currentEquity,
+      netPnl: mission.netPnl,
+      openPositions: mission.openPositions,
+      totalTrades: mission.totalTrades,
+      phase: "POSITION_REFRESH",
+    },
+  });
+
+  return {
+    ok: true,
+    snapshots,
+    reconciliation,
+    message: connected
+      ? "Positions refreshed from Binance testnet."
+      : "Binance not connected — position state unknown.",
+  };
+}
+
+export async function getReconciliationStatus(): Promise<ReconciliationResult> {
+  const events = await getEvents();
+  const openTrades = buildOpenTradesFromEvents(events);
+  const snapshots = Array.from(getLatestMonitoredSnapshots(events).values());
+  const lastMonitoredAt = getLatestMonitoredAt(events);
+  const testnet = await resolveTestnetConnectionStatus();
+  const connected = testnet.connected;
+
+  return reconcilePositions({
+    openTrades,
+    binancePositions: [],
+    snapshots,
+    lastMonitoredAt,
+    maxOpenPositions: getMaxOpenPositions(),
+    binanceConnected: connected,
+  });
+}
+
+export function getSnapshotForTrade(
+  tradeId: string,
+  events: JournalEvent[],
+): PositionSnapshot | null {
+  return getLatestMonitoredSnapshots(events).get(tradeId) ?? null;
+}

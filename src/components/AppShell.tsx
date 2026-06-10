@@ -1,0 +1,49 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const NAV = [
+  { href: "/", label: "Dashboard" },
+  { href: "/trades", label: "Trades" },
+  { href: "/ai-status", label: "AI Status" },
+  { href: "/reports", label: "Reports" },
+  { href: "/operator", label: "Operator" },
+  { href: "/settings", label: "Settings" },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  return (
+    <div className="min-h-screen">
+      <header className="border-b border-[var(--border)] bg-[var(--panel)]">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-[var(--muted)]">v2 core</p>
+            <h1 className="text-lg font-bold">BTC Short Premium Agent</h1>
+          </div>
+          <nav className="flex flex-wrap gap-2">
+            {NAV.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                    active
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--muted)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+    </div>
+  );
+}

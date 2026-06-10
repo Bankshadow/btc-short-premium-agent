@@ -1,81 +1,13 @@
 import { NextResponse } from "next/server";
-import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
-import { probeBinanceStatus } from "@/lib/testnet-engine-activation/activation-probes";
-import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
-import {
-  runCentralAnalysisOrchestrator,
-  stripAnalysisResultForClient,
-  toAnalysisUiView,
-} from "@/lib/analysis-engine/analysis-engine";
+import { runAnalysis } from "@/lib/analysis/analysis-runner";
 
-export const dynamic = "force-dynamic";
-
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const liveBlock = blockBinanceProductionOrder();
-    if (liveBlock) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: liveBlock,
-          liveTradingLocked: true,
-          autoExecuteBlocked: true,
-        },
-        { status: 403 },
-      );
-    }
-
-    let body: Record<string, unknown> = {};
-    try {
-      body = (await request.json()) as Record<string, unknown>;
-    } catch {
-      body = {};
-    }
-
-    const trigger =
-      body.trigger === "start_ai" ||
-      body.trigger === "automation" ||
-      body.trigger === "manual"
-        ? body.trigger
-        : "api";
-
-    const binanceStatus = await probeBinanceStatus();
-    const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
-    const allowPreview =
-      body.createTestnetPreview === false ? false : diagnostic.connected;
-
-    const output = await runCentralAnalysisOrchestrator({
-      trigger,
-      runId: typeof body.runId === "string" ? body.runId : undefined,
-      enrichMvp9: body.enrichMvp9 !== false,
-      runAutopilot: body.runAutopilot !== false,
-      createTestnetPreview: allowPreview,
-    });
-
-    const clientResult = stripAnalysisResultForClient(output.result);
-
-    return NextResponse.json({
-      ok: output.ok,
-      runId: output.runId,
-      decisionLogId: output.result.decisionLogId,
-      result: clientResult,
-      ui: toAnalysisUiView({ state: output.state, result: output.result }),
-      deskRunId: output.deskRun?.runId ?? null,
-      previewId: output.result.tradeCandidate?.previewId ?? null,
-      testnetDiagnostic: diagnostic,
-      liveTradingLocked: true,
-      autoExecuteBlocked: true,
-      safetyNotice:
-        "Central analysis completed — no orders executed. Testnet preview requires double confirm.",
-    });
-  } catch (error) {
+    const result = await runAnalysis();
+    return NextResponse.json(result);
+  } catch (err) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: error instanceof Error ? error.message : "Analysis run failed",
-        liveTradingLocked: true,
-        autoExecuteBlocked: true,
-      },
+      { error: err instanceof Error ? err.message : "Analysis failed" },
       { status: 500 },
     );
   }

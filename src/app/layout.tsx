@@ -1,36 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import PlatformProviders from "@/components/platform/PlatformProviders";
+import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "BTC Premium Trading Desk",
-  description:
-    "Live multi-agent trading desk — bull/bear thesis, derivatives, risk veto, committee verdict. Analysis only.",
+  title: "BTC Short Premium Agent v2",
+  description: "Minimal testnet AI trading loop — journal-first",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="th"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full text-zinc-100">
-        <PlatformProviders>{children}</PlatformProviders>
+    <html lang="en">
+      <body>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

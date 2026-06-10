@@ -13,7 +13,7 @@
 | Item | Result |
 |------|--------|
 | **Build** | PASS (`npm run build`) |
-| **Tests** | PASS — 146/146 (`npm test`) |
+| **Tests** | PASS — 164/164 (`npm test`, includes core-engine) |
 | **Lint** | PARTIAL — ESLint runs; 1 pre-existing `use-api.tsx` react-hooks warning |
 | **Live trading** | LOCKED — no live order path in v2 execution |
 | **Force execute / force close** | NOT PRESENT in application code |
@@ -383,3 +383,20 @@ Micro-live discussion should wait until evidence collection and operator approva
 | F | MiroFish advisory | mvp12-18 | PASS |
 | G | Operator kill switch | mvp19-24 | PASS |
 | H | Audit pack | mvp19-24 | PASS |
+| I | Core engine health/trace | core-engine.test.ts | PASS |
+
+---
+
+## Core Engine upgrade (2026-06-06)
+
+| Item | Status |
+|------|--------|
+| Research doc | [CORE_ENGINE_RESEARCH_DISCOVERY.md](./CORE_ENGINE_RESEARCH_DISCOVERY.md) |
+| Design doc | [CORE_ENGINE_UPGRADE_DESIGN.md](./CORE_ENGINE_UPGRADE_DESIGN.md) |
+| Event validator | PASS — unit tests |
+| Projection engine | PASS — unit tests |
+| Lifecycle FSM | PASS — unit tests |
+| Core APIs | PASS — build includes `/api/core/*` |
+| MVP 1–24 regression | PASS — 164/164 tests |
+
+**Recommendation:** `CORE_ENGINE_PARTIAL` (stable foundation; Phase 7 integration pending)
