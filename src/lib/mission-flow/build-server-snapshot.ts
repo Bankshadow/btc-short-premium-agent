@@ -19,6 +19,7 @@ import {
   readMissionSnapshotCache,
   writeMissionSnapshotCache,
 } from "./snapshot-cache";
+import { invalidateTestnetMonitorSnapshotCache } from "@/lib/testnet-monitor/snapshot-cache";
 import { toMissionFlowPendingPreview } from "./to-pending-preview";
 import type { MissionFlowBuildResult } from "./types";
 
@@ -39,20 +40,31 @@ export async function buildMissionFlowServerSnapshot(
         cached: true,
       };
     }
+  } else {
+    invalidateTestnetMonitorSnapshotCache();
+    clearMissionSnapshotCache();
   }
 
   const warnings: string[] = [];
 
   try {
-    const [payload, trades, entriesRaw, notificationPrefs, automationHistory] =
+    const payload = await buildGoalDashboardServerPayload({
+      fresh: options.fresh,
+    }).catch((err) => {
+      warnings.push(
+        err instanceof Error ? err.message : "Goal payload failed",
+      );
+      return null;
+    });
+
+    const [trades, entriesRaw, notificationPrefs, automationHistory] =
       await Promise.all([
-        buildGoalDashboardServerPayload().catch((err) => {
-          warnings.push(
-            err instanceof Error ? err.message : "Goal payload failed",
-          );
-          return null;
-        }),
-        buildGoalTradeListServer().catch(() => []),
+        payload
+          ? buildGoalTradeListServer({
+              testnetSnapshot: payload.testnetSnapshot,
+              fresh: options.fresh,
+            })
+          : Promise.resolve([]),
         loadServerAnalysisJournal().catch(() => []),
         loadGoalNotificationPrefs().catch(() => ({
           notifyOnTrade: true,
@@ -143,3 +155,5 @@ export async function buildMissionFlowServerSnapshot(
 export function invalidateMissionSnapshotCache(): void {
   clearMissionSnapshotCache();
 }
+
+export { writeMissionSnapshotCache } from "./snapshot-cache";

@@ -163,6 +163,7 @@ export interface TestnetMonitorSnapshot {
   integratedQualityCalibration: import("@/lib/integrated-quality-calibration/types").IntegratedQualityCalibrationSnapshot;
   integratedStrategyAgentHealth: import("@/lib/integrated-strategy-agent-health/types").IntegratedStrategyAgentHealthSnapshot;
   missionControllerRiskBudget: import("@/lib/mission-controller-risk-budget/types").MissionControllerRiskBudgetSnapshot;
+  engineConsistency: import("@/lib/engine-consistency/types").EngineConsistencySnapshot;
   alwaysOnOperatorLayer: import("@/lib/always-on-operator-layer/types").AlwaysOnOperatorLayerSnapshot;
   microLiveReadinessReview: import("@/lib/micro-live-readiness-review/types").MicroLiveReadinessReviewSnapshot;
   lastUpdatedAt: string;

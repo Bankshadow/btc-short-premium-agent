@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { blockBinanceProductionOrder } from "@/lib/exchange/binance/binance-config";
+import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
+import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
 import {
   runCentralAnalysisOrchestrator,
   stripAnalysisResultForClient,
@@ -37,12 +39,17 @@ export async function POST(request: Request) {
         ? body.trigger
         : "api";
 
+    const binanceStatus = await getBinanceStatus().catch(() => null);
+    const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
+    const allowPreview =
+      body.createTestnetPreview === false ? false : diagnostic.connected;
+
     const output = await runCentralAnalysisOrchestrator({
       trigger,
       runId: typeof body.runId === "string" ? body.runId : undefined,
       enrichMvp9: body.enrichMvp9 !== false,
       runAutopilot: body.runAutopilot !== false,
-      createTestnetPreview: body.createTestnetPreview !== false,
+      createTestnetPreview: allowPreview,
     });
 
     const clientResult = stripAnalysisResultForClient(output.result);
@@ -55,6 +62,7 @@ export async function POST(request: Request) {
       ui: toAnalysisUiView({ state: output.state, result: output.result }),
       deskRunId: output.deskRun?.runId ?? null,
       previewId: output.result.tradeCandidate?.previewId ?? null,
+      testnetDiagnostic: diagnostic,
       liveTradingLocked: true,
       autoExecuteBlocked: true,
       safetyNotice:

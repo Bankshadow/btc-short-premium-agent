@@ -13,9 +13,10 @@ import {
   writeServerBackboneRecord,
 } from "@/lib/background-worker/server-backbone";
 import { getBinanceStatus } from "@/lib/exchange/binance/binance-futures-testnet";
+import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
 import { buildOrderPreview } from "@/lib/exchange/binance";
 import { buildBinancePreviewInputFromAiSignal } from "@/lib/exchange/binance/build-ai-preview";
-import { invalidateMissionSnapshotCache, buildMissionFlowServerSnapshot } from "@/lib/mission-flow/build-server-snapshot";
+import { buildMissionFlowServerSnapshot, writeMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { recordMonitorEvent } from "@/lib/testnet-monitor/monitor-journal-server";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 import { listWarehouseRows } from "@/lib/db/repositories/warehouse-repository";
@@ -148,9 +149,18 @@ export async function runCentralAnalysisOrchestrator(
     deskRun = record.run ?? null;
   }
 
-  const binanceStatus = await getBinanceStatus();
-  const testnetConnected = Boolean(binanceStatus.connected);
+  const binanceStatus = await getBinanceStatus().catch(() => null);
+  const diagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
+  const testnetConnected = diagnostic.connected;
   let testnetPreview = null;
+
+  const blockers = [...riskGate.blockers];
+  if (!testnetConnected) {
+    const testnetBlocker = `Testnet ${diagnostic.status}: ${diagnostic.reason}`;
+    if (!blockers.some((b) => b.includes("Testnet"))) {
+      blockers.push(testnetBlocker);
+    }
+  }
 
   if (
     createTestnetPreview &&
@@ -170,17 +180,16 @@ export async function runCentralAnalysisOrchestrator(
   }
 
   const learningImpact = buildAnalysisLearningImpact(context);
-  const missionSnapshot = (await buildMissionFlowServerSnapshot({ fresh: true }).catch(() => null))
-    ?.snapshot;
+  const missionSnapshotForImpact = context.missionSnapshot;
 
   const partialResult = {
     finalVerdict,
     confidence,
-    blockers: riskGate.blockers,
+    blockers,
     reasons: riskGate.reasons,
     missionImpact: {
-      progressPct: missionSnapshot?.progressPct ?? context.missionSnapshot?.progressPct ?? null,
-      evidenceCompleted: missionSnapshot?.evidenceProgress?.completedTrades ?? null,
+      progressPct: missionSnapshotForImpact?.progressPct ?? null,
+      evidenceCompleted: missionSnapshotForImpact?.evidenceProgress?.completedTrades ?? null,
       pendingLearning: learningImpact.pendingReviewCount,
     },
   };
@@ -204,9 +213,11 @@ export async function runCentralAnalysisOrchestrator(
           }
         : null,
     riskStatus: riskGate.riskStatus,
-    blockers: riskGate.blockers,
+    blockers,
     reasons: riskGate.reasons,
-    nextAction: riskGate.nextAction,
+    nextAction: testnetConnected
+      ? riskGate.nextAction
+      : diagnostic.recommendation,
     humanActionRequired: riskGate.humanActionRequired,
     aiState: "ANALYZING",
     missionImpact: partialResult.missionImpact,
@@ -227,10 +238,20 @@ export async function runCentralAnalysisOrchestrator(
     latestResult: result,
   });
 
-  const { attachConsistencyToContext } = await import(
-    "@/lib/engine-consistency/attach-to-context"
-  );
-  result.context = await attachConsistencyToContext(result.context);
+  const freshMission = (
+    await buildMissionFlowServerSnapshot({ fresh: true }).catch(() => null)
+  )?.snapshot;
+  if (freshMission) {
+    const { toAnalysisContextConsistencyLink } = await import(
+      "@/lib/engine-consistency/build-engine-consistency"
+    );
+    result.context = {
+      ...result.context,
+      missionSnapshot: freshMission,
+      consistency: toAnalysisContextConsistencyLink(freshMission.engineConsistency),
+    };
+    writeMissionSnapshotCache(freshMission);
+  }
 
   const { attachEvidenceQualityToContext } = await import(
     "@/lib/evidence-quality/attach-to-context"
@@ -265,14 +286,12 @@ export async function runCentralAnalysisOrchestrator(
       trigger,
       finalVerdict,
       confidence,
-      blockers: riskGate.blockers.slice(0, 5),
+      blockers: blockers.slice(0, 5),
       previewId: testnetPreview?.previewId ?? null,
       advisoryOnly: true,
       liveTradingLocked: true,
     },
   }).catch(() => undefined);
-
-  invalidateMissionSnapshotCache();
 
   const state: CentralAnalysisState = {
     mvp: CENTRAL_ANALYSIS_ENGINE_MVP,

@@ -1,6 +1,7 @@
 export {
   buildMissionControllerRiskBudget,
 } from "./build-mission-controller-risk-budget";
+export { applyMissionControllerRiskBudgetAdjustment } from "./apply-risk-adjustment";
 export { emptyMissionControllerRiskBudget } from "./empty-snapshot";
 export {
   computeLosingStreakFromClosedTrades,

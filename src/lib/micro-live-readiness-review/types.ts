@@ -70,6 +70,8 @@ export interface MicroLiveReadinessReviewBuildInput {
   monitorHealthOk: boolean;
   monitorPositionUncertain: boolean;
   monitorCurrentIssue: string | null;
+  engineConsistencyOk: boolean;
+  engineConsistencyIssue: string | null;
   riskBudgetConfigured: boolean;
   dailyLossLimitConfigured: boolean;
   reduceOnlyCloseTested: boolean;

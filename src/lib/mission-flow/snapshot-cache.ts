@@ -1,6 +1,6 @@
 import type { MissionFlowSnapshot } from "./types";
 
-const TTL_MS = 12_000;
+const TTL_MS = 60_000;
 
 let cache: {
   snapshot: MissionFlowSnapshot;

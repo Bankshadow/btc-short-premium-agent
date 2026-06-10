@@ -3,7 +3,30 @@ import { buildGoalProgressSnapshot } from "@/lib/goal-engine/build-goal-snapshot
 import { buildMissionSnapshotFromGoal } from "@/lib/goal-engine/build-mission-snapshot";
 import { buildCoreEngineRegistry } from "@/lib/core-engine-registry";
 import { buildStrategyHealthSummary } from "@/lib/strategy-health";
+import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
+import type { BinanceStatusResult } from "@/lib/exchange/binance/binance-types";
 import type { TestnetMonitorSnapshot } from "@/lib/testnet-monitor/types";
+
+function mockConnectedBinanceStatus(): BinanceStatusResult {
+  return {
+    configured: true,
+    testnetEnabled: true,
+    liveEnabled: false,
+    liveBlocked: true,
+    baseUrl: "https://demo-fapi.binance.com",
+    upstreamBaseUrl: "https://demo-fapi.binance.com",
+    proxyEnabled: false,
+    autoExecuteEnabled: false,
+    allowedSymbols: ["BTCUSDT"],
+    connected: true,
+    serverTimeMs: Date.now(),
+    clockSkewMs: 0,
+    safetyNotice: "Testnet only",
+    error: null,
+    envChecklist: [],
+    blockers: [],
+  };
+}
 
 export function minimalPayloadWithTestnet(
   testnetSnapshot: Partial<TestnetMonitorSnapshot>,
@@ -37,6 +60,7 @@ export function minimalPayloadWithTestnet(
       error: null,
       debugHref: "/binance-testnet",
     },
+    binanceDiagnostic: resolveBinanceTestnetDiagnosticFromStatus(mockConnectedBinanceStatus()),
     engines: buildCoreEngineRegistry({
       market: {},
       agents: {},

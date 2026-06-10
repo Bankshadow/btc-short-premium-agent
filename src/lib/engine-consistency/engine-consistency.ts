@@ -15,6 +15,9 @@ export {
   buildEngineConsistencySnapshot,
   toAnalysisContextConsistencyLink,
 } from "./build-engine-consistency";
+export { buildEngineConsistencyFromTestnet } from "./build-engine-consistency-from-testnet";
+export { assembleEngineConsistencySnapshot } from "./assemble-engine-consistency-snapshot";
+export { emptyEngineConsistencySnapshot } from "./empty-engine-consistency";
 export { applyConsistencyAutoFix } from "./apply-consistency-auto-fix";
 export type { ApplyConsistencyAutoFixResult } from "./apply-consistency-auto-fix";
 export { resolveConsistencyStatus } from "./resolve-consistency-status";

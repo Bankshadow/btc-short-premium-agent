@@ -81,15 +81,15 @@ export function resolveOneButtonAiState(
     };
   }
 
-  if (m.binanceTestnet.status === "BLOCKED") {
+  if (m.binanceTestnet.status !== "CONNECTED") {
     blockers.push(m.binanceTestnet.reason);
     return {
       blockers,
       state: baseState(
         "Resolve blocker",
         "RESOLVE_ISSUE",
-        "Binance testnet connection blocked.",
-        m.binanceTestnet.reason,
+        `Binance testnet ${m.binanceTestnet.status}.`,
+        m.binanceTestnet.recommendation || m.binanceTestnet.reason,
       ),
     };
   }

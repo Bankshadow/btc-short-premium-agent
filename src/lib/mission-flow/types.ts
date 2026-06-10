@@ -16,11 +16,9 @@ import type { MissionControllerRiskBudgetSnapshot } from "@/lib/mission-controll
 import type { AlwaysOnOperatorLayerSnapshot } from "@/lib/always-on-operator-layer/types";
 import type { MicroLiveReadinessReviewSnapshot } from "@/lib/micro-live-readiness-review/types";
 
-export type BinanceTestnetFlowStatus =
-  | "CONNECTED"
-  | "DISCONNECTED"
-  | "CHECKING"
-  | "BLOCKED";
+import type { BinanceTestnetDiagnosticSnapshot } from "@/lib/testnet-engine-activation/types";
+
+export type BinanceTestnetFlowStatus = import("@/lib/testnet-engine-activation/types").BinanceTestnetDiagnosticStatus;
 
 export interface MissionFlowPosition {
   environment: string;
@@ -146,7 +144,17 @@ export interface MissionFlowSnapshot {
   binanceTestnet: {
     status: BinanceTestnetFlowStatus;
     reason: string;
+    recommendation: string;
+    lastCheckedAt: string;
+    connected: boolean;
+    testnetEnabled: boolean;
+    liveEnabled: boolean;
+    proxyEnabled: boolean;
     proxyProvider: string | null;
+    proxyUrlConfigured: boolean;
+    apiKeyPresent: boolean;
+    apiSecretPresent: boolean;
+    baseUrl: string;
   };
   lastUpdatedAt: string;
   lastCycleAt: string | null;
@@ -188,6 +196,7 @@ export interface MissionFlowSnapshot {
   integratedQualityCalibration: IntegratedQualityCalibrationSnapshot;
   integratedStrategyAgentHealth: IntegratedStrategyAgentHealthSnapshot;
   missionControllerRiskBudget: MissionControllerRiskBudgetSnapshot;
+  engineConsistency: import("@/lib/engine-consistency/types").EngineConsistencySnapshot;
   alwaysOnOperatorLayer: AlwaysOnOperatorLayerSnapshot;
   microLiveReadinessReview: MicroLiveReadinessReviewSnapshot;
   selfLearning: MissionFlowSelfLearning;

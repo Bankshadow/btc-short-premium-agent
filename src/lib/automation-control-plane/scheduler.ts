@@ -451,11 +451,14 @@ export async function runAutomationCycle(
   }
 
   try {
-    const { evaluateMissionController, applyMissionControllerRiskAdjustment } = await import(
-      "@/lib/mission-controller"
+    const { readMissionSnapshotCache } = await import("@/lib/mission-flow/snapshot-cache");
+    const { applyMissionControllerRiskBudgetAdjustment } = await import(
+      "@/lib/mission-controller-risk-budget/apply-risk-adjustment"
     );
-    const controller = await evaluateMissionController();
-    await applyMissionControllerRiskAdjustment(controller);
+    const mcr = readMissionSnapshotCache()?.snapshot?.missionControllerRiskBudget;
+    if (mcr) {
+      await applyMissionControllerRiskBudgetAdjustment(mcr);
+    }
   } catch {
     /* mission controller risk adjust is best-effort */
   }

@@ -63,13 +63,13 @@ test("empty mission flow snapshot provides zero-state defaults", () => {
   assert.equal(s.totalTrades, 0);
   assert.equal(s.winRate, null);
   assert.equal(s.aiStatus.state, "IDLE");
-  assert.equal(s.binanceTestnet.status, "DISCONNECTED");
+  assert.equal(s.binanceTestnet.status, "MISSING_ENV");
 });
 
 test("mission flow snapshot maps connected binance and trust progress", () => {
   const flow = buildMissionFlowSnapshot(minimalPayload(), null, 0);
   assert.equal(flow.binanceTestnet.status, "CONNECTED");
-  assert.equal(flow.binanceTestnet.reason, "connected");
+  assert.ok(flow.binanceTestnet.reason.toLowerCase().includes("connect"));
   assert.equal(flow.trust.completedTrades, 0);
   assert.equal(flow.trust.minRequired, 12);
   assert.ok(flow.nextRecommendation.length > 0);
@@ -79,8 +79,24 @@ test("mission flow snapshot detects HTTP 451 blocked status", () => {
   const payload = minimalPayload();
   payload.binance.connected = false;
   payload.binance.error = "Binance HTTP 451: Service unavailable from a restricted location";
+  payload.binanceDiagnostic = {
+    mvp: 95,
+    status: "BLOCKED_BY_REGION",
+    connected: false,
+    testnetEnabled: true,
+    liveEnabled: false,
+    proxyEnabled: true,
+    proxyProvider: "Fly.io (Singapore)",
+    proxyUrlConfigured: true,
+    apiKeyPresent: true,
+    apiSecretPresent: true,
+    baseUrl: payload.binance.baseUrl,
+    lastCheckedAt: new Date().toISOString(),
+    reason: payload.binance.error,
+    recommendation: "Use an allowed proxy region or run server from a non-blocked location (HTTP 451).",
+  };
   const flow = buildMissionFlowSnapshot(payload, null, 0);
-  assert.equal(flow.binanceTestnet.status, "BLOCKED");
+  assert.equal(flow.binanceTestnet.status, "BLOCKED_BY_REGION");
   assert.ok(flow.binanceTestnet.reason.includes("451"));
 });
 

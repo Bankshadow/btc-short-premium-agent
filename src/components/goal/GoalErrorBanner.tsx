@@ -21,8 +21,8 @@ export default function GoalErrorBanner({
     items.push({ tone: "rose", text: `Blocker: ${snapshot.risk.blocker}` });
   }
   if (
-    snapshot?.binanceTestnet.status === "BLOCKED" ||
-    snapshot?.binanceTestnet.status === "DISCONNECTED"
+    snapshot?.binanceTestnet.status &&
+    snapshot.binanceTestnet.status !== "CONNECTED"
   ) {
     items.push({
       tone: "amber",

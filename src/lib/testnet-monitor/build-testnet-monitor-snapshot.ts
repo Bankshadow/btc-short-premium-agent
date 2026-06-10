@@ -32,6 +32,7 @@ import {
   computeLosingStreakFromClosedTrades,
 } from "@/lib/mission-controller-risk-budget";
 import { buildAlwaysOnOperatorLayerSnapshot } from "@/lib/always-on-operator-layer/build-operator-layer-snapshot";
+import { buildEngineConsistencyFromTestnet } from "@/lib/engine-consistency/build-engine-consistency-from-testnet";
 import {
   buildMicroLiveReadinessReviewFromSnapshots,
   persistReadinessReviewSideEffects,
@@ -63,6 +64,7 @@ import {
   sumRealizedPnl,
   sumUnrealizedPnl,
 } from "./pnl";
+import { withTestnetMonitorSnapshotDedup } from "./snapshot-cache";
 import type {
   TestnetClosedTrade,
   TestnetMonitorSnapshot,
@@ -236,7 +238,7 @@ function buildSummary(input: {
   };
 }
 
-export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnapshot> {
+export async function buildTestnetMonitorSnapshotUncached(): Promise<TestnetMonitorSnapshot> {
   const liveBlock = blockBinanceProductionOrder();
   const config = loadBinanceConfig();
   let connected = false;
@@ -418,6 +420,18 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
   });
   const summary = buildSummary({ openPositions, closedTrades, riskStatus });
 
+  const engineConsistency = await buildEngineConsistencyFromTestnet({
+    connected,
+    positions,
+    journal,
+    positionMismatches: mismatches,
+    closedTrades,
+    learningRecords,
+    monitorEvents: monitorEventsForEvidence,
+    decisions,
+    dashboardNetPnl: summary.netPnl,
+  });
+
   const integratedRiskBudget = await buildIntegratedRiskBudget({
     evidenceProgress,
     strategyHealth: integratedStrategyHealth,
@@ -479,6 +493,7 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
     integratedStrategyHealth,
     integratedRiskBudget,
     monitorReliability,
+    engineConsistency,
     microLiveReadiness,
     alwaysOnOperatorLayer,
     criticalIncidentOpen: Boolean(criticalIncident),
@@ -518,12 +533,27 @@ export async function buildTestnetMonitorSnapshot(): Promise<TestnetMonitorSnaps
     integratedQualityCalibration,
     integratedStrategyAgentHealth,
     missionControllerRiskBudget,
+    engineConsistency,
     alwaysOnOperatorLayer,
     microLiveReadinessReview,
     lastUpdatedAt: new Date().toISOString(),
     connected,
     mismatches,
   };
+}
+
+export interface BuildTestnetMonitorSnapshotOptions {
+  fresh?: boolean;
+}
+
+/** Cached entry point — dedupes parallel builds within TTL. */
+export async function buildTestnetMonitorSnapshot(
+  options: BuildTestnetMonitorSnapshotOptions = {},
+): Promise<TestnetMonitorSnapshot> {
+  return withTestnetMonitorSnapshotDedup(
+    () => buildTestnetMonitorSnapshotUncached(),
+    options,
+  );
 }
 
 export function buildPnlReport(snapshot: TestnetMonitorSnapshot) {

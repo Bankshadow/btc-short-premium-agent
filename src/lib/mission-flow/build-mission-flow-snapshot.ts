@@ -15,6 +15,7 @@ import { emptyIntegratedDailySelfReview } from "@/lib/integrated-daily-self-revi
 import { emptyEvidenceQualitySnapshot } from "@/lib/evidence-quality/build-evidence-quality";
 import { emptyIntegratedQualityCalibration } from "@/lib/integrated-quality-calibration/build-integrated-quality-calibration";
 import { emptyIntegratedStrategyAgentHealth } from "@/lib/integrated-strategy-agent-health/build-integrated-strategy-agent-health";
+import { emptyEngineConsistencySnapshot } from "@/lib/engine-consistency/empty-engine-consistency";
 import { emptyMissionControllerRiskBudget } from "@/lib/mission-controller-risk-budget/empty-snapshot";
 import { emptyAlwaysOnOperatorLayer } from "@/lib/always-on-operator-layer/empty-snapshot";
 import { emptyMicroLiveReadinessReview } from "@/lib/micro-live-readiness-review/empty-snapshot";
@@ -22,10 +23,12 @@ import { resolveAiNextActionChain } from "@/lib/integrated-daily-self-review/map
 import { emptyMonitorReliabilitySnapshot } from "@/lib/monitor-reliability/empty-snapshot";
 import { resolveTrustScaledNotionalUsd } from "@/lib/exchange/binance/trust-scaled-notional";
 import { loadBinanceConfig } from "@/lib/exchange/binance/binance-config";
+import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
+import type { BinanceTestnetDiagnosticSnapshot } from "@/lib/testnet-engine-activation/types";
+import type { BinanceStatusResult } from "@/lib/exchange/binance/binance-types";
 import { resolvePrimaryStrategyHealth } from "./resolve-primary-strategy-health";
 import type { MissionFlowSelfLearning } from "./types";
 import type {
-  BinanceTestnetFlowStatus,
   MissionFlowActivityItem,
   MissionFlowLearningInsights,
   MissionFlowPendingPreview,
@@ -33,9 +36,64 @@ import type {
   MissionFlowStrategyHealth,
 } from "./types";
 
-function resolveBinanceFlowStatus(
+function legacyBinanceToStatus(
   binance: GoalDashboardServerPayload["binance"],
-): { status: BinanceTestnetFlowStatus; reason: string } {
+): BinanceStatusResult {
+  return {
+    configured: binance.configured,
+    testnetEnabled: binance.testnetEnabled,
+    liveEnabled: false,
+    liveBlocked: binance.liveLocked,
+    baseUrl: binance.baseUrl,
+    upstreamBaseUrl: binance.upstreamBaseUrl,
+    proxyEnabled: binance.proxyEnabled,
+    autoExecuteEnabled: binance.autoExecuteEnabled,
+    allowedSymbols: ["BTCUSDT"],
+    connected: binance.connected,
+    serverTimeMs: binance.connected ? Date.now() : null,
+    clockSkewMs: null,
+    safetyNotice: "Testnet only",
+    error: binance.error,
+    envChecklist: [],
+    blockers: binance.blocker
+      ? [{ category: "API_ERROR", detail: binance.blocker }]
+      : [],
+  };
+}
+
+function resolvePayloadBinanceDiagnostic(
+  payload: GoalDashboardServerPayload,
+): BinanceTestnetDiagnosticSnapshot {
+  if (payload.binanceDiagnostic) return payload.binanceDiagnostic;
+  return resolveBinanceTestnetDiagnosticFromStatus(
+    legacyBinanceToStatus(payload.binance),
+  );
+}
+
+function mapBinanceTestnetFromPayload(
+  payload: GoalDashboardServerPayload,
+): MissionFlowSnapshot["binanceTestnet"] {
+  const d = resolvePayloadBinanceDiagnostic(payload);
+  return {
+    status: d.status,
+    reason: d.reason,
+    recommendation: d.recommendation,
+    lastCheckedAt: d.lastCheckedAt,
+    connected: d.connected,
+    testnetEnabled: d.testnetEnabled,
+    liveEnabled: d.liveEnabled,
+    proxyEnabled: d.proxyEnabled,
+    proxyProvider: d.proxyProvider,
+    proxyUrlConfigured: d.proxyUrlConfigured,
+    apiKeyPresent: d.apiKeyPresent,
+    apiSecretPresent: d.apiSecretPresent,
+    baseUrl: d.baseUrl,
+  };
+}
+
+function resolveBinanceFlowStatusLegacy(
+  binance: GoalDashboardServerPayload["binance"],
+): { status: "CONNECTED" | "DISCONNECTED"; reason: string } {
   if (!binance.configured) {
     return {
       status: "DISCONNECTED",
@@ -44,19 +102,6 @@ function resolveBinanceFlowStatus(
   }
   if (binance.connected) {
     return { status: "CONNECTED", reason: "connected" };
-  }
-  const err = (binance.error ?? binance.blocker ?? "").toLowerCase();
-  if (err.includes("451") || err.includes("restricted location") || err.includes("geo")) {
-    return {
-      status: "BLOCKED",
-      reason: binance.error ?? binance.blocker ?? "HTTP 451 — region blocked by Binance.",
-    };
-  }
-  if (err.includes("proxy") || err.includes("unauthorized")) {
-    return {
-      status: "BLOCKED",
-      reason: binance.error ?? binance.blocker ?? "Proxy or API error.",
-    };
   }
   return {
     status: "DISCONNECTED",
@@ -69,10 +114,11 @@ function buildNextRecommendation(
   pendingTestnetPreview: MissionFlowPendingPreview | null,
 ): string {
   const { goal, mission, binance } = payload;
-  const binanceFlow = resolveBinanceFlowStatus(binance);
+  const binanceFlow = resolveBinanceFlowStatusLegacy(binance);
 
-  if (binanceFlow.status !== "CONNECTED") {
-    return "Connect Binance Testnet — configure API keys and proxy if needed.";
+  const diagnostic = resolvePayloadBinanceDiagnostic(payload);
+  if (diagnostic.status !== "CONNECTED") {
+    return diagnostic.recommendation;
   }
   if (pendingTestnetPreview && !pendingTestnetPreview.blocked) {
     return `Review testnet order: ${pendingTestnetPreview.symbol} ${pendingTestnetPreview.side} · double confirm required.`;
@@ -139,7 +185,6 @@ export function buildMissionFlowSnapshot(
   const { goal, mission, binance, engines, automation, learningPending } = payload;
   const settings = automation?.state.settings;
   const lastRun = automation?.state.lastRun;
-  const binanceFlow = resolveBinanceFlowStatus(binance);
 
   const currentPosition = goal.currentPosition
     ? {
@@ -194,6 +239,8 @@ export function buildMissionFlowSnapshot(
   const missionControllerRiskBudget =
     payload.testnetSnapshot?.missionControllerRiskBudget ??
     emptyMissionControllerRiskBudget();
+  const engineConsistency =
+    payload.testnetSnapshot?.engineConsistency ?? emptyEngineConsistencySnapshot();
   const alwaysOnOperatorLayer =
     payload.testnetSnapshot?.alwaysOnOperatorLayer ?? emptyAlwaysOnOperatorLayer();
   const microLiveReadinessReview =
@@ -243,11 +290,7 @@ export function buildMissionFlowSnapshot(
         mission.humanActionRequired ||
         Boolean(pendingTestnetPreview && !pendingTestnetPreview.blocked),
     },
-    binanceTestnet: {
-      status: binanceFlow.status,
-      reason: binanceFlow.reason,
-      proxyProvider: binance.proxyEnabled ? binance.proxyProvider : null,
-    },
+    binanceTestnet: mapBinanceTestnetFromPayload(payload),
     lastUpdatedAt: mission.lastUpdatedAt,
     lastCycleAt: mission.lastCycleAt,
     lastVerdict: mission.lastVerdict,
@@ -317,6 +360,7 @@ export function buildMissionFlowSnapshot(
     integratedQualityCalibration,
     integratedStrategyAgentHealth,
     missionControllerRiskBudget,
+    engineConsistency,
     alwaysOnOperatorLayer,
     microLiveReadinessReview,
     selfLearning: extras?.selfLearning ?? {

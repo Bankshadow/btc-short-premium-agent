@@ -1,6 +1,7 @@
 import { blockBinanceProductionOrder, loadBinanceConfig } from "@/lib/exchange/binance/binance-config";
 import { liveExecutionStatus } from "@/lib/exchange/live-execution-gate";
 import type { AlwaysOnOperatorLayerSnapshot } from "@/lib/always-on-operator-layer/types";
+import type { EngineConsistencySnapshot } from "@/lib/engine-consistency/types";
 import type { EvidenceProgressSnapshot } from "@/lib/evidence-progress/types";
 import type { EvidenceQualitySnapshot } from "@/lib/evidence-quality/types";
 import type { IntegratedRiskBudgetSnapshot } from "@/lib/integrated-risk-budget/types";
@@ -35,6 +36,7 @@ export function buildMicroLiveReadinessReviewFromSnapshots(input: {
   integratedStrategyHealth: IntegratedStrategyHealthSnapshot;
   integratedRiskBudget: IntegratedRiskBudgetSnapshot;
   monitorReliability: MonitorReliabilitySnapshot;
+  engineConsistency?: EngineConsistencySnapshot | null;
   microLiveReadiness: MicroLiveReadinessSnapshot;
   alwaysOnOperatorLayer?: AlwaysOnOperatorLayerSnapshot | null;
   killSwitchPaused?: boolean;
@@ -79,6 +81,16 @@ export function buildMicroLiveReadinessReviewFromSnapshots(input: {
     monitorHealthOk: input.monitorReliability.health !== "BLOCKED",
     monitorPositionUncertain: input.monitorReliability.positionStateUncertain,
     monitorCurrentIssue: input.monitorReliability.currentIssue,
+    engineConsistencyOk:
+      input.engineConsistency != null
+        ? !input.engineConsistency.blocksNewTrades &&
+          input.engineConsistency.consistencyStatus !== "BLOCKED"
+        : !input.monitorReliability.positionStateUncertain &&
+          input.monitorReliability.health !== "BLOCKED" &&
+          input.evidenceProgress.missingDecisionLogId === 0,
+    engineConsistencyIssue:
+      input.engineConsistency?.issues[0]?.message ??
+      input.monitorReliability.currentIssue,
     riskBudgetConfigured:
       rec.currentMaxNotional > 0 && rec.recommendedMaxNotional > 0,
     dailyLossLimitConfigured:

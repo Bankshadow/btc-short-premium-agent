@@ -3,7 +3,6 @@ import {
   verifyCronOrTestAuthorization,
 } from "@/lib/cron/cron-auth";
 import { runCronTick } from "@/lib/automation-control-plane/run-cron-tick";
-import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +19,6 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const force = url.searchParams.get("force") === "1";
     const tick = await runCronTick({ force });
-    invalidateMissionSnapshotCache();
     return NextResponse.json({
       ok: tick.ok,
       test,

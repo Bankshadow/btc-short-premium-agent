@@ -9,9 +9,8 @@ import TestnetTradeModal from "./TestnetTradeModal";
 import PermissionPrompt from "@/components/agent-os/PermissionPrompt";
 import { EngineEventAlertBanner } from "./EngineEventFeed";
 import EngineStatusBanner from "./EngineStatusBanner";
-import { MissionControllerRiskBudgetBadge } from "@/components/mission-controller-risk-budget/MissionControllerRiskBudgetPanel";
+import { MissionModeLabels } from "@/components/mission-mode-labels/MissionModeLabels";
 import { AlwaysOnOperatorLayerBadge } from "@/components/always-on-operator-layer/AlwaysOnOperatorLayerPanel";
-import { MicroLiveReadinessReviewBadge } from "@/components/micro-live-readiness-review/MicroLiveReadinessReviewPanel";
 import { useMissionSnapshot } from "./use-mission-snapshot";
 import { useAnalysisState } from "@/hooks/useAnalysisState";
 import { useEngineEvents } from "@/hooks/useEngineEvents";
@@ -211,10 +210,11 @@ export default function GoalDashboard() {
               style={{ width: "0%" }}
             />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <MissionControllerRiskBudgetBadge snapshot={m.missionControllerRiskBudget} />
+          <div className="mt-3">
+            <MissionModeLabels snapshot={m} />
+          </div>
+          <div className="mt-2">
             <AlwaysOnOperatorLayerBadge snapshot={m.alwaysOnOperatorLayer} />
-            <MicroLiveReadinessReviewBadge review={m.microLiveReadinessReview} />
           </div>
           <div className="mt-3 grid gap-2 text-xs text-zinc-400 sm:grid-cols-3">
             <span>Trades: {m.closedTrades}</span>
@@ -371,6 +371,9 @@ export default function GoalDashboard() {
               >
                 {m.binanceTestnet.status}
               </p>
+              {m.binanceTestnet.status !== "CONNECTED" && (
+                <p className="mt-1 text-[10px] text-zinc-500">{m.binanceTestnet.reason}</p>
+              )}
             </div>
             <div>
               <p className="text-zinc-500">Blocker</p>

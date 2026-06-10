@@ -62,20 +62,20 @@ export async function runOneButtonAiAction(
   const label = status.state.label;
 
   switch (action) {
-    case "ASK_PERMISSION_EXECUTE":
+    case "ASK_PERMISSION_EXECUTE": {
+      const missionSnap = (await buildMissionFlowServerSnapshot({ fresh: true }))
+        .snapshot;
       return clientConfirmResult(
         action,
         "Approve testnet order",
         status.state.detail,
         "execute",
         {
-          previewId: (await buildMissionFlowServerSnapshot({ fresh: true })).snapshot
-            .pendingTestnetPreview?.previewId ?? null,
-          decisionLogId:
-            (await buildMissionFlowServerSnapshot({ fresh: true })).snapshot
-              .latestDecisionLogId ?? null,
+          previewId: missionSnap.pendingTestnetPreview?.previewId ?? null,
+          decisionLogId: missionSnap.latestDecisionLogId ?? null,
         },
       );
+    }
 
     case "ASK_PERMISSION_CLOSE":
       return clientConfirmResult(

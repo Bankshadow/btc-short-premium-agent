@@ -33,8 +33,8 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Learning records server", [
         "src/lib/testnet-monitor/learning-records-server.ts",
       ]),
-      check("dashboard_visibility", "Dashboard learning panel", [
-        "src/components/goal/GoalDashboard.tsx",
+      check("dashboard_visibility", "Reports learning section", [
+        "src/components/goal/ReportsView.tsx",
       ], { mustContain: "LearningQueuePanel" }),
       check("reports_visibility", "Reports learning section", [
         "src/components/goal/ReportsView.tsx",
@@ -68,12 +68,12 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
         "src/lib/trade-quality-score/quality-store.ts",
         "src/lib/trade-quality-score/sync-trade-quality-from-closed.ts",
       ], { mustContain: "recordMonitorEvent" }),
-      check("dashboard_visibility", "Trade quality badge", [
-        "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "TradeQualityBadge" }),
+      check("dashboard_visibility", "Reports trade quality", [
+        "src/components/goal/ReportsView.tsx",
+      ], { mustContain: "integratedTradeQuality" }),
       check("reports_visibility", "Reports trade quality", [
         "src/components/goal/ReportsView.tsx",
-      ], { mustContain: "TradeQualityPanel" }),
+      ], { mustContain: "integratedTradeQuality" }),
       check("journal_event", "Scored event type", [
         "src/lib/testnet-monitor/types.ts",
       ], { mustContain: "TRADE_QUALITY_SCORED" }),
@@ -102,9 +102,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Persist review + registry", [
         "src/lib/integrated-strategy-health/persist-strategy-health.ts",
       ]),
-      check("dashboard_visibility", "Strategy health badge", [
-        "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "StrategyHealthBadge" }),
+      check("dashboard_visibility", "Reports strategy health", [
+        "src/components/goal/ReportsView.tsx",
+      ], { mustContain: "StrategyHealthReportPanel" }),
       check("reports_visibility", "Reports strategy health", [
         "src/components/goal/ReportsView.tsx",
       ], { mustContain: "StrategyHealthReportPanel" }),
@@ -137,9 +137,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Persist readiness check", [
         "src/lib/micro-live-readiness/persist-readiness-check.ts",
       ]),
-      check("dashboard_visibility", "Readiness badge", [
+      check("dashboard_visibility", "Dashboard readiness mode labels", [
         "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "MicroLiveReadinessBadge" }),
+      ], { mustContain: "MissionModeLabels" }),
       check("reports_visibility", "Reports checklist", [
         "src/components/goal/ReportsView.tsx",
       ], { mustContain: "MicroLiveReadinessChecklist" }),
@@ -171,9 +171,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Persist recommendation", [
         "src/lib/integrated-risk-budget/persist-risk-budget-event.ts",
       ]),
-      check("dashboard_visibility", "Risk budget badge", [
+      check("dashboard_visibility", "Dashboard mission mode labels", [
         "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "RiskBudgetBadge" }),
+      ], { mustContain: "MissionModeLabels" }),
       check("reports_visibility", "Reports risk budget", [
         "src/components/goal/ReportsView.tsx",
       ], { mustContain: "IntegratedRiskBudgetPanel" }),
@@ -205,9 +205,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Persist review event", [
         "src/lib/integrated-daily-self-review/persist-daily-self-review-event.ts",
       ]),
-      check("dashboard_visibility", "Daily review badge", [
-        "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "DailySelfReviewBadge" }),
+      check("dashboard_visibility", "Reports daily review", [
+        "src/components/goal/ReportsView.tsx",
+      ], { mustContain: "IntegratedDailySelfReviewPanel" }),
       check("reports_visibility", "Reports daily review", [
         "src/components/goal/ReportsView.tsx",
       ], { mustContain: "IntegratedDailySelfReviewPanel" }),
@@ -303,9 +303,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Attach modules to context", [
         "src/lib/advanced-modules/attach-to-context.ts",
       ]),
-      check("dashboard_visibility", "Advanced index engine cards", [
+      check("dashboard_visibility", "Advanced index engine health card", [
         "src/components/goal/AdvancedView.tsx",
-      ], { mustContain: "Used by Central Engine" }),
+      ], { mustContain: "Engine Health" }),
       check("journal_event", "Module layout banner", [
         "src/components/advanced/AdvancedModuleEngineBanner.tsx",
       ], { mustContain: "Impact on latest analysis" }),
@@ -328,7 +328,7 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       ], { mustContain: "market_data_fresh" }),
       check("dashboard_visibility", "Engine health page", [
         "src/components/advanced/EngineHealthDashboard.tsx",
-      ], { mustContain: "Dashboard summary" }),
+      ], { mustContain: "Activation checks" }),
       check("reports_visibility", "Advanced engine health link", [
         "src/components/goal/AdvancedView.tsx",
       ], { mustContain: "Engine Health" }),
@@ -344,6 +344,8 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
     mvpId: 88,
     name: "Engine Consistency & Reconciliation",
     tradeAffecting: true,
+    missionSnapshotField: "engineConsistency",
+    testnetSnapshotField: "engineConsistency",
     journalEventType: "READINESS_CHECKED",
     checks: [
       check("route_or_api", "Consistency API", [
@@ -352,6 +354,7 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       ]),
       check("data_source", "Consistency builder", [
         "src/lib/engine-consistency/build-engine-consistency.ts",
+        "src/lib/engine-consistency/build-engine-consistency-from-testnet.ts",
       ], { mustContain: "trade_without_decision_log_id" }),
       check("write_path", "Safe auto-fix", [
         "src/lib/engine-consistency/apply-consistency-auto-fix.ts",
@@ -495,9 +498,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Build mission controller snapshot", [
         "src/lib/mission-controller-risk-budget/build-mission-controller-risk-budget.ts",
       ], { mustContain: "recommendedMaxNotional" }),
-      check("dashboard_visibility", "Mission controller badge", [
+      check("dashboard_visibility", "Mission mode labels", [
         "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "MissionControllerRiskBudgetBadge" }),
+      ], { mustContain: "MissionModeLabels" }),
       check("reports_visibility", "Reports mission controller", [
         "src/components/goal/ReportsView.tsx",
       ], { mustContain: "MissionControllerRiskBudgetPanel" }),
@@ -513,6 +516,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("risk_permission_check", "PAUSED blocks testnet entries", [
         "src/lib/exchange/binance/unified-testnet-trade-gate.ts",
       ], { mustContain: 'missionMode === "PAUSED"' }),
+      check("risk_permission_check", "Blocks cooldown entries", [
+        "src/lib/exchange/binance/unified-testnet-trade-gate.ts",
+      ], { mustContain: 'missionMode === "COOLDOWN"' }),
     ],
   },
   {
@@ -569,9 +575,9 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("write_path", "Persist readiness review", [
         "src/lib/micro-live-readiness-review/persist-readiness-review.ts",
       ], { mustContain: "READINESS_REVIEWED" }),
-      check("dashboard_visibility", "Readiness review badge", [
+      check("dashboard_visibility", "Readiness mode labels", [
         "src/components/goal/GoalDashboard.tsx",
-      ], { mustContain: "MicroLiveReadinessReviewBadge" }),
+      ], { mustContain: "MissionModeLabels" }),
       check("reports_visibility", "Reports readiness review", [
         "src/components/goal/ReportsView.tsx",
       ], { mustContain: "MicroLiveReadinessReviewPanel" }),
@@ -587,6 +593,46 @@ export const MVP_INTEGRATION_REGISTRY: MvpIntegrationContract[] = [
       check("risk_permission_check", "Cannot place live orders", [
         "src/lib/micro-live-readiness-review/types.ts",
       ], { mustContain: "cannotPlaceLiveOrders" }),
+    ],
+  },
+  {
+    mvpId: 95,
+    name: "Testnet + Engine Activation Fix Pack",
+    tradeAffecting: true,
+    missionSnapshotField: "binanceTestnet",
+    testnetSnapshotField: "binanceTestnet",
+    journalEventType: "ANALYSIS_STARTED",
+    checks: [
+      check("route_or_api", "Engine health API", [
+        "src/app/api/analysis/health/route.ts",
+      ], { mustContain: "buildEngineActivationHealthStatus" }),
+      check("route_or_api", "Reconciliation status API", [
+        "src/app/api/reconciliation/status/route.ts",
+      ], { mustContain: "buildReconciliationStatus" }),
+      check("route_or_api", "Evidence quality status API", [
+        "src/app/api/evidence-quality/status/route.ts",
+      ], { mustContain: "buildEvidenceQualityActivationStatus" }),
+      check("route_or_api", "Binance diagnostic API", [
+        "src/app/api/exchange/binance/diagnostic/route.ts",
+      ]),
+      check("data_source", "Binance diagnostic resolver", [
+        "src/lib/testnet-engine-activation/build-binance-testnet-diagnostic.ts",
+      ], { mustContain: "MISSING_ENV" }),
+      check("write_path", "Engine run events on analyze", [
+        "src/lib/testnet-engine-activation/run-engine-activation-desk-analyze.ts",
+      ], { mustContain: "ANALYSIS_STARTED" }),
+      check("dashboard_visibility", "Mode labels on dashboard", [
+        "src/components/goal/GoalDashboard.tsx",
+      ], { mustContain: "MissionModeLabels" }),
+      check("reports_visibility", "Activation status on reports", [
+        "src/components/goal/ReportsView.tsx",
+      ], { mustContain: "EngineActivationStatusPanel" }),
+      check("risk_permission_check", "Live trading locked", [
+        "src/lib/testnet-engine-activation/types.ts",
+      ], { mustContain: "liveTradingLocked" }),
+      check("single_source_of_truth", "Mission binanceTestnet diagnostic", [
+        "src/lib/mission-flow/types.ts",
+      ], { mustContain: "recommendation" }),
     ],
   },
 ];

@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import GoalShell from "@/components/goal/GoalShell";
-import EvidenceQualityPanel from "@/components/evidence-quality/EvidenceQualityPanel";
-import type { EvidenceQualitySnapshot } from "@/lib/evidence-quality/types";
+import type { EvidenceQualityStatusResponse } from "@/lib/testnet-engine-activation/types";
 
 export default function EvidenceQualityDashboard() {
-  const [snapshot, setSnapshot] = useState<EvidenceQualitySnapshot | null>(null);
+  const [status, setStatus] = useState<EvidenceQualityStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,14 +14,18 @@ export default function EvidenceQualityDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/analysis/evidence-quality", { cache: "no-store" });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? "Failed to load evidence quality");
+      const res = await fetch("/api/evidence-quality/status", { cache: "no-store" });
+      const data = (await res.json()) as EvidenceQualityStatusResponse & {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error ?? "Failed to load evidence quality");
       }
-      setSnapshot(json.snapshot as EvidenceQualitySnapshot);
+      setStatus(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Load failed");
+      setStatus(null);
     } finally {
       setLoading(false);
     }
@@ -64,14 +67,48 @@ export default function EvidenceQualityDashboard() {
         </p>
       )}
 
-      <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-          Evidence quality status
-        </h2>
-        <div className="mt-3">
-          <EvidenceQualityPanel quality={snapshot} />
-        </div>
-      </section>
+      {status && (
+        <section className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            Evidence quality status
+          </h2>
+          <p className="mt-3 text-2xl font-semibold text-zinc-100">{status.status}</p>
+          <p className="mt-2 text-sm text-zinc-300">{status.message}</p>
+          <dl className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+            <div>
+              <dt className="text-zinc-500">Valid evidence</dt>
+              <dd className="font-mono text-zinc-200">
+                {status.validEvidenceCount}/{status.requiredEvidenceCount}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Invalid</dt>
+              <dd className="font-mono text-zinc-200">{status.invalidEvidenceCount}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Confidence</dt>
+              <dd className="font-mono text-zinc-200">{status.evidenceConfidence}%</dd>
+            </div>
+          </dl>
+          {status.missingFields.length > 0 && (
+            <ul className="mt-4 space-y-1 text-xs text-amber-200/90">
+              {status.missingFields.map((m) => (
+                <li key={m.field}>
+                  • {m.field}: {m.count} trade(s)
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {!status && !error && loading && (
+        <p className="text-sm text-zinc-500">Evidence quality loading…</p>
+      )}
+
+      {!status && !error && !loading && (
+        <p className="text-sm text-zinc-500">No evidence quality data — try Refresh.</p>
+      )}
     </GoalShell>
   );
 }

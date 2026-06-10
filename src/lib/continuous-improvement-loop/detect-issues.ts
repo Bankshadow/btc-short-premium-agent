@@ -55,7 +55,12 @@ export function detectImprovementIssues(
         title: "Binance testnet not connected",
         summary: m.binanceTestnet.reason,
         evidence: [m.binanceTestnet.reason],
-        severity: m.binanceTestnet.status === "BLOCKED" ? "HIGH" : "MEDIUM",
+        severity:
+          m.binanceTestnet.status === "AUTH_ERROR" ||
+          m.binanceTestnet.status === "MISSING_ENV" ||
+          m.binanceTestnet.status === "BLOCKED_BY_REGION"
+            ? "HIGH"
+            : "MEDIUM",
         sourceModule: "mission-flow",
       }),
     );

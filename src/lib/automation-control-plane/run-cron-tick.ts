@@ -1,4 +1,4 @@
-import { invalidateMissionSnapshotCache } from "@/lib/mission-flow/build-server-snapshot";
+import { buildMissionFlowServerSnapshot } from "@/lib/mission-flow/build-server-snapshot";
 import {
   CRON_INTERVAL_PRESETS,
   describeCronSchedule,
@@ -94,7 +94,12 @@ export async function runCronTick(input: {
     trigger: "cron",
     force: input.force,
   });
-  invalidateMissionSnapshotCache();
+
+  try {
+    await buildMissionFlowServerSnapshot({ fresh: true });
+  } catch {
+    /* mission refresh after cycle is best-effort */
+  }
 
   return {
     ok: run.status === "SUCCESS" || run.status === "SKIPPED" || run.status === "BLOCKED",

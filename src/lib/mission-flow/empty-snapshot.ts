@@ -10,6 +10,7 @@ import { emptyEvidenceQualitySnapshot } from "@/lib/evidence-quality/build-evide
 import { emptyIntegratedQualityCalibration } from "@/lib/integrated-quality-calibration/build-integrated-quality-calibration";
 import { emptyIntegratedStrategyAgentHealth } from "@/lib/integrated-strategy-agent-health/build-integrated-strategy-agent-health";
 import { emptyMissionControllerRiskBudget } from "@/lib/mission-controller-risk-budget/empty-snapshot";
+import { emptyEngineConsistencySnapshot } from "@/lib/engine-consistency/empty-engine-consistency";
 import { emptyAlwaysOnOperatorLayer } from "@/lib/always-on-operator-layer/empty-snapshot";
 import { emptyMicroLiveReadinessReview } from "@/lib/micro-live-readiness-review/empty-snapshot";
 import { emptyMonitorReliabilitySnapshot } from "@/lib/monitor-reliability/empty-snapshot";
@@ -48,9 +49,19 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
       humanActionRequired: false,
     },
     binanceTestnet: {
-      status: "DISCONNECTED",
-      reason: "Not connected yet.",
+      status: "MISSING_ENV",
+      reason: "BINANCE_API_KEY / BINANCE_API_SECRET not configured.",
+      recommendation: "Set BINANCE_API_KEY, BINANCE_API_SECRET, and BINANCE_TESTNET_ENABLED=true in server env.",
+      lastCheckedAt: new Date().toISOString(),
+      connected: false,
+      testnetEnabled: false,
+      liveEnabled: false,
+      proxyEnabled: false,
       proxyProvider: null,
+      proxyUrlConfigured: false,
+      apiKeyPresent: false,
+      apiSecretPresent: false,
+      baseUrl: "",
     },
     lastUpdatedAt: new Date().toISOString(),
     lastCycleAt: null,
@@ -113,6 +124,7 @@ export function emptyMissionFlowSnapshot(): MissionFlowSnapshot {
     integratedQualityCalibration: emptyIntegratedQualityCalibration(),
     integratedStrategyAgentHealth: emptyIntegratedStrategyAgentHealth(),
     missionControllerRiskBudget: emptyMissionControllerRiskBudget(),
+    engineConsistency: emptyEngineConsistencySnapshot(),
     alwaysOnOperatorLayer: emptyAlwaysOnOperatorLayer(),
     microLiveReadinessReview: emptyMicroLiveReadinessReview(),
     selfLearning: {

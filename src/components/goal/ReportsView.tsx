@@ -34,6 +34,9 @@ import {
   MicroLiveReadinessReviewPanel,
 } from "@/components/micro-live-readiness-review/MicroLiveReadinessReviewPanel";
 
+import { MissionModeLabels } from "@/components/mission-mode-labels/MissionModeLabels";
+import EngineActivationStatusPanel from "@/components/testnet-engine-activation/EngineActivationStatusPanel";
+
 import { IntegratedDailySelfReviewPanel } from "@/components/integrated-daily-self-review/IntegratedDailySelfReviewPanel";
 
 import { useMissionSnapshot } from "./use-mission-snapshot";
@@ -333,65 +336,56 @@ export default function ReportsView() {
         title="Risk/readiness"
 
         summary={
-
           m.microLiveReadinessReview.readinessStatus === "READY_FOR_REVIEW"
-
             ? "MVP 94 readiness review passed — schedule human review"
-
             : m.microLiveReadinessReview.readinessStatus === "BLOCKED"
-
               ? "Readiness BLOCKED — live safety violation"
-
-              : incidentOpen > 0
-
-                ? `${incidentOpen} open incident(s) · review readiness checklist`
-
-                : m.microLiveReadiness.readinessStatus === "READY_FOR_REVIEW"
-
-                  ? "Readiness checklist passed"
-
+              : m.microLiveReadinessReview.topBlocker
+                ? m.microLiveReadinessReview.topBlocker
+                : incidentOpen > 0
+                  ? `${incidentOpen} open incident(s) · review readiness checklist`
                   : "Readiness gaps remain — advisory only"
-
         }
-
       >
+        <div className="mb-4">
+          <MissionModeLabels snapshot={m} />
+        </div>
 
-        <MicroLiveReadinessChecklist readiness={m.microLiveReadiness} />
+        <EngineActivationStatusPanel />
 
         <div className="mt-4 border-t border-zinc-800/80 pt-4">
-
-          <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            Micro-live readiness review (MVP 94)
-          </h3>
-
           <MicroLiveReadinessReviewPanel review={m.microLiveReadinessReview} />
-
         </div>
 
+        <details className="mt-4 border-t border-zinc-800/80 pt-4">
+          <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            Legacy readiness checklist (MVP 75)
+          </summary>
+          <div className="mt-3">
+            <MicroLiveReadinessChecklist readiness={m.microLiveReadiness} />
+          </div>
+        </details>
+
         <div className="mt-4 border-t border-zinc-800/80 pt-4">
-
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            Always-on operator layer
+            Always-on operator layer (MVP 93)
           </h3>
-
           <AlwaysOnOperatorLayerPanel snapshot={m.alwaysOnOperatorLayer} />
-
         </div>
 
         <div className="mt-4 border-t border-zinc-800/80 pt-4">
-
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-            Mission controller & risk budget
+            Mission controller & risk budget (MVP 92)
           </h3>
-
           <MissionControllerRiskBudgetPanel snapshot={m.missionControllerRiskBudget} />
-
-        </div>
-
-        <div className="mt-4 border-t border-zinc-800/80 pt-4">
-
-          <IntegratedRiskBudgetPanel riskBudget={m.integratedRiskBudget} />
-
+          <details className="mt-4">
+            <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Risk budget optimizer detail (MVP 78)
+            </summary>
+            <div className="mt-3">
+              <IntegratedRiskBudgetPanel riskBudget={m.integratedRiskBudget} />
+            </div>
+          </details>
         </div>
 
         {incidentOpen > 0 && (

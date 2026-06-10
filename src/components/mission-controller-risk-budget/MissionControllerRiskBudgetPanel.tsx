@@ -25,10 +25,7 @@ export function MissionControllerRiskBudgetBadge({
       data-mvp="92"
       title={snapshot.modeReason}
     >
-      Mission {snapshot.missionMode}
-      <span className="opacity-70">
-        · ${snapshot.recommendedMaxNotional}
-      </span>
+      Mission mode: {snapshot.missionMode}
     </span>
   );
 }
@@ -52,7 +49,7 @@ export function MissionControllerRiskBudgetPanel({
         <span
           className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style}`}
         >
-          {snapshot.missionMode}
+          Mission mode: {snapshot.missionMode}
         </span>
         <span className="text-xs text-zinc-500">
           Progress {snapshot.inputs.progressPct.toFixed(0)}% to $

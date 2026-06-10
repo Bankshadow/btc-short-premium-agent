@@ -33,6 +33,8 @@ function baseInput(overrides: Partial<Parameters<typeof buildReadinessReviewChec
     monitorHealthOk: true,
     monitorPositionUncertain: false,
     monitorCurrentIssue: null,
+    engineConsistencyOk: true,
+    engineConsistencyIssue: null,
     riskBudgetConfigured: true,
     dailyLossLimitConfigured: true,
     reduceOnlyCloseTested: true,

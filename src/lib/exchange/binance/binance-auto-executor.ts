@@ -9,9 +9,14 @@ import {
 } from "./binance-config";
 import { GOAL_MIN_TRADES_FOR_TRUST, GOAL_START_CAPITAL } from "@/lib/goal-engine/types";
 import {
+  computeLosingStreakFromClosedTrades,
   dailyLossLimitHit,
   deriveMissionNextAction,
+  resolveMissionMode,
 } from "@/lib/mission-controller-risk-budget/resolve-mission-mode";
+import { readMissionSnapshotCache } from "@/lib/mission-flow/snapshot-cache";
+import { readTestnetMonitorSnapshotCache } from "@/lib/testnet-monitor/snapshot-cache";
+import { VALIDATION_THRESHOLDS } from "@/lib/validation/validation-config";
 import { emitMissionAlert } from "@/lib/mission-notifications/emit-mission-alert";
 import { loadServerBinanceTestnetJournal } from "./binance-testnet-journal-server";
 import { buildBinancePreviewInputFromAiSignal } from "./build-ai-preview";
@@ -181,15 +186,53 @@ export async function runBinanceTestnetAutoExecute(input: {
     const equityUsd = GOAL_START_CAPITAL + netPnlUsd;
     const dailyPnlPct =
       equityUsd > 0 ? (dailyPnlUsd / equityUsd) * 100 : 0;
-    const missionMode = dailyLossLimitHit(dailyPnlPct) ? "PAUSED" : null;
-    const missionNextAction =
-      missionMode === "PAUSED"
-        ? deriveMissionNextAction({
-            missionMode: "PAUSED",
-            progressPct: 0,
-            modeReason: "Daily loss limit hit.",
-          })
-        : null;
+    const losingStreak = computeLosingStreakFromClosedTrades(closedTrades);
+    const cachedTestnet = readTestnetMonitorSnapshotCache()?.snapshot;
+    const cachedMission = readMissionSnapshotCache()?.snapshot;
+    const cachedMcr =
+      cachedMission?.missionControllerRiskBudget ??
+      cachedTestnet?.missionControllerRiskBudget ??
+      null;
+    const engineConsistency =
+      cachedMission?.engineConsistency ??
+      cachedTestnet?.engineConsistency ??
+      null;
+
+    let missionMode = cachedMcr?.missionMode ?? null;
+    let missionNextAction = cachedMcr?.nextAction ?? null;
+
+    if (dailyLossLimitHit(dailyPnlPct)) {
+      missionMode = "PAUSED";
+      missionNextAction = deriveMissionNextAction({
+        missionMode: "PAUSED",
+        progressPct: cachedMcr?.inputs.progressPct ?? 0,
+        modeReason: "Daily loss limit hit.",
+      });
+    } else if (!missionMode) {
+      const strategyStatus =
+        integratedStrategyHealth.primaryReport?.status ?? null;
+      const resolved = resolveMissionMode({
+        dailyLossLimitHit: false,
+        automationPaused: false,
+        criticalIncidentOpen: false,
+        losingStreak,
+        dailyPnlStressed: dailyPnlPct <= VALIDATION_THRESHOLDS.dailyLossLimitPct * 0.7,
+        strategyStatus,
+        blocksNewTestnetEntries: integratedStrategyHealth.blocksNewTestnetEntries,
+        riskBudgetMode: "NORMAL",
+        drawdownPct: 0,
+        overconfidence: false,
+        avgQuality: null,
+        evidenceReady: evidenceProgress.completedTrades >= GOAL_MIN_TRADES_FOR_TRUST,
+        readinessBlocked: false,
+      });
+      missionMode = resolved.mode;
+      missionNextAction = deriveMissionNextAction({
+        missionMode: resolved.mode,
+        progressPct: cachedMcr?.inputs.progressPct ?? 0,
+        modeReason: resolved.reason,
+      });
+    }
 
     const tradeGate = evaluateUnifiedTestnetTradeGate({
       analysis: input.analysis,
@@ -198,8 +241,14 @@ export async function runBinanceTestnetAutoExecute(input: {
       orders: input.orders,
       monitorReliability,
       integratedStrategyHealth,
-      consistencyBlocksNewTrades: monitorReliability?.positionStateUncertain ?? false,
-      consistencyIssue: monitorReliability?.currentIssue ?? null,
+      consistencyBlocksNewTrades:
+        engineConsistency?.blocksNewTrades ??
+        monitorReliability?.positionStateUncertain ??
+        false,
+      consistencyIssue:
+        engineConsistency?.issues[0]?.message ??
+        monitorReliability?.currentIssue ??
+        null,
       missionMode,
       missionNextAction,
     });
@@ -216,8 +265,7 @@ export async function runBinanceTestnetAutoExecute(input: {
       .filter((p) => Math.abs(Number(p.positionAmt)) > 0)
       .map((p) => p.symbol);
 
-    const journal = await loadServerBinanceTestnetJournal().catch(() => []);
-    const tradesToday = journal.filter(
+    const tradesToday = journalForReliability.filter(
       (j) =>
         new Date(j.createdAt).getTime() >= todayStart.getTime() &&
         j.status !== "BLOCKED" &&
@@ -260,8 +308,8 @@ export async function runBinanceTestnetAutoExecute(input: {
       };
     }
 
-    const completedTrades = journal.filter((j) => j.status === "CLOSED").length;
-    const submittedPreviewIds = journal
+    const completedTrades = journalForReliability.filter((j) => j.status === "CLOSED").length;
+    const submittedPreviewIds = journalForReliability
       .filter((j) =>
         ["SUBMITTED", "FILLED", "CLOSING", "CLOSED"].includes(j.status),
       )

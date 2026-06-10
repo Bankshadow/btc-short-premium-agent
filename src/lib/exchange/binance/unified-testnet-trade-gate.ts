@@ -70,10 +70,12 @@ export function evaluateUnifiedTestnetTradeGate(
     );
   }
 
-  if (input.missionMode === "PAUSED") {
+  if (input.missionMode === "PAUSED" || input.missionMode === "COOLDOWN") {
     blockReasons.push(
       input.missionNextAction ??
-        "Mission PAUSED — daily loss limit or critical blocker.",
+        (input.missionMode === "COOLDOWN"
+          ? "Mission COOLDOWN — reduce activity until metrics recover."
+          : "Mission PAUSED — daily loss limit or critical blocker."),
     );
   }
 

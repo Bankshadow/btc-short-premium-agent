@@ -15,19 +15,18 @@ export function buildReadinessReviewChecklist(
   push({
     id: "engine_consistency_ok",
     label: "Engine consistency OK",
-    passed:
-      !input.monitorPositionUncertain &&
-      input.monitorHealthOk &&
-      input.evidenceMissingDecisionLogId === 0,
+    passed: input.engineConsistencyOk,
     hardBlock: true,
-    detail:
-      input.monitorPositionUncertain
-        ? input.monitorCurrentIssue ?? "Position state uncertain."
-        : !input.monitorHealthOk
-          ? input.monitorCurrentIssue ?? "Monitor health blocked."
-          : input.evidenceMissingDecisionLogId > 0
-            ? `${input.evidenceMissingDecisionLogId} trade(s) missing decisionLogId.`
-            : null,
+    detail: input.engineConsistencyOk
+      ? null
+      : input.engineConsistencyIssue ??
+        (input.monitorPositionUncertain
+          ? input.monitorCurrentIssue ?? "Position state uncertain."
+          : !input.monitorHealthOk
+            ? input.monitorCurrentIssue ?? "Monitor health blocked."
+            : input.evidenceMissingDecisionLogId > 0
+              ? `${input.evidenceMissingDecisionLogId} trade(s) missing decisionLogId.`
+              : "Engine consistency blocked."),
   });
 
   push({

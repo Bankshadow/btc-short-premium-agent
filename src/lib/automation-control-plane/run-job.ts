@@ -211,6 +211,35 @@ export async function runAutomationJob(
           );
         }
 
+        if (isTestnetPrimaryAutomation()) {
+          const { runEngineActivationDeskAnalyze } = await import(
+            "@/lib/testnet-engine-activation/run-engine-activation-desk-analyze"
+          );
+          const activation = await runEngineActivationDeskAnalyze(ctx);
+          ctx.analyze = activation.analysis;
+          ctx.decisionLogId = activation.decisionLogId;
+          ctx.autopilotResult = activation.autopilot;
+
+          await emitAnalyzePipelineEvents({
+            runId: ctx.runId,
+            analysis: activation.analysis,
+            autopilot: activation.autopilot,
+            previewCreated: false,
+          });
+
+          await recordLoopGuardAction({
+            actionType: "DESK_ANALYZE",
+            actionKey: buildActionKey("DESK_ANALYZE", activation.analysis.step5_verdict?.recommendation ?? "—"),
+            success: true,
+            failed: false,
+            marketContextHash: buildMarketContextHash(activation.analysis),
+            runId: ctx.runId,
+            summary: activation.summary,
+          });
+
+          return { summary: activation.summary };
+        }
+
         const { prepareSecondBrainForCycle } = await import(
           "@/lib/second-brain/prepare-cycle"
         );
@@ -520,7 +549,7 @@ export async function runAutomationJob(
         if (monitor.closedCount > 0 && isBinanceTestnetAutoExecuteEnabled()) {
           await (
             await import("@/lib/testnet-monitor/build-testnet-monitor-snapshot")
-          ).buildTestnetMonitorSnapshot();
+          ).buildTestnetMonitorSnapshot({ fresh: true });
           const { autoMarkPendingLearningRecordsServer } = await import(
             "@/lib/testnet-monitor/learning-records-server"
           );

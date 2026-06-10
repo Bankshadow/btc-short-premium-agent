@@ -19,11 +19,13 @@ import type { CoreEngineRegistrySnapshot } from "@/lib/core-engine-registry";
 import type { PaperOrder } from "@/lib/paper/paper-order-types";
 import type { LiveTradeJournalEntry } from "@/lib/live-pilot/types";
 import { loadServerBackboneRecord } from "@/lib/background-worker/server-backbone";
-import { buildGoalProgressSnapshot } from "./build-goal-snapshot";
+import type { BinanceTestnetDiagnosticSnapshot } from "@/lib/testnet-engine-activation/types";
+import { resolveBinanceTestnetDiagnosticFromStatus } from "@/lib/testnet-engine-activation/build-binance-testnet-diagnostic";
 import {
   buildMissionSnapshotFromGoal,
   resolveProxyProviderLabel,
 } from "./build-mission-snapshot";
+import { buildGoalProgressSnapshot } from "./build-goal-snapshot";
 import { buildGoalTradeList, type GoalTradeRow } from "./build-trade-list";
 import type { AutomationStatusSnapshot } from "@/lib/automation-control-plane/types";
 import type { TestnetMonitorSnapshot } from "@/lib/testnet-monitor/types";
@@ -39,6 +41,7 @@ export interface GoalDashboardServerPayload {
   goal: GoalProgressSnapshot;
   mission: MissionSnapshot;
   binance: GoalBinanceConnectionSnapshot;
+  binanceDiagnostic: BinanceTestnetDiagnosticSnapshot;
   engines: CoreEngineRegistrySnapshot;
   automation: AutomationStatusSnapshot | null;
   learningPending: TestnetLearningRecord[];
@@ -48,7 +51,13 @@ export interface GoalDashboardServerPayload {
   testnetSnapshot: TestnetMonitorSnapshot | null;
 }
 
-export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardServerPayload> {
+export interface BuildGoalDashboardOptions {
+  fresh?: boolean;
+}
+
+export async function buildGoalDashboardServerPayload(
+  options: BuildGoalDashboardOptions = {},
+): Promise<GoalDashboardServerPayload> {
   const [
     entriesRaw,
     testnetSnapshot,
@@ -62,7 +71,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     serverBackbone,
   ] = await Promise.all([
     loadServerAnalysisJournal().catch(() => []),
-    buildTestnetMonitorSnapshot().catch(() => null),
+    buildTestnetMonitorSnapshot({ fresh: options.fresh }).catch(() => null),
     loadServerUnifiedPortfolio().catch(() => null),
     getAutomationStatus().catch(() => null),
     buildObservabilitySnapshot("server-default", {
@@ -193,10 +202,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     pendingLearningReview,
   });
 
-  const binanceBlocker =
-    binanceStatus?.blockers?.[0]?.detail ??
-    binanceStatus?.error ??
-    null;
+  const binanceDiagnostic = resolveBinanceTestnetDiagnosticFromStatus(binanceStatus);
 
   const binance: GoalBinanceConnectionSnapshot = {
     configured: Boolean(binanceStatus?.configured),
@@ -208,7 +214,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     upstreamBaseUrl: binanceStatus?.upstreamBaseUrl ?? "",
     autoExecuteEnabled: Boolean(binanceStatus?.autoExecuteEnabled),
     liveLocked: Boolean(binanceStatus?.liveBlocked ?? true),
-    blocker: binanceBlocker,
+    blocker: binanceDiagnostic.reason,
     error: binanceStatus?.error ?? null,
     debugHref: "/binance-testnet",
   };
@@ -291,6 +297,7 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
     goal,
     mission,
     binance,
+    binanceDiagnostic,
     engines,
     automation,
     learningPending,
@@ -302,11 +309,20 @@ export async function buildGoalDashboardServerPayload(): Promise<GoalDashboardSe
   };
 }
 
-export async function buildGoalTradeListServer(): Promise<GoalTradeRow[]> {
+export interface BuildGoalTradeListOptions {
+  testnetSnapshot?: TestnetMonitorSnapshot | null;
+  fresh?: boolean;
+}
+
+export async function buildGoalTradeListServer(
+  options: BuildGoalTradeListOptions = {},
+): Promise<GoalTradeRow[]> {
   const [entriesRaw, testnetSnapshot, unifiedPortfolio, paperRows, liveRows] =
     await Promise.all([
       loadServerAnalysisJournal().catch(() => []),
-      buildTestnetMonitorSnapshot().catch(() => null),
+      options.testnetSnapshot !== undefined
+        ? Promise.resolve(options.testnetSnapshot)
+        : buildTestnetMonitorSnapshot({ fresh: options.fresh }).catch(() => null),
       loadServerUnifiedPortfolio().catch(() => null),
       listWarehouseRows("paper_trades", 500).catch(() => []),
       listWarehouseRows("live_trades", 300).catch(() => []),
