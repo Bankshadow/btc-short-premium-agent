@@ -33,6 +33,9 @@ export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const {
     ok: bundleOk,
+    ready: bundleReady,
+    loading: bundleLoading,
+    isFallback,
     mission,
     pnl,
     evidence,
@@ -71,6 +74,7 @@ export default function DashboardPage() {
     risk,
     health,
   });
+  const showFallbackWarning = isFallback && !bundleLoading;
   const lifecycle = deriveLifecycleDisplay(mission, data, metrics.evidenceValid);
   const binance =
     bundleBinance && !bundleBinance.zeroState
@@ -80,7 +84,7 @@ export default function DashboardPage() {
         : bundleBinance;
   const staleWarnings = trades.staleOpenWarnings ?? [];
   const projectionWarnings = [
-    ...(metrics.usingFallback ? [PROJECTION_FALLBACK_ACTIVE_MESSAGE] : []),
+    ...(showFallbackWarning ? [PROJECTION_FALLBACK_ACTIVE_MESSAGE] : []),
     ...bundleWarnings.filter((w) => w !== PROJECTION_FALLBACK_ACTIVE_MESSAGE),
     ...(ctxError ? [`ui/context: ${ctxError}`] : []),
   ];
@@ -139,7 +143,7 @@ export default function DashboardPage() {
 
       <ProjectionWarning
         warnings={projectionWarnings}
-        title={metrics.usingFallback ? PROJECTION_FALLBACK_ACTIVE_MESSAGE : undefined}
+        title={showFallbackWarning ? PROJECTION_FALLBACK_ACTIVE_MESSAGE : undefined}
         onRetry={refresh}
       />
 

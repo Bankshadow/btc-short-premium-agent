@@ -52,12 +52,20 @@ export default function ReportsPage() {
     risk: projRisk,
     trades: projTrades,
     warnings: bundleWarnings,
+    loading: bundleLoading,
+    isFallback,
     reload: reloadBundle,
   } = useProjectionBundle();
   const coreHealthApi = useApi<CoreHealthReport>("/api/core/health", 0, {
     fallback: getDefaultCoreHealth(),
   });
   const coreHealthStatus = resolveCoreHealthStatus(coreHealthApi.data, projHealth);
+  const pendingPnlCount = projTrades.closed.filter(
+    (t) =>
+      t.status === "CLOSED_PENDING_PNL" ||
+      t.result === "PENDING_PNL" ||
+      t.pnlStatus === "PENDING_DATA",
+  ).length;
   const reportsFallback = useMemo(
     () =>
       zeroReportsSummary(
@@ -197,6 +205,7 @@ export default function ReportsPage() {
         <div className="ui-dashboard-metrics sm:grid-cols-2">
           <MetricCard label="Realized count" value={String(projPnl.realizedCount)} />
           <MetricCard label="Total net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
+          <MetricCard label="PnL pending (closed)" value={String(pendingPnlCount)} />
           <MetricCard label="Legacy closed count" value={String(pnlSummary.count)} description="Legacy reference only" />
           <MetricCard label="Legacy avg PnL" value={`$${pnlSummary.averagePnl.toFixed(2)}`} description="Legacy reference only" />
         </div>
@@ -209,8 +218,10 @@ export default function ReportsPage() {
         ) : (
           <p className="text-sm text-[var(--muted)]">No realized PnL records yet.</p>
         )}
-        {reportData.positionStats.realizedPnlPending ? (
-          <Badge tone="wait">{PNL_PENDING_LABEL}</Badge>
+        {pendingPnlCount > 0 ? (
+          <Badge tone="wait">
+            {pendingPnlCount} closed trade(s) · {PNL_PENDING_LABEL}
+          </Badge>
         ) : null}
       </SectionCard>
 

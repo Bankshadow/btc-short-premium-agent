@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useApi } from "@/components/use-api";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import {
@@ -12,7 +11,6 @@ import {
   SectionCard,
   StatusBadge,
 } from "@/components/ui";
-import { getDefaultTradeProjection } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import {
   bundleProjectionReady,
@@ -90,24 +88,21 @@ function lifecycleLabel(open: boolean, hasClosePreview: boolean): string {
 }
 
 export default function TradesPage() {
-  const fallback = useMemo(() => getDefaultTradeProjection(), []);
   const {
     ok: bundleOk,
+    ready: bundleReady,
+    loading: bundleLoading,
+    isFallback,
     mission: bundleMission,
     trades: bundleTrades,
     evidence,
     warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
-  const { data, error, reload } = useApi<TradesResponse>("/api/core/projections/trades", 0, {
-    fallback,
-  });
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
   const tradeData = useMemo((): TradesResponse => {
-    if (
-      bundleProjectionReady({ ok: bundleOk, mission: bundleMission, trades: bundleTrades })
-    ) {
+    if (bundleProjectionReady({ ok: bundleOk, mission: bundleMission, trades: bundleTrades })) {
       return {
         open: bundleTrades.open as TradesResponse["open"],
         closed: bundleTrades.closed as TradesResponse["closed"],
@@ -123,13 +118,18 @@ export default function TradesPage() {
         staleOpenWarnings: bundleTrades.staleOpenWarnings,
       };
     }
-    if (data?.summary) return data;
-    return fallback;
-  }, [bundleOk, bundleMission, bundleTrades, data, fallback]);
+    return {
+      open: [],
+      closed: [],
+      summary: { openCount: 0, closedCount: 0, realizedPnl: 0, executionCount: 0 },
+    };
+  }, [bundleOk, bundleMission, bundleTrades]);
+
   const closeTrade = tradeData.open.find((t) => t.tradeId === closeTradeId);
   const evidenceByTrade = new Map(
     (evidence.trades ?? []).map((t) => [t.tradeId, t.status]),
   );
+  const showFallbackWarning = isFallback && !bundleLoading;
 
   return (
     <div className="ui-dashboard-grid">
@@ -137,23 +137,13 @@ export default function TradesPage() {
         title="Trades"
         description="Trade projection — journal-derived open/closed state"
         actions={
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              reloadBundle();
-              reload();
-            }}
-          >
+          <button type="button" className="btn" onClick={() => reloadBundle()}>
             Refresh
           </button>
         }
       />
       <SafetyLabelsBar />
-      <ProjectionWarning
-        warnings={[...bundleWarnings, ...(error ? [`trades: ${error}`] : [])]}
-        onRetry={reload}
-      />
+      <ProjectionWarning warnings={bundleWarnings} onRetry={reloadBundle} />
 
       <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard label="Executions" value={String(tradeData.summary.executionCount)} />
@@ -179,7 +169,9 @@ export default function TradesPage() {
 
       <SectionCard title="Open testnet trades">
         {tradeData.open.length === 0 ? (
-          <p className="empty-state">No open trades.</p>
+          <p className="empty-state">
+            {bundleLoading ? "Loading trades projection…" : "No open trades."}
+          </p>
         ) : (
           <div className="space-y-3">
             {tradeData.open.map((t) => (
@@ -221,7 +213,13 @@ export default function TradesPage() {
 
       <SectionCard title="Closed trades">
         {tradeData.closed.length === 0 ? (
-          <p className="empty-state">No closed trades yet.</p>
+          <p className="empty-state">
+            {bundleLoading
+              ? "Loading closed trades…"
+              : showFallbackWarning
+                ? "Projection unavailable — retry refresh."
+                : "No closed trades yet."}
+          </p>
         ) : (
           <div className="space-y-3">
             {tradeData.closed.map((t) => (
@@ -268,7 +266,7 @@ export default function TradesPage() {
           side={closeTrade.side}
           qty={closeTrade.qty}
           onClose={() => setCloseTradeId(null)}
-          onReviewed={reload}
+          onReviewed={reloadBundle}
         />
       ) : null}
     </div>

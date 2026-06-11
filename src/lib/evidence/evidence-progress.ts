@@ -2,6 +2,7 @@ import { appendEvent, getEvents } from "@/lib/journal/journal-query";
 import { PNL_PENDING_MESSAGE } from "@/lib/core/trade-reconciliation";
 import { listClosedTradeIds, validateTradeEvidence } from "./evidence-validator";
 import type { EvidenceProgress } from "./evidence-types";
+import { buildClosedTradesFromEvents } from "@/lib/trades/trade-store";
 
 const EVIDENCE_TARGET = 12;
 
@@ -70,8 +71,12 @@ function evidenceProgressMessage(
 }
 
 export function buildEvidenceProgressFromEvents(events: Awaited<ReturnType<typeof getEvents>>): EvidenceProgress {
+  const closedViews = buildClosedTradesFromEvents(events);
+  const closedById = new Map(closedViews.map((t) => [t.tradeId, t]));
   const tradeIds = listClosedTradeIds(events);
-  const trades = tradeIds.map((id) => validateTradeEvidence(id, events));
+  const trades = tradeIds.map((id) =>
+    validateTradeEvidence(id, events, closedById.get(id)),
+  );
   const validTrades = trades.filter((t) => t.status === "VALID");
   const rejectedTrades = trades.filter((t) => t.status === "REJECTED");
   const valid = Math.min(validTrades.length, EVIDENCE_TARGET);

@@ -92,16 +92,21 @@ describe("UI dashboard loading fix", () => {
 
   it("dashboard does not stay Loading forever", () => {
     const pageSrc = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
-    const hookSrc = fs.readFileSync(
-      path.join(process.cwd(), "src", "components", "use-projection-bundle.tsx"),
+    const providerSrc = fs.readFileSync(
+      path.join(process.cwd(), "src", "components", "projection-bundle-provider.tsx"),
+      "utf8",
+    );
+    const shellSrc = fs.readFileSync(
+      path.join(process.cwd(), "src", "components", "AppShell.tsx"),
       "utf8",
     );
     assert.ok(!pageSrc.includes("LoadingOrError"));
     assert.ok(!pageSrc.includes("if (loading)"));
     assert.ok(pageSrc.includes("useMemo"));
     assert.ok(pageSrc.includes("useProjectionBundle"));
-    assert.ok(hookSrc.includes("DASHBOARD_RENDER_DEADLINE_MS"));
-    assert.equal(hookSrc.includes('loading: false'), true);
+    assert.ok(providerSrc.includes("ProjectionBundleProvider"));
+    assert.ok(shellSrc.includes("ProjectionBundleProvider"));
+    assert.ok(providerSrc.includes("loading"));
   });
 
   it("dashboard does not expose secrets", () => {

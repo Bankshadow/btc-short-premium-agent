@@ -4,9 +4,12 @@ export function bundleProjectionReady(
   bundle: Pick<DefaultProjectionBundle, "ok" | "mission" | "trades">,
 ): boolean {
   if (bundle.ok) return true;
-  const closed = bundle.trades.closedCount ?? bundle.trades.closed.length;
-  const total = bundle.mission.totalTrades;
-  return total > 0 || closed > 0;
+  if (bundle.mission.totalTrades > 0) return true;
+  if (bundle.trades.closed.length > 0) return true;
+  if (bundle.trades.open.length > 0) return true;
+  if ((bundle.trades.effectiveOpenCount ?? 0) > 0) return true;
+  if ((bundle.trades.closedCount ?? 0) > 0) return true;
+  return false;
 }
 
 export function pickClosedTradeCount(

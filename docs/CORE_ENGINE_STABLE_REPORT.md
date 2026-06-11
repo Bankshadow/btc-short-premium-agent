@@ -32,32 +32,27 @@ See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECT
 
 **Hotfix 4 (2026-06-06):** See [CORE_ENGINE_HOTFIX4_UI_BINDING_EVIDENCE_STRICTNESS.md](./CORE_ENGINE_HOTFIX4_UI_BINDING_EVIDENCE_STRICTNESS.md). Projection bundle unwrap, UI page binding, strict evidence validator, API-first core health.
 
+**Hotfix 5 (2026-06-06):** See [CORE_ENGINE_HOTFIX5_UI_SOURCE_EVIDENCE_STRICT.md](./CORE_ENGINE_HOTFIX5_UI_SOURCE_EVIDENCE_STRICT.md). `getProjectionBundleForUI`, shared `ProjectionBundleProvider`, strict evidence with closed-trade projection checks, ui-consistency DOM note.
+
 | Criterion | Status |
 |-----------|--------|
 | `/` dashboard renders (no permanent Loading) | ✅ Hotfix 1 + 2 |
 | `/trades`, `/ai-status`, `/reports`, `/settings` render | ✅ Hotfix 2 — stable fallbacks + bundle-first |
-| Dashboard uses real bundle values when API OK | ✅ Hotfix 4 — `unwrapProjectionBundle` + `ok:true` when valid |
-| Trades/Reports use bundle closed/evidence counts | ✅ Hotfix 4 — `bundleProjectionReady` |
+| Dashboard uses real bundle values when API OK | ✅ Hotfix 5 — shared provider + `getProjectionBundleForUI` |
+| Trades/Reports use bundle closed/evidence counts | ✅ Hotfix 5 — bundle-only binding |
+| Navigate between pages without zero reset | ✅ Hotfix 5 — `ProjectionBundleProvider` in AppShell |
 | Binance status consistent when keys present | ✅ Hotfix 3 — `resolveBinanceStatusConsistency` |
 | Stale trade manual repair (soft WARNING) | ✅ Hotfix 3 — `STALE_TRADE_MANUAL_REPAIR_REQUIRED` |
-| `GET /api/core/ui-consistency` < 5s | ✅ `buildProjectionBundleFast()` — verify post-deploy |
-| `GET /api/core/projection-parity` < 5s | ✅ bundle-only parity — verify post-deploy |
-| Core page health matches `/api/core/health` | ✅ Hotfix 4 — `resolveCoreHealthStatus` |
-| Evidence excludes PENDING_PNL / zero-fill trades | ✅ Hotfix 4 — strict validator |
+| Core page health matches `/api/core/health` | ✅ Hotfix 4/5 — `resolveCoreHealthStatus` |
+| Evidence excludes PENDING_PNL / zero-fill trades | ✅ Hotfix 5 — strict validator + projection checks |
+| ui-consistency documents no DOM checks | ✅ Hotfix 5 — `browserDomChecksAvailable: false` |
 | Stale OPEN not counted as active open | ✅ reconciliation in projections |
-| `npm run build` passes | ✅ verify after Hotfix 4 |
+| `npm run build` passes | ✅ verify after Hotfix 5 |
 | Evidence 0/12 until real fills (8 rejected) | ✅ expected under strict rules |
 
-**Recommendation (after Hotfix 4): `CORE_ENGINE_PARTIAL`**
+**Recommendation (after Hotfix 5): `CORE_ENGINE_PARTIAL`**
 
-UI binding and evidence strictness are fixed in code; production must redeploy and verify pages show bundle values (8 trades, 0/12 evidence, health WARNING). Assign **`CORE_ENGINE_STABLE`** only when:
-
-- All UI pages display projection values correctly in production
-- Evidence does not count pending PnL trades
-- Health status is consistent across Dashboard, Core, and health API
-- No P0/P1 safety issue remains
-
-Previous recommendation (journal repair — 2026-06-11) superseded by strict evidence: zero-fill trades no longer count as valid evidence.
+Deploy Hotfix 5 and verify production: Dashboard 8/8 trades, Trades 8 closed, Reports evidence 0/12, Core health WARNING. Assign **`CORE_ENGINE_STABLE`** only when all UI pages match bundle API and evidence strictness is confirmed in production.
 
 Assign **`CORE_ENGINE_NOT_READY`** only if any core page remains permanently Loading.
 

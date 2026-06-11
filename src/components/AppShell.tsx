@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ProjectionBundleProvider } from "@/components/projection-bundle-provider";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -46,7 +47,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-6">
+        <ProjectionBundleProvider>{children}</ProjectionBundleProvider>
+      </main>
     </div>
   );
 }

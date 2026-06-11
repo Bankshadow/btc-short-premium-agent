@@ -17,6 +17,8 @@ export interface UiConsistencyReport {
   skippedChecks: string[];
   lastCheckedAt: string;
   timedOut?: boolean;
+  browserDomChecksAvailable: boolean;
+  note: string;
 }
 
 function check(
@@ -51,6 +53,9 @@ function deriveStatus(
 export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
   const lastCheckedAt = new Date().toISOString();
   const skippedChecks: string[] = [];
+  const note =
+    "This endpoint validates projection consistency, not rendered DOM values.";
+  const browserDomChecksAvailable = false;
 
   const { result: bundle, timedOut } = await withBoundedCheck(
     () => buildProjectionBundleFast(),
@@ -74,6 +79,8 @@ export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
       skippedChecks: ["all_projection_checks"],
       lastCheckedAt,
       timedOut: true,
+      browserDomChecksAvailable,
+      note,
     };
   }
 
@@ -85,6 +92,8 @@ export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
       mismatches: checks.filter((c) => !c.ok),
       skippedChecks,
       lastCheckedAt,
+      browserDomChecksAvailable,
+      note,
     };
   }
 
@@ -205,5 +214,7 @@ export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
     skippedChecks,
     lastCheckedAt,
     timedOut: timedOut || undefined,
+    browserDomChecksAvailable,
+    note,
   };
 }

@@ -1,4 +1,5 @@
 import type { DefaultProjectionBundle } from "./projection-defaults";
+import { bundleProjectionReady } from "./ui-projection-bind";
 
 export interface DashboardProjectionMetrics {
   currentEquity: number;
@@ -24,14 +25,17 @@ export function mapBundleToDashboardMetrics(
     "ok" | "mission" | "trades" | "pnl" | "evidence" | "risk" | "health"
   >,
 ): DashboardProjectionMetrics {
-  const usingFallback = !bundle.ok;
+  const usingFallback = !bundleProjectionReady(bundle);
 
   const openTrades =
     bundle.trades.effectiveOpenCount ??
+    (bundle.trades.open.length > 0 ? bundle.trades.open.length : null) ??
     bundle.trades.openCount ??
-    bundle.trades.open.length;
+    0;
   const closedTrades =
-    bundle.trades.closedCount ?? bundle.trades.closed.length;
+    bundle.trades.closed.length > 0
+      ? bundle.trades.closed.length
+      : (bundle.trades.closedCount ?? 0);
 
   return {
     currentEquity: bundle.mission.currentEquity,

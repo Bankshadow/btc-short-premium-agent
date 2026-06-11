@@ -56,9 +56,10 @@ describe("UI v0 dashboard migration", () => {
     assert.ok(src.includes("useProjectionBundle"));
   });
 
-  it("trades page uses projection API", () => {
+  it("trades page uses shared projection bundle", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
-    assert.ok(src.includes("/api/core/projections/trades"));
+    assert.ok(src.includes("useProjectionBundle"));
+    assert.ok(src.includes("bundleProjectionReady"));
     assert.ok(!src.includes("buildOpenTradesFromEvents"));
   });
 

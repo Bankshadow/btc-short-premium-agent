@@ -151,6 +151,8 @@ const ZERO_CONSISTENCY: UiConsistencyReport = {
   mismatches: [],
   skippedChecks: [],
   lastCheckedAt: new Date().toISOString(),
+  browserDomChecksAvailable: false,
+  note: "This endpoint validates projection consistency, not rendered DOM values.",
 };
 
 const ZERO_PARITY: ProjectionParityReport = {
@@ -172,6 +174,8 @@ export default function CoreMonitorPage() {
     trades,
     risk,
     health,
+    loading: bundleLoading,
+    isFallback,
     reload: reloadBundle,
   } = useProjectionBundle();
   const consistency = useApi<UiConsistencyReport>("/api/core/ui-consistency", 0, {
@@ -189,6 +193,14 @@ export default function CoreMonitorPage() {
     ...(coreHealth.data ?? {}),
     status: resolveCoreHealthStatus(coreHealth.data, health),
   };
+  const openTradeCount =
+    trades.effectiveOpenCount ?? trades.openCount ?? trades.open.length;
+  const closedTradeCount =
+    trades.closed.length > 0 ? trades.closed.length : (trades.closedCount ?? 0);
+  const warningCount =
+    healthData?.warnings?.reduce((sum, w) => sum + (w.count ?? 1), 0) ??
+    healthData?.rawWarningCount ??
+    0;
   const staleWarnings = trades.staleOpenWarnings ?? [];
   const latestTradeId =
     trades.open[0]?.tradeId ?? trades.closed[0]?.tradeId ?? null;
@@ -236,12 +248,15 @@ export default function CoreMonitorPage() {
           <MetricCard label="Equity" value={`$${mission.currentEquity.toLocaleString()}`} />
           <MetricCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} />
           <MetricCard label="Evidence" value={`${evidence.valid}/${evidence.required}`} />
-          <MetricCard label="Trades" value={`${trades.open.length} open / ${trades.closed.length} closed`} />
-          <MetricCard
-            label="Health warnings"
-            value={String(healthData?.rawWarningCount ?? healthData?.warnings.length ?? 0)}
-          />
+          <MetricCard label="Trades" value={`${openTradeCount} open / ${closedTradeCount} closed`} />
+          <MetricCard label="Health warnings" value={String(warningCount)} />
         </div>
+        {isFallback && !bundleLoading ? (
+          <p className="text-xs text-[var(--danger)]">Projection fallback active — bundle values may be zero-state.</p>
+        ) : null}
+        {consistency.data?.note ? (
+          <p className="text-xs text-[var(--muted)]">{consistency.data.note}</p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <Badge tone={statusTone(consistencyLabel(consistency.data))}>
             UI {consistencyLabel(consistency.data)}

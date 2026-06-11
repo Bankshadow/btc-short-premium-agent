@@ -231,13 +231,18 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
     assert.ok(src.includes("mapBundleToDashboardMetrics"));
     assert.ok(src.includes("metrics.coreHealthStatus"));
-    assert.ok(src.includes("metrics.usingFallback"));
+    assert.ok(src.includes("isFallback"));
   });
 
   it("trades page prefers bundle when projection ready", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
     assert.ok(src.includes("bundleProjectionReady"));
-    assert.ok(!src.match(/if \(data\?\.summary\) return data;\s*\n\s*if \(!bundleTrades\.zeroState\)/));
+    assert.ok(!src.includes("useApi<TradesResponse>"));
+  });
+
+  it("AppShell mounts shared ProjectionBundleProvider once", () => {
+    const shell = fs.readFileSync(path.join(process.cwd(), "src", "components", "AppShell.tsx"), "utf8");
+    assert.ok(shell.includes("ProjectionBundleProvider"));
   });
 
   it("core page resolves health from API first", () => {

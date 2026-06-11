@@ -37,10 +37,10 @@ import {
   unwrapProjectionData,
 } from "./projection-api-response";
 import {
-  bundleHasRealData,
   unwrapProjectionBundle,
   type ProjectionBundlePayload,
 } from "./unwrap-projection-bundle";
+import { bundleProjectionReady } from "./ui-projection-bind";
 import type { PnlProjection } from "./projections/pnl-projection";
 import type { TradeProjection } from "./projections/trade-projection";
 import type { PositionProjection } from "./projections/position-projection";
@@ -215,12 +215,23 @@ function normalizeMissionFromBundle(
   };
 }
 
-function normalizeTradesFromBundle(trades: TradeProjection): DefaultTradeProjection {
+function normalizeTradesFromBundle(
+  trades: TradeProjection,
+  mission?: MissionSnapshot,
+): DefaultTradeProjection {
   const open = (trades.open ?? []) as DefaultTradeProjection["open"];
   const closed = (trades.closed ?? []) as DefaultTradeProjection["closed"];
   const base = getDefaultTradeProjection();
-  const openCount = trades.effectiveOpenCount ?? open.length;
-  const hasTrades = open.length > 0 || closed.length > 0;
+  const openCount =
+    trades.effectiveOpenCount ??
+    ("openCount" in trades ? Number((trades as { openCount?: number }).openCount) : undefined) ??
+    open.length;
+  const closedLen = closed.length;
+  const executionCount =
+    mission?.totalTrades ??
+    ("totalTrades" in trades ? Number((trades as { totalTrades?: number }).totalTrades) : undefined) ??
+    openCount + closedLen;
+  const hasTrades = executionCount > 0 || open.length > 0 || closedLen > 0;
   return {
     ...base,
     ...trades,
@@ -230,14 +241,15 @@ function normalizeTradesFromBundle(trades: TradeProjection): DefaultTradeProject
     trades: open,
     openTrades: open,
     closedTrades: closed,
-    totalTrades: openCount + closed.length,
+    totalTrades: executionCount,
     openCount,
-    closedCount: closed.length,
+    closedCount: closedLen,
+    effectiveOpenCount: trades.effectiveOpenCount ?? openCount,
     summary: {
       openCount,
-      closedCount: closed.length,
+      closedCount: closedLen,
       realizedPnl: base.summary.realizedPnl,
-      executionCount: openCount + closed.length,
+      executionCount,
     },
     zeroState: !hasTrades,
   };
@@ -308,13 +320,11 @@ function mapBundlePayloadToClient(
       ? exchangeStatusToBinanceStatus(health.exchangeStatus, binanceStatus)
       : binanceStatus;
 
-  const hasRealData = bundleHasRealData(payload);
-
-  return {
+  const mapped: ProjectionBundleClientResult = {
     mission: payload.mission
       ? normalizeMissionFromBundle(payload.mission, payload.trades)
       : base.mission,
-    trades: payload.trades ? normalizeTradesFromBundle(payload.trades) : base.trades,
+    trades: payload.trades ? normalizeTradesFromBundle(payload.trades, payload.mission) : base.trades,
     positions: payload.positions ? normalizePositionsFromBundle(payload.positions) : base.positions,
     pnl: payload.pnl ? normalizePnlFromBundle(payload.pnl) : base.pnl,
     evidence: payload.evidence ? normalizeEvidenceFromBundle(payload.evidence) : base.evidence,
@@ -326,8 +336,11 @@ function mapBundlePayloadToClient(
       ? warnings
       : [PROJECTION_FALLBACK_ACTIVE_MESSAGE, PROJECTION_UNAVAILABLE_MESSAGE, ...warnings],
     loadedAt: new Date().toISOString(),
-    ok: bundleValid && hasRealData,
+    ok: false,
   };
+
+  mapped.ok = bundleValid && bundleProjectionReady(mapped);
+  return mapped;
 }
 
 function fallbackProjectionBundle(
@@ -337,11 +350,63 @@ function fallbackProjectionBundle(
   bundle.ok = false;
   bundle.errors = errors;
   bundle.warnings = [
+    PROJECTION_FALLBACK_ACTIVE_MESSAGE,
     PROJECTION_UNAVAILABLE_MESSAGE,
     ...errors.map((e) => `${e.section}: ${e.message}`),
   ];
   bundle.loadedAt = new Date().toISOString();
   return bundle;
+}
+
+export interface ProjectionBundleForUIResult {
+  bundle: ProjectionBundleClientResult;
+  isFallback: boolean;
+  errors: ProjectionSectionError[];
+  warnings: string[];
+}
+
+function stripFallbackWarnings(warnings: string[]): string[] {
+  return warnings.filter(
+    (w) => w !== PROJECTION_FALLBACK_ACTIVE_MESSAGE && w !== PROJECTION_UNAVAILABLE_MESSAGE,
+  );
+}
+
+/**
+ * Primary UI entry point for projection bundle loading.
+ * Valid when mission + trades exist in the API payload; fallback only on fetch/parse failure.
+ */
+export async function getProjectionBundleForUI(
+  options?: { timeoutMs?: number; includeBinance?: boolean },
+): Promise<ProjectionBundleForUIResult> {
+  try {
+    const bundle = await getProjectionBundle(options);
+    const isFallback = !bundleProjectionReady(bundle);
+    return {
+      bundle,
+      isFallback,
+      errors: bundle.errors,
+      warnings: isFallback
+        ? bundle.warnings.length > 0
+          ? bundle.warnings
+          : [PROJECTION_FALLBACK_ACTIVE_MESSAGE]
+        : stripFallbackWarnings(bundle.warnings),
+    };
+  } catch (err) {
+    const errors: ProjectionSectionError[] = [
+      {
+        section: "bundle",
+        code: "BUNDLE_FAILED",
+        message: err instanceof Error ? err.message : "Projection bundle failed",
+      },
+    ];
+    const bundle = fallbackProjectionBundle(errors);
+    return {
+      bundle,
+      isFallback: true,
+      errors,
+      warnings: [PROJECTION_FALLBACK_ACTIVE_MESSAGE, PROJECTION_UNAVAILABLE_MESSAGE],
+    };
+  }
 }
 
 export async function getProjectionBundle(
@@ -358,7 +423,7 @@ export async function getProjectionBundle(
     try {
       const json = await fetchJson<unknown>("/api/core/projections/bundle", { timeoutMs });
       const unwrapped = unwrapProjectionBundle(json);
-      if (unwrapped.valid && unwrapped.payload) {
+      if (unwrapped.payload?.mission && unwrapped.payload?.trades) {
         return { payload: unwrapped.payload, valid: true };
       }
       errors.push({

@@ -1,5 +1,6 @@
 import { hasTradeChainEvent } from "@/lib/journal/trade-chain";
 import type { JournalEvent } from "@/lib/journal/journal-types";
+import type { ClosedTrade } from "@/lib/trades/trade-types";
 import {
   CRITICAL_RECONCILIATION_CODES,
   EVIDENCE_REQUIRED_EVENTS,
@@ -28,12 +29,48 @@ function pnlPayload(evt: JournalEvent) {
     qty?: string;
     source?: string;
     status?: string;
+    pnlStatus?: string;
   };
 }
 
 function parseQty(qty: string | undefined): number {
   const n = Math.abs(Number.parseFloat(String(qty ?? "0")));
   return Number.isFinite(n) ? n : 0;
+}
+
+function applyClosedTradeProjectionChecks(
+  closedTrade: ClosedTrade | null | undefined,
+  rejectionReasons: string[],
+): void {
+  if (!closedTrade) return;
+
+  if (closedTrade.status === "CLOSED_PENDING_PNL") {
+    rejectionReasons.push("PNL_PENDING_DATA");
+  }
+  if (closedTrade.result === "PENDING_PNL") {
+    rejectionReasons.push("PNL_PENDING_DATA");
+  }
+  if (closedTrade.pnlStatus === "PENDING_DATA") {
+    rejectionReasons.push("PNL_PENDING_DATA");
+  }
+  if (closedTrade.status !== "CLOSED") {
+    rejectionReasons.push("PNL_PENDING_DATA");
+  }
+  if (closedTrade.entryPrice == null || !Number.isFinite(closedTrade.entryPrice)) {
+    rejectionReasons.push("MISSING_ENTRY_PRICE");
+  }
+  if (closedTrade.exitPrice == null || !Number.isFinite(closedTrade.exitPrice)) {
+    rejectionReasons.push("MISSING_EXIT_PRICE");
+  }
+  if (parseQty(closedTrade.qty) <= 0) {
+    rejectionReasons.push("ZERO_QTY");
+  }
+  if (!["WIN", "LOSS", "BREAKEVEN"].includes(String(closedTrade.result ?? ""))) {
+    rejectionReasons.push("PNL_PENDING_DATA");
+  }
+  if (closedTrade.pnlStatus != null && closedTrade.pnlStatus !== "REALIZED") {
+    rejectionReasons.push("PNL_PENDING_DATA");
+  }
 }
 
 function applyStrictEvidenceQualityChecks(
@@ -73,6 +110,9 @@ function applyStrictEvidenceQualityChecks(
     if (pnl.source === "ZERO_FILL_RECONCILIATION") {
       rejectionReasons.push("PNL_PENDING_DATA");
     }
+    if (pnl.result === "PENDING_PNL" || pnl.status === "PENDING_DATA" || pnl.pnlStatus === "PENDING_DATA") {
+      rejectionReasons.push("PNL_PENDING_DATA");
+    }
     const exitPrice =
       pnl.exitPrice ??
       (closeOrderEvt
@@ -100,7 +140,11 @@ function applyStrictEvidenceQualityChecks(
   }
 }
 
-export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): EvidenceTradeResult {
+export function validateTradeEvidence(
+  tradeId: string,
+  events: JournalEvent[],
+  closedTrade?: ClosedTrade | null,
+): EvidenceTradeResult {
   const rejectionReasons: string[] = [];
   const validatedAt = new Date().toISOString();
 
@@ -132,6 +176,7 @@ export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): 
   }
 
   applyStrictEvidenceQualityChecks(tradeId, events, rejectionReasons);
+  applyClosedTradeProjectionChecks(closedTrade, rejectionReasons);
 
   const reconWarnings = events.filter(
     (e) => e.type === "POSITION_RECONCILIATION_WARNING" && e.tradeId === tradeId,
