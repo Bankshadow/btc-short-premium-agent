@@ -135,3 +135,4 @@ Legacy APIs retained for parity: `/api/mission/snapshot`, `/api/trades`, `/api/r
 | 2026-06-06 | Slice 8: Full regression + STABLE report |
 | 2026-06-06 | STABLE follow-up: strict append, lifecycle fix, trace UI, lint, prod 10/10 |
 | 2026-06-06 | Post-STABLE: parity CI gate + legacy API deprecation headers |
+| 2026-06-06 | Core Monitor `/core` page; Vercel production branch → v2-core |
