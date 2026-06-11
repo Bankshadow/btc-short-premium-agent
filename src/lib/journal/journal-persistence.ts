@@ -38,7 +38,10 @@ function parseEvents(raw: string): JournalEvent[] {
 }
 
 function useBlobPersistence(): boolean {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+  if (process.env.BLOB_READ_WRITE_TOKEN?.trim()) return true;
+  // Linked Vercel Blob stores use OIDC + BLOB_STORE_ID at runtime (no RW token in env).
+  if (process.env.VERCEL && process.env.BLOB_STORE_ID?.trim()) return true;
+  return false;
 }
 
 async function readFromBlob(): Promise<JournalEvent[]> {

@@ -6,13 +6,14 @@ On Vercel serverless, `/tmp` journal storage is **ephemeral** — data is lost o
 
 ## Solution
 
-When `BLOB_READ_WRITE_TOKEN` is set, the journal uses **Vercel Blob** (`@vercel/blob`) at pathname `v2-core/event-journal.json` (override with `JOURNAL_BLOB_PATHNAME`).
+When blob credentials are available, the journal uses **Vercel Blob** (`@vercel/blob`) at pathname `v2-core/event-journal.json` (override with `JOURNAL_BLOB_PATHNAME`).
 
 | Environment | Backend |
 |-------------|---------|
 | `BLOB_READ_WRITE_TOKEN` set | Vercel Blob (persistent) |
+| Vercel + linked `BLOB_STORE_ID` | Vercel Blob via OIDC (persistent) |
 | Local / `JOURNAL_DATA_DIR` | File (`data/event-journal.json`) |
-| Vercel without blob token | File fallback `/tmp` (non-persistent) |
+| Vercel without blob credentials | File fallback `/tmp` (non-persistent) |
 
 ## Setup
 
