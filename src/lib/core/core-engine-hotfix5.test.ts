@@ -162,14 +162,14 @@ describe("Core Engine hotfix 5 — UI projection source + strict evidence", () =
 
   it("trades page uses bundle only", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
-    assert.ok(src.includes("useProjectionBundle"));
+    assert.ok(src.includes("useUiProjectionData"));
     assert.ok(!src.includes("useApi<TradesResponse>"));
   });
 
   it("core page shows aggregated warning count", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
     assert.ok(src.includes("warningCount"));
-    assert.ok(src.includes("resolveCoreHealthStatus"));
+    assert.ok(src.includes("REAL_BUNDLE"));
   });
 
   it("no live trading enabled", () => {

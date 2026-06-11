@@ -10,8 +10,8 @@ import {
   SafetyLabelsBar,
   SectionCard,
 } from "@/components/ui";
-import { useProjectionBundle } from "@/components/use-projection-bundle";
-import { getDefaultBinanceStatus } from "@/lib/core/projection-defaults";
+import { useUiProjectionData } from "@/components/use-projection-bundle";
+import { binanceStatusForUiPanel } from "@/lib/binance/normalize-binance-status";
 import {
   zeroAnalysisLatest,
   zeroBinanceStatusApiResponse,
@@ -104,8 +104,7 @@ const SAFETY_EVENTS = new Set([
 ]);
 
 export default function AiStatusPage() {
-  const { mission, health, risk, binanceStatus: bundleBinance, warnings: bundleWarnings, reload: reloadBundle } =
-    useProjectionBundle();
+  const ui = useUiProjectionData();
   const analysisFallback = useMemo(() => zeroAnalysisLatest(), []);
   const reviewFallback = useMemo(() => ({ review: null }), []);
   const binanceFallback = useMemo(() => zeroBinanceStatusApiResponse(), []);
@@ -133,7 +132,7 @@ export default function AiStatusPage() {
   );
 
   const refreshAll = () => {
-    reloadBundle();
+    ui.reload();
     void latest.reload();
     void events.reload();
     void review.reload();
@@ -142,7 +141,7 @@ export default function AiStatusPage() {
   };
 
   const projectionWarnings = [
-    ...bundleWarnings,
+    ...ui.warnings,
     ...(latest.error ? [`analysis/latest: ${latest.error}`] : []),
     ...(events.error ? [`journal/events: ${events.error}`] : []),
     ...(review.error ? [`execution/review: ${review.error}`] : []),
@@ -176,7 +175,9 @@ export default function AiStatusPage() {
   );
 
   const binanceData =
-    bundleBinance && !bundleBinance.zeroState ? bundleBinance : binance.data ?? binanceFallback;
+    ui.source === "REAL_BUNDLE"
+      ? binanceStatusForUiPanel(ui.binanceStatus)
+      : binanceStatusForUiPanel(binance.data ?? binanceFallback);
 
   return (
     <div className="ui-dashboard-grid">
@@ -193,17 +194,17 @@ export default function AiStatusPage() {
       <ProjectionWarning warnings={projectionWarnings} onRetry={refreshAll} />
 
       <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Core health" value={health?.status ?? "OK"} />
-        <MetricCard label="Mission run" value={mission.latestRunId ?? "—"} />
-        <MetricCard label="Decision log" value={mission.latestDecisionLogId ?? "—"} />
-        <MetricCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
+        <MetricCard label="Core health" value={ui.health.status} />
+        <MetricCard label="Mission run" value={ui.mission.latestRunId ?? "—"} />
+        <MetricCard label="Decision log" value={ui.mission.latestDecisionLogId ?? "—"} />
+        <MetricCard label="Live locked" value={ui.risk.liveLocked ? "true" : "false"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="panel space-y-2">
           <h3 className="font-semibold">Latest analysis</h3>
-          <p className="text-sm">runId: {mission.latestRunId ?? d?.runId ?? "—"}</p>
-          <p className="text-sm">decisionLogId: {mission.latestDecisionLogId ?? d?.decisionLogId ?? "—"}</p>
+          <p className="text-sm">runId: {ui.mission.latestRunId ?? d?.runId ?? "—"}</p>
+          <p className="text-sm">decisionLogId: {ui.mission.latestDecisionLogId ?? d?.decisionLogId ?? "—"}</p>
           <p className="text-sm">previewId: {d?.previewId ?? "—"}</p>
           {d?.scenarioContext ? (
             <p className="text-sm text-[var(--muted)]">

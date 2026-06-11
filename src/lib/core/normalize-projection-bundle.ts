@@ -1,8 +1,5 @@
+import { binanceStatusForUiPanel } from "@/lib/binance/normalize-binance-status";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
-import {
-  normalizeBinanceStatusDiagnostics,
-  resolveBinanceStatusConsistency,
-} from "@/lib/execution/binance-status-diagnostics";
 import type { BinanceTestnetStatus } from "@/lib/execution/binance-testnet-types";
 import type { CoreHealthReport } from "./core-health";
 import type { EvidenceProgress } from "@/lib/evidence/evidence-types";
@@ -104,10 +101,7 @@ function normalizeTrades(
 export function normalizeBinanceStatusForUI(
   status: BinanceTestnetStatus | BinanceStatusDiagnostics | DefaultBinanceStatus,
 ): DefaultBinanceStatus {
-  const normalized = normalizeBinanceStatusDiagnostics(
-    resolveBinanceStatusConsistency(status as BinanceTestnetStatus),
-    "mvp-4.6",
-  );
+  const normalized = binanceStatusForUiPanel(status as BinanceTestnetStatus);
   return {
     ...normalized,
     zeroState: false,

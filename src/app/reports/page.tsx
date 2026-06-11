@@ -11,10 +11,9 @@ import {
   SafetyLabelsBar,
   SectionCard,
 } from "@/components/ui";
-import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { useUiProjectionData } from "@/components/use-projection-bundle";
 import type { CoreHealthReport } from "@/lib/core/core-health";
 import { getDefaultCoreHealth } from "@/lib/core/projection-defaults";
-import { resolveCoreHealthStatus } from "@/lib/core/ui-projection-bind";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
@@ -44,24 +43,13 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 export default function ReportsPage() {
-  const {
-    mission: projMission,
-    pnl: projPnl,
-    evidence: projEvidence,
-    health: projHealth,
-    risk: projRisk,
-    trades: projTrades,
-    binanceStatus: bundleBinance,
-    warnings: bundleWarnings,
-    loading: bundleLoading,
-    isFallback,
-    reload: reloadBundle,
-  } = useProjectionBundle();
+  const ui = useUiProjectionData();
   const coreHealthApi = useApi<CoreHealthReport>("/api/core/health", 0, {
     fallback: getDefaultCoreHealth(),
   });
-  const coreHealthStatus = resolveCoreHealthStatus(coreHealthApi.data, projHealth);
-  const pendingPnlCount = projTrades.closed.filter(
+  const coreHealthStatus =
+    ui.source === "REAL_BUNDLE" ? ui.health.status : (coreHealthApi.data?.status ?? ui.health.status);
+  const pendingPnlCount = ui.trades.closed.filter(
     (t) =>
       t.status === "CLOSED_PENDING_PNL" ||
       t.result === "PENDING_PNL" ||
@@ -146,7 +134,7 @@ export default function ReportsPage() {
 
   const reportData = data ?? reportsFallback;
   const projectionWarnings = [
-    ...bundleWarnings,
+    ...ui.warnings,
     ...(error ? [`reports/summary: ${error}`] : []),
   ];
 
@@ -169,17 +157,17 @@ export default function ReportsPage() {
         warnings={projectionWarnings}
         onRetry={() => {
           reload();
-          reloadBundle();
+          ui.reload();
         }}
       />
 
       {auditError ? <div className="error-box">{auditError}</div> : null}
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
-      {(projTrades.staleOpenWarnings?.length ?? 0) > 0 ? (
+      {ui.trades.staleOpenWarnings.length > 0 ? (
         <SectionCard title="Stale trade reconciliation" addon="WARNING" tone="warning">
           <p className="text-sm text-[var(--muted)]">
-            {staleTradeBannerText(projTrades.staleOpenWarnings!.length)}
+            {staleTradeBannerText(ui.trades.staleOpenWarnings.length)}
           </p>
         </SectionCard>
       ) : null}
@@ -190,22 +178,19 @@ export default function ReportsPage() {
 
       <SectionCard title="Mission summary (projection)">
         <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-3">
-          <MetricCard label="Current equity" value={`$${projMission.currentEquity.toLocaleString()}`} />
-          <MetricCard label="Progress" value={`${projMission.progressPct}%`} />
-          <MetricCard label="Net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
-          <MetricCard
-            label="Trades"
-            value={`${projMission.totalTrades} (${projMission.win}W/${projMission.loss}L)`}
-          />
+          <MetricCard label="Current equity" value={`$${ui.mission.currentEquity.toLocaleString()}`} />
+          <MetricCard label="Progress" value={`${ui.mission.progressPct}%`} />
+          <MetricCard label="Net PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} />
+          <MetricCard label="Trades" value={String(ui.mission.totalTrades)} />
           <MetricCard label="Core health" value={coreHealthStatus} />
-          <MetricCard label="Live locked" value={projRisk.liveLocked ? "true" : "false"} />
+          <MetricCard label="Live locked" value={ui.risk.liveLocked ? "true" : "false"} />
         </div>
       </SectionCard>
 
       <SectionCard title="Realized PnL (projection)">
         <div className="ui-dashboard-metrics sm:grid-cols-2">
-          <MetricCard label="Realized count" value={String(projPnl.realizedCount)} />
-          <MetricCard label="Total net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
+          <MetricCard label="Closed trades" value={String(ui.mission.closedTrades)} />
+          <MetricCard label="Total net PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} />
           <MetricCard label="PnL pending (closed)" value={String(pendingPnlCount)} />
           <MetricCard label="Legacy closed count" value={String(pnlSummary.count)} description="Legacy reference only" />
           <MetricCard label="Legacy avg PnL" value={`$${pnlSummary.averagePnl.toFixed(2)}`} description="Legacy reference only" />
@@ -228,20 +213,20 @@ export default function ReportsPage() {
 
       <ProgressCard
         title="Evidence progress (projection)"
-        current={projEvidence.valid}
-        required={projEvidence.required}
-        statusLabel={projEvidence.readinessStatus ?? "COLLECTING"}
-        tone={projEvidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
-        message={projEvidence.message}
+        current={ui.evidence.valid}
+        required={ui.evidence.required}
+        statusLabel={ui.evidence.readinessStatus ?? "COLLECTING"}
+        tone={ui.evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
+        message={ui.evidence.message ?? undefined}
       />
 
       <SectionCard title="Evidence trade details">
         <p className="text-sm text-[var(--muted)] mb-3">
-          {projEvidence.rejected} rejected · {projEvidence.required - projEvidence.valid} remaining
+          {ui.evidence.rejected} rejected · {ui.evidence.required - ui.evidence.valid} remaining
         </p>
-        {(projEvidence.trades?.length ?? 0) > 0 ? (
+        {(ui.evidence.trades?.length ?? 0) > 0 ? (
           <div className="space-y-2">
-            {projEvidence.trades!.slice(0, 8).map((t) => (
+            {ui.evidence.trades!.slice(0, 8).map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-2 text-xs">
                 <Badge tone={t.status === "VALID" ? "safe" : "blocked"}>{t.status}</Badge>
                 <span className="ml-2 font-mono">{t.tradeId}</span>
@@ -700,7 +685,7 @@ export default function ReportsPage() {
         )}
       </section>
 
-      <BinanceTestnetDiagnosticsPanel data={bundleBinance} title="Binance testnet" />
+      <BinanceTestnetDiagnosticsPanel data={ui.binanceStatus} title="Binance testnet" />
 
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Risk &amp; Readiness</h3>

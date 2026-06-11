@@ -2,7 +2,7 @@ import type { StaleOpenTradeWarning } from "./trade-reconciliation";
 import { MANUAL_REPAIR_REQUIRED } from "./trade-reconciliation";
 
 export const STALE_TRADE_BANNER_MESSAGE =
-  "stale trade requires manual repair. It is not counted as active open exposure.";
+  "stale trade requires manual repair. Not counted as active exposure.";
 
 export const PNL_PENDING_LABEL = "PnL pending — missing fill data.";
 

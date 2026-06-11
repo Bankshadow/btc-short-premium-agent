@@ -103,7 +103,7 @@ describe("UI dashboard loading fix", () => {
     assert.ok(!pageSrc.includes("LoadingOrError"));
     assert.ok(!pageSrc.includes("if (loading)"));
     assert.ok(pageSrc.includes("useMemo"));
-    assert.ok(pageSrc.includes("useProjectionBundle"));
+    assert.ok(pageSrc.includes("useUiProjectionData") || pageSrc.includes("useProjectionBundle"));
     assert.ok(providerSrc.includes("ProjectionBundleProvider"));
     assert.ok(shellSrc.includes("ProjectionBundleProvider"));
     assert.ok(providerSrc.includes("loading"));

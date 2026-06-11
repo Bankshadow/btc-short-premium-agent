@@ -10,90 +10,44 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  getProjectionBundleForUI,
-  type ProjectionBundleClientResult,
-} from "@/lib/core/projection-client";
-import type { NormalizedProjectionBundle } from "@/lib/core/normalize-projection-bundle";
-import { mapBundleToDashboardMetrics } from "@/lib/core/dashboard-projection-map";
-import { bundleProjectionReady } from "@/lib/core/ui-projection-bind";
 import type { ProjectionSectionError } from "@/lib/core/projection-defaults";
 import {
-  getDefaultProjectionBundle,
   PROJECTION_FALLBACK_ACTIVE_MESSAGE,
   PROJECTION_UNAVAILABLE_MESSAGE,
 } from "@/lib/core/projection-defaults";
+import {
+  getDefaultUiProjectionData,
+  getUiProjectionData,
+  type UiProjectionData,
+} from "@/lib/core/ui-projection-data";
 
-export interface ProjectionBundleDebugSummary {
-  totalTrades: number;
-  closedTrades: number;
-  openTrades: number;
-  evidenceValid: number;
-  evidenceRequired: number;
-  healthStatus: string;
-  binanceStatus: string;
-}
-
-export interface ProjectionBundleContextValue {
-  bundle: ProjectionBundleClientResult;
-  normalized: NormalizedProjectionBundle | null;
-  mission: ProjectionBundleClientResult["mission"];
-  trades: ProjectionBundleClientResult["trades"];
-  positions: ProjectionBundleClientResult["positions"];
-  pnl: ProjectionBundleClientResult["pnl"];
-  evidence: ProjectionBundleClientResult["evidence"];
-  risk: ProjectionBundleClientResult["risk"];
-  health: ProjectionBundleClientResult["health"];
-  binanceStatus: ProjectionBundleClientResult["binanceStatus"];
-  errors: ProjectionSectionError[];
-  warnings: string[];
-  ok: boolean;
-  ready: boolean;
-  isFallback: boolean;
-  debugSource: "REAL_BUNDLE" | "FALLBACK";
-  debugSummary: ProjectionBundleDebugSummary;
-  loadedAt: string;
-  error: string | null;
+export interface UiProjectionContextValue extends UiProjectionData {
   loading: boolean;
   refreshing: boolean;
   reload: () => Promise<void>;
 }
 
-const ProjectionBundleContext = createContext<ProjectionBundleContextValue | null>(null);
+const UiProjectionContext = createContext<UiProjectionContextValue | null>(null);
 
 export function ProjectionBundleProvider({ children }: { children: ReactNode }) {
-  const initial = useMemo(() => getDefaultProjectionBundle(), []);
-  const [state, setState] = useState<ProjectionBundleClientResult>(initial);
-  const [normalized, setNormalized] = useState<NormalizedProjectionBundle | null>(null);
-  const [isFallback, setIsFallback] = useState(true);
-  const [debugSource, setDebugSource] = useState<"REAL_BUNDLE" | "FALLBACK">("FALLBACK");
-  const [warnings, setWarnings] = useState<string[]>([]);
+  const initial = useMemo(() => getDefaultUiProjectionData(), []);
+  const [ui, setUi] = useState<UiProjectionData>(initial);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const fetchGeneration = useRef(0);
 
-  const loadBundle = useCallback(async (mode: "initial" | "refresh") => {
+  const loadUi = useCallback(async (mode: "initial" | "refresh") => {
     const generation = ++fetchGeneration.current;
     if (mode === "initial") setLoading(true);
     setRefreshing(true);
 
     try {
-      const result = await getProjectionBundleForUI({ includeBinance: true });
+      const data = await getUiProjectionData({ includeBinance: true });
       if (generation !== fetchGeneration.current) return;
-      setState(result.bundle);
-      setNormalized(result.normalized);
-      setIsFallback(result.isFallback);
-      setDebugSource(result.debugSource);
-      setWarnings(result.warnings);
+      setUi(data);
     } catch {
       if (generation !== fetchGeneration.current) return;
-      const fallback = getDefaultProjectionBundle();
-      fallback.ok = false;
-      setState(fallback);
-      setNormalized(null);
-      setIsFallback(true);
-      setDebugSource("FALLBACK");
-      setWarnings([PROJECTION_FALLBACK_ACTIVE_MESSAGE, PROJECTION_UNAVAILABLE_MESSAGE]);
+      setUi(getDefaultUiProjectionData());
     } finally {
       if (generation === fetchGeneration.current) {
         setLoading(false);
@@ -103,73 +57,30 @@ export function ProjectionBundleProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => {
-    void loadBundle("initial");
-  }, [loadBundle]);
+    void loadUi("initial");
+  }, [loadUi]);
 
   const reload = useCallback(async () => {
-    await loadBundle("refresh");
-  }, [loadBundle]);
-
-  const ready = bundleProjectionReady(state);
-
-  const debugSummary = useMemo((): ProjectionBundleDebugSummary => {
-    const metrics = mapBundleToDashboardMetrics({
-      ok: state.ok,
-      mission: state.mission,
-      trades: state.trades,
-      pnl: state.pnl,
-      evidence: state.evidence,
-      risk: state.risk,
-      health: state.health,
-    });
-    return {
-      totalTrades: metrics.totalTrades,
-      closedTrades: metrics.closedTrades,
-      openTrades: metrics.openTrades,
-      evidenceValid: metrics.evidenceValid,
-      evidenceRequired: metrics.evidenceRequired,
-      healthStatus: metrics.coreHealthStatus,
-      binanceStatus: state.binanceStatus?.status ?? "MISSING_ENV",
-    };
-  }, [state]);
+    await loadUi("refresh");
+  }, [loadUi]);
 
   const value = useMemo(
-    (): ProjectionBundleContextValue => ({
-      bundle: state,
-      normalized,
-      mission: state.mission,
-      trades: state.trades,
-      positions: state.positions,
-      pnl: state.pnl,
-      evidence: state.evidence,
-      risk: state.risk,
-      health: state.health,
-      binanceStatus: state.binanceStatus,
-      errors: state.errors,
-      warnings,
-      ok: state.ok,
-      ready,
-      isFallback,
-      debugSource,
-      debugSummary,
-      loadedAt: state.loadedAt,
-      error: state.errors[0]?.message ?? null,
+    (): UiProjectionContextValue => ({
+      ...ui,
       loading,
       refreshing,
       reload,
     }),
-    [debugSource, debugSummary, isFallback, loading, normalized, ready, refreshing, reload, state, warnings],
+    [loading, refreshing, reload, ui],
   );
 
-  return (
-    <ProjectionBundleContext.Provider value={value}>{children}</ProjectionBundleContext.Provider>
-  );
+  return <UiProjectionContext.Provider value={value}>{children}</UiProjectionContext.Provider>;
 }
 
-export function useProjectionBundle(_refreshKey = 0): ProjectionBundleContextValue {
-  const ctx = useContext(ProjectionBundleContext);
+export function useUiProjectionData(_refreshKey = 0): UiProjectionContextValue {
+  const ctx = useContext(UiProjectionContext);
   if (!ctx) {
-    throw new Error("useProjectionBundle must be used within ProjectionBundleProvider");
+    throw new Error("useUiProjectionData must be used within ProjectionBundleProvider");
   }
 
   useEffect(() => {
@@ -179,4 +90,81 @@ export function useProjectionBundle(_refreshKey = 0): ProjectionBundleContextVal
   }, [_refreshKey, ctx.reload]);
 
   return ctx;
+}
+
+/** @deprecated Use useUiProjectionData — kept for gradual migration. */
+export function useProjectionBundle(_refreshKey = 0) {
+  const ui = useUiProjectionData(_refreshKey);
+  return useMemo(
+    () => ({
+      bundle: {
+        ok: !ui.isFallback,
+        mission: {
+          ...ui.mission,
+          win: 0,
+          loss: 0,
+          breakeven: 0,
+          winCount: 0,
+          lossCount: 0,
+          breakevenCount: 0,
+          zeroState: ui.isFallback,
+        },
+        trades: {
+          open: ui.trades.open,
+          closed: ui.trades.closed,
+          effectiveOpenCount: ui.trades.effectiveOpenCount,
+          staleOpenWarnings: ui.trades.staleOpenWarnings,
+          openCount: ui.trades.effectiveOpenCount,
+          closedCount: ui.trades.closed.length,
+          totalTrades: ui.mission.totalTrades,
+          summary: {
+            openCount: ui.trades.effectiveOpenCount,
+            closedCount: ui.trades.closed.length,
+            realizedPnl: ui.mission.netPnl,
+            executionCount: ui.mission.totalTrades,
+          },
+          zeroState: ui.isFallback,
+        },
+        positions: getDefaultUiProjectionData().mission as never,
+        pnl: { totalNetPnl: ui.mission.netPnl, zeroState: ui.isFallback },
+        evidence: ui.evidence,
+        risk: ui.risk,
+        health: ui.health,
+        binanceStatus: ui.binanceStatus,
+        errors: ui.errors,
+        warnings: ui.warnings,
+        loadedAt: ui.loadedAt,
+      },
+      normalized: null,
+      mission: ui.mission,
+      trades: ui.trades,
+      positions: { openTradeCount: ui.trades.effectiveOpenCount, zeroState: ui.isFallback },
+      pnl: { totalNetPnl: ui.mission.netPnl },
+      evidence: ui.evidence,
+      risk: ui.risk,
+      health: ui.health,
+      binanceStatus: ui.binanceStatus,
+      errors: ui.errors as ProjectionSectionError[],
+      warnings: ui.warnings,
+      ok: !ui.isFallback,
+      ready: ui.source === "REAL_BUNDLE",
+      isFallback: ui.isFallback,
+      debugSource: ui.source,
+      debugSummary: {
+        totalTrades: ui.mission.totalTrades,
+        closedTrades: ui.mission.closedTrades,
+        openTrades: ui.mission.openTrades,
+        evidenceValid: ui.evidence.valid,
+        evidenceRequired: ui.evidence.required,
+        healthStatus: ui.health.status,
+        binanceStatus: ui.binanceStatus.status,
+      },
+      loadedAt: ui.loadedAt,
+      error: ui.errors[0]?.message ?? null,
+      loading: ui.loading,
+      refreshing: ui.refreshing,
+      reload: ui.reload,
+    }),
+    [ui],
+  );
 }

@@ -229,14 +229,14 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
 
   it("dashboard page binds bundle metrics and health status", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
-    assert.ok(src.includes("mapBundleToDashboardMetrics"));
-    assert.ok(src.includes("metrics.coreHealthStatus"));
-    assert.ok(src.includes("isFallback"));
+    assert.ok(src.includes("useUiProjectionData") || src.includes("mapBundleToDashboardMetrics"));
+    assert.ok(src.includes("ui.health.status") || src.includes("metrics.coreHealthStatus"));
+    assert.ok(src.includes("isFallback") || src.includes("ui.isFallback"));
   });
 
   it("trades page prefers bundle when projection ready", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
-    assert.ok(src.includes("bundleProjectionReady"));
+    assert.ok(src.includes("useUiProjectionData"));
     assert.ok(!src.includes("useApi<TradesResponse>"));
   });
 
@@ -245,16 +245,16 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
     assert.ok(shell.includes("ProjectionBundleProvider"));
   });
 
-  it("core page resolves health from API first", () => {
+  it("core page uses bundle health when REAL_BUNDLE", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
-    assert.ok(src.includes("resolveCoreHealthStatus"));
+    assert.ok(src.includes("REAL_BUNDLE"));
     assert.ok(src.includes("/api/core/health"));
   });
 
-  it("reports page uses strict evidence projection and API health", () => {
+  it("reports page uses strict evidence projection and bundle health", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "page.tsx"), "utf8");
-    assert.ok(src.includes("projEvidence.valid"));
-    assert.ok(src.includes("resolveCoreHealthStatus"));
+    assert.ok(src.includes("ui.evidence.valid"));
+    assert.ok(src.includes("REAL_BUNDLE") || src.includes("ui.health.status"));
   });
 
   it("no live trading enabled", () => {

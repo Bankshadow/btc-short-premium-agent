@@ -124,8 +124,7 @@ describe("Core Engine hotfix 2 — UI projection sync", () => {
   it("trades page renders without LoadingOrError gate", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
     assert.ok(!src.includes("LoadingOrError"));
-    assert.ok(src.includes("useProjectionBundle"));
-    assert.ok(src.includes("useMemo"));
+    assert.ok(src.includes("useUiProjectionData"));
   });
 
   it("ai-status page renders without LoadingOrError gate", () => {

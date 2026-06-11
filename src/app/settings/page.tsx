@@ -13,8 +13,8 @@ import {
   StatusBadge,
   statusFromHealth,
 } from "@/components/ui";
-import { useProjectionBundle } from "@/components/use-projection-bundle";
-import { resolveBinanceStatusConsistency } from "@/lib/execution/binance-status-diagnostics";
+import { useUiProjectionData } from "@/components/use-projection-bundle";
+import { binanceStatusForUiPanel } from "@/lib/binance/normalize-binance-status";
 import { zeroBinanceStatusApiResponse } from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
@@ -34,13 +34,7 @@ function healthTone(status: string): "safe" | "blocked" | "wait" {
 }
 
 export default function SettingsPage() {
-  const {
-    health: coreHealth,
-    risk,
-    binanceStatus: bundleBinance,
-    warnings: bundleWarnings,
-    reload: reloadBundle,
-  } = useProjectionBundle();
+  const ui = useUiProjectionData();
   const binanceFallback = useMemo(() => zeroBinanceStatusApiResponse(), []);
   const healthFallback = useMemo<EngineHealthReport>(
     () => ({
@@ -132,24 +126,15 @@ export default function SettingsPage() {
   }
 
   const rawSettings = data ?? binanceFallback;
-  const resolvedBinance = resolveBinanceStatusConsistency(rawSettings);
+  const normalizedBinance = binanceStatusForUiPanel(
+    ui.source === "REAL_BUNDLE" ? ui.binanceStatus : rawSettings,
+  );
   const settingsData: BinanceStatusResponse = {
     ...rawSettings,
-    ...resolvedBinance,
-    status:
-      resolvedBinance.status === "DISCONNECTED" &&
-      bundleBinance &&
-      !bundleBinance.zeroState &&
-      bundleBinance.status === "CONNECTED"
-        ? bundleBinance.status
-        : resolvedBinance.status,
-    connected:
-      bundleBinance && !bundleBinance.zeroState && bundleBinance.status === "CONNECTED"
-        ? true
-        : resolvedBinance.status === "CONNECTED",
+    ...normalizedBinance,
   };
   const projectionWarnings = [
-    ...bundleWarnings,
+    ...ui.warnings,
     ...(error ? [`binance/status: ${error}`] : []),
   ];
 
@@ -159,7 +144,7 @@ export default function SettingsPage() {
         title="Settings"
         description="Binance testnet config, environment safety, operator state"
         actions={
-          <button type="button" className="btn" onClick={() => { reload(); reloadBundle(); reloadSandbox(); }}>
+          <button type="button" className="btn" onClick={() => { reload(); ui.reload(); reloadSandbox(); }}>
             Refresh
           </button>
         }
@@ -169,15 +154,15 @@ export default function SettingsPage() {
         warnings={projectionWarnings}
         onRetry={() => {
           reload();
-          reloadBundle();
+          ui.reload();
         }}
       />
 
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
       <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Core health" value={coreHealth?.status ?? "OK"} />
-        <MetricCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
+        <MetricCard label="Core health" value={ui.health.status} />
+        <MetricCard label="Live locked" value={ui.risk.liveLocked ? "true" : "false"} />
         <MetricCard label="Kill switch" value={settingsData.killSwitch.active ? "ACTIVE" : "OFF"} />
         <MetricCard label="Binance" value={settingsData.status} description={settingsData.baseUrl} />
       </div>

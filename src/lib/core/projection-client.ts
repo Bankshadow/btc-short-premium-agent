@@ -9,7 +9,6 @@ import {
   PROJECTION_UNAVAILABLE_MESSAGE,
   type ProjectionSectionError,
 } from "./projection-defaults";
-import { bundleProjectionReady } from "./ui-projection-bind";
 import type { DefaultProjectionBundle } from "./projection-defaults";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
 
@@ -139,7 +138,9 @@ export async function getProjectionBundleForUI(
   const normalized = normalizeProjectionBundle(raw, { binanceStatus, errors });
   const bundle = normalizedBundleToClientResult(normalized);
   bundle.errors = errors;
-  if (normalized.isFallback) {
+  const isRealBundle = !normalized.isFallback;
+
+  if (!isRealBundle) {
     bundle.warnings = [
       PROJECTION_FALLBACK_ACTIVE_MESSAGE,
       PROJECTION_UNAVAILABLE_MESSAGE,
@@ -149,10 +150,10 @@ export async function getProjectionBundleForUI(
     bundle.ok = false;
   } else {
     bundle.warnings = [...normalized.warnings, ...errors.map((e) => `${e.section}: ${e.message}`)];
-    bundle.ok = bundleProjectionReady(bundle);
+    bundle.ok = true;
   }
 
-  const isFallback = normalized.isFallback || !bundleProjectionReady(bundle);
+  const isFallback = !isRealBundle;
 
   return {
     bundle,

@@ -212,7 +212,7 @@ describe("Core Engine hotfix 3 — projection mapping + status consistency", () 
 
   it("stale trade banner text is visible copy", () => {
     assert.ok(staleTradeBannerText(1).includes("manual repair"));
-    assert.ok(staleTradeBannerText(1).includes("not counted as active open exposure"));
+    assert.ok(staleTradeBannerText(1).toLowerCase().includes("not counted as active exposure"));
   });
 
   it("closed pending PnL does not create fake PNL_REALIZED", () => {
@@ -240,9 +240,9 @@ describe("Core Engine hotfix 3 — projection mapping + status consistency", () 
     assert.equal(PNL_PENDING_LABEL, "PnL pending — missing fill data.");
   });
 
-  it("dashboard page uses mapBundleToDashboardMetrics", () => {
+  it("dashboard page uses canonical UI projection data", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
-    assert.ok(src.includes("mapBundleToDashboardMetrics"));
+    assert.ok(src.includes("useUiProjectionData"));
     assert.ok(src.includes("PROJECTION_FALLBACK_ACTIVE_MESSAGE"));
     assert.ok(!src.includes("openTradeCount = mission.openTrades"));
   });

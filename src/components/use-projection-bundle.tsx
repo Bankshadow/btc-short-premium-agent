@@ -1,1 +1,5 @@
-export { ProjectionBundleProvider, useProjectionBundle } from "./projection-bundle-provider";
+export {
+  ProjectionBundleProvider,
+  useProjectionBundle,
+  useUiProjectionData,
+} from "./projection-bundle-provider";

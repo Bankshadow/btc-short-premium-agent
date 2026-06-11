@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
-import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { useUiProjectionData } from "@/components/use-projection-bundle";
 import {
   MetricCard,
   PageHeader,
@@ -11,69 +11,14 @@ import {
   SectionCard,
   StatusBadge,
 } from "@/components/ui";
+import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
-import {
-  bundleProjectionReady,
-  pickClosedTradeCount,
-  pickOpenTradeCount,
-} from "@/lib/core/ui-projection-bind";
 
-interface TradesResponse {
-  open: Array<{
-    tradeId: string;
-    symbol: string;
-    side: string;
-    qty: string;
-    notionalUsd: number;
-    orderId: string;
-    entryPrice: number | null;
-    decisionLogId: string;
-    openedAt: string;
-    environment: string;
-    source: string;
-    position: {
-      side: string;
-      qty: string;
-      entryPrice: number | null;
-      markPrice: number | null;
-      unrealizedPnl: number | null;
-      refreshedAt: string;
-      status: string;
-    } | null;
-    closePreview: {
-      closePreviewId: string;
-      status: string;
-      sideToClose: string;
-      qty: string;
-      blocked: boolean;
-      blockReasons: string[];
-      expiresAt: string;
-      reduceOnly: boolean;
-    } | null;
-  }>;
-  closed: Array<{
-    tradeId: string;
-    symbol: string;
-    side: string;
-    netPnl: number;
-    result: string;
-    learningId: string | null;
-    status: string;
-    pnlStatus?: string;
-    closeOrderId: string | null;
-    decisionLogId: string | null;
-    closedAt: string;
-  }>;
-  summary: {
-    openCount: number;
-    closedCount: number;
-    realizedPnl: number;
-    executionCount: number;
-  };
-  staleOpenWarnings?: Array<{ tradeId: string; projectedStatus: string }>;
-}
-
-function pnlStatusLabel(trade: TradesResponse["closed"][number]): string {
+function pnlStatusLabel(trade: {
+  status: string;
+  result: string;
+  pnlStatus?: string;
+}): string {
   if (trade.status === "CLOSED_PENDING_PNL" || trade.result === "PENDING_PNL") {
     return "PENDING_PNL";
   }
@@ -88,48 +33,14 @@ function lifecycleLabel(open: boolean, hasClosePreview: boolean): string {
 }
 
 export default function TradesPage() {
-  const {
-    ok: bundleOk,
-    ready: bundleReady,
-    loading: bundleLoading,
-    isFallback,
-    mission: bundleMission,
-    trades: bundleTrades,
-    evidence,
-    warnings: bundleWarnings,
-    reload: reloadBundle,
-  } = useProjectionBundle();
+  const ui = useUiProjectionData();
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
-  const tradeData = useMemo((): TradesResponse => {
-    if (bundleProjectionReady({ ok: bundleOk, mission: bundleMission, trades: bundleTrades })) {
-      return {
-        open: bundleTrades.open as TradesResponse["open"],
-        closed: bundleTrades.closed as TradesResponse["closed"],
-        summary: {
-          openCount: pickOpenTradeCount({ trades: bundleTrades, mission: bundleMission }),
-          closedCount: pickClosedTradeCount({ trades: bundleTrades, mission: bundleMission }),
-          realizedPnl:
-            "summary" in bundleTrades && bundleTrades.summary
-              ? bundleTrades.summary.realizedPnl
-              : 0,
-          executionCount: bundleMission.totalTrades ?? bundleTrades.totalTrades,
-        },
-        staleOpenWarnings: bundleTrades.staleOpenWarnings,
-      };
-    }
-    return {
-      open: [],
-      closed: [],
-      summary: { openCount: 0, closedCount: 0, realizedPnl: 0, executionCount: 0 },
-    };
-  }, [bundleOk, bundleMission, bundleTrades]);
-
-  const closeTrade = tradeData.open.find((t) => t.tradeId === closeTradeId);
+  const closeTrade = ui.trades.open.find((t) => t.tradeId === closeTradeId);
   const evidenceByTrade = new Map(
-    (evidence.trades ?? []).map((t) => [t.tradeId, t.status]),
+    (ui.evidence.trades ?? []).map((t) => [t.tradeId, t.status]),
   );
-  const showFallbackWarning = isFallback && !bundleLoading;
+  const showFallbackWarning = ui.isFallback && !ui.loading;
 
   return (
     <div className="ui-dashboard-grid">
@@ -137,28 +48,35 @@ export default function TradesPage() {
         title="Trades"
         description="Trade projection — journal-derived open/closed state"
         actions={
-          <button type="button" className="btn" onClick={() => reloadBundle()}>
+          <button type="button" className="btn" onClick={() => ui.reload()}>
             Refresh
           </button>
         }
       />
       <SafetyLabelsBar />
-      <ProjectionWarning warnings={bundleWarnings} onRetry={reloadBundle} />
+      <ProjectionWarning
+        warnings={
+          showFallbackWarning
+            ? [PROJECTION_FALLBACK_ACTIVE_MESSAGE, ...ui.warnings]
+            : ui.warnings
+        }
+        onRetry={ui.reload}
+      />
 
       <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Executions" value={String(tradeData.summary.executionCount)} />
-        <MetricCard label="Open" value={String(tradeData.summary.openCount)} />
-        <MetricCard label="Closed" value={String(tradeData.summary.closedCount)} />
-        <MetricCard label="Realized PnL" value={`$${tradeData.summary.realizedPnl.toFixed(2)}`} />
+        <MetricCard label="Executions" value={String(ui.mission.totalTrades)} />
+        <MetricCard label="Open" value={String(ui.trades.effectiveOpenCount)} />
+        <MetricCard label="Closed" value={String(ui.mission.closedTrades)} />
+        <MetricCard label="Realized PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} />
       </div>
 
-      {(tradeData.staleOpenWarnings?.length ?? 0) > 0 ? (
+      {ui.trades.staleOpenWarnings.length > 0 ? (
         <SectionCard title="Stale trade reconciliation" addon="WARNING" tone="warning">
           <p className="text-sm text-[var(--muted)]">
-            {staleTradeBannerText(tradeData.staleOpenWarnings!.length)}
+            {staleTradeBannerText(ui.trades.staleOpenWarnings.length)}
           </p>
           <ul className="mt-2 space-y-1 text-sm">
-            {tradeData.staleOpenWarnings!.map((w) => (
+            {ui.trades.staleOpenWarnings.map((w) => (
               <li key={w.tradeId}>
                 {w.tradeId} → {w.projectedStatus}
               </li>
@@ -168,13 +86,13 @@ export default function TradesPage() {
       ) : null}
 
       <SectionCard title="Open testnet trades">
-        {tradeData.open.length === 0 ? (
+        {ui.trades.open.length === 0 ? (
           <p className="empty-state">
-            {bundleLoading ? "Loading trades projection…" : "No open trades."}
+            {ui.loading ? "Loading trades projection…" : "No open trades."}
           </p>
         ) : (
           <div className="space-y-3">
-            {tradeData.open.map((t) => (
+            {ui.trades.open.map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-3 text-sm">
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge label={lifecycleLabel(true, Boolean(t.closePreview))} tone="warning" />
@@ -212,9 +130,9 @@ export default function TradesPage() {
       </SectionCard>
 
       <SectionCard title="Closed trades">
-        {tradeData.closed.length === 0 ? (
+        {ui.trades.closed.length === 0 ? (
           <p className="empty-state">
-            {bundleLoading
+            {ui.loading
               ? "Loading closed trades…"
               : showFallbackWarning
                 ? "Projection unavailable — retry refresh."
@@ -222,7 +140,7 @@ export default function TradesPage() {
           </p>
         ) : (
           <div className="space-y-3">
-            {tradeData.closed.map((t) => (
+            {ui.trades.closed.map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-3 text-sm">
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge
@@ -266,7 +184,7 @@ export default function TradesPage() {
           side={closeTrade.side}
           qty={closeTrade.qty}
           onClose={() => setCloseTradeId(null)}
-          onReviewed={reloadBundle}
+          onReviewed={ui.reload}
         />
       ) : null}
     </div>

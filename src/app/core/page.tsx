@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Badge, useApi } from "@/components/use-api";
 import { MetricCard, PageHeader, SafetyLabelsBar, SectionCard } from "@/components/ui";
-import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { useUiProjectionData } from "@/components/use-projection-bundle";
 import type { AggregatedCoreHealthWarning } from "@/lib/core/health-warning-aggregate";
 import type { CoreHealthReport } from "@/lib/core/core-health";
 import { getDefaultCoreHealth } from "@/lib/core/projection-defaults";
@@ -13,7 +13,6 @@ import {
   staleTradeBannerText,
   staleTradeRequiredAction,
 } from "@/lib/core/stale-trade-display";
-import { resolveCoreHealthStatus } from "@/lib/core/ui-projection-bind";
 
 function statusTone(status: string): "safe" | "blocked" | "wait" {
   if (status === "OK") return "safe";
@@ -167,17 +166,7 @@ const ZERO_PARITY: ProjectionParityReport = {
 };
 
 export default function CoreMonitorPage() {
-  const {
-    mission,
-    pnl,
-    evidence,
-    trades,
-    risk,
-    health,
-    loading: bundleLoading,
-    isFallback,
-    reload: reloadBundle,
-  } = useProjectionBundle();
+  const ui = useUiProjectionData();
   const consistency = useApi<UiConsistencyReport>("/api/core/ui-consistency", 0, {
     fallback: ZERO_CONSISTENCY,
   });
@@ -188,25 +177,16 @@ export default function CoreMonitorPage() {
     fallback: getDefaultCoreHealth(),
   });
 
-  const healthData = {
-    ...(health ?? getDefaultCoreHealth()),
-    ...(coreHealth.data ?? {}),
-    status: resolveCoreHealthStatus(coreHealth.data, health),
-  };
-  const openTradeCount =
-    trades.effectiveOpenCount ?? trades.openCount ?? trades.open.length;
-  const closedTradeCount =
-    trades.closed.length > 0 ? trades.closed.length : (trades.closedCount ?? 0);
+  const healthStatus =
+    ui.source === "REAL_BUNDLE" ? ui.health.status : (coreHealth.data?.status ?? ui.health.status);
   const warningCount =
-    healthData?.warnings?.reduce((sum, w) => sum + (w.count ?? 1), 0) ??
-    healthData?.rawWarningCount ??
-    0;
-  const staleWarnings = trades.staleOpenWarnings ?? [];
+    ui.health.warnings?.reduce((sum, w) => sum + (w.count ?? 1), 0) ?? 0;
+  const staleWarnings = ui.trades.staleOpenWarnings;
   const latestTradeId =
-    trades.open[0]?.tradeId ?? trades.closed[0]?.tradeId ?? null;
+    ui.trades.open[0]?.tradeId ?? ui.trades.closed[0]?.tradeId ?? null;
 
   const nextAction =
-    healthData?.status === "OK" &&
+    healthStatus === "OK" &&
     consistency.data?.status === "OK" &&
     parity.data?.status === "OK" &&
     staleWarnings.length === 0
@@ -223,7 +203,7 @@ export default function CoreMonitorPage() {
             type="button"
             className="btn"
             onClick={() => {
-              reloadBundle();
+              ui.reload();
               void consistency.reload();
               void parity.reload();
               void coreHealth.reload();
@@ -235,23 +215,37 @@ export default function CoreMonitorPage() {
       />
       <SafetyLabelsBar />
 
+      <section
+        className="rounded border border-[var(--border)] bg-[var(--panel)] px-3 py-2 font-mono text-xs text-[var(--muted)]"
+        aria-label="Projection source diagnostic"
+      >
+        Projection source: {ui.source}
+        {" · "}
+        trades={ui.mission.openTrades} open / {ui.mission.closedTrades} closed
+        {" · "}
+        health={healthStatus}
+      </section>
+
       <SectionCard title="Next action" tone="warning">
         <p className="text-sm text-[var(--muted)]">{nextAction}</p>
       </SectionCard>
 
       <SectionCard title="System status">
         <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-3">
-          <MetricCard label="Core health" value={healthData?.status ?? "—"} />
+          <MetricCard label="Core health" value={healthStatus} />
           <MetricCard label="UI consistency" value={consistencyLabel(consistency.data)} />
           <MetricCard label="Projection parity" value={parity.data?.status ?? "—"} />
-          <MetricCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
-          <MetricCard label="Equity" value={`$${mission.currentEquity.toLocaleString()}`} />
-          <MetricCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} />
-          <MetricCard label="Evidence" value={`${evidence.valid}/${evidence.required}`} />
-          <MetricCard label="Trades" value={`${openTradeCount} open / ${closedTradeCount} closed`} />
+          <MetricCard label="Live locked" value={ui.risk.liveLocked ? "true" : "false"} />
+          <MetricCard label="Equity" value={`$${ui.mission.currentEquity.toLocaleString()}`} />
+          <MetricCard label="Net PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} />
+          <MetricCard label="Evidence" value={`${ui.evidence.valid}/${ui.evidence.required}`} />
+          <MetricCard
+            label="Trades"
+            value={`${ui.mission.openTrades} open / ${ui.mission.closedTrades} closed`}
+          />
           <MetricCard label="Health warnings" value={String(warningCount)} />
         </div>
-        {isFallback && !bundleLoading ? (
+        {ui.isFallback && !ui.loading ? (
           <p className="text-xs text-[var(--danger)]">Projection fallback active — bundle values may be zero-state.</p>
         ) : null}
         {consistency.data?.note ? (
@@ -264,8 +258,8 @@ export default function CoreMonitorPage() {
           <Badge tone={statusTone(parity.data?.status ?? "OK")}>
             Parity {parity.data?.status ?? "—"}
           </Badge>
-          <Badge tone={statusTone(healthData?.status ?? "OK")}>
-            Health {healthData?.status ?? "—"}
+          <Badge tone={statusTone(healthStatus)}>
+            Health {healthStatus}
           </Badge>
         </div>
         {(consistency.error || parity.error || coreHealth.error) && (
@@ -345,11 +339,11 @@ export default function CoreMonitorPage() {
         />
       ) : null}
 
-      {healthData?.blockingIssues?.length ? (
+      {ui.health.blockingIssues?.length ? (
         <div className="panel space-y-2">
           <h3 className="font-semibold">Core health blockers</h3>
           <ul className="space-y-1 text-sm text-[var(--danger)]">
-            {healthData.blockingIssues.map((i) => (
+            {ui.health.blockingIssues.map((i) => (
               <li key={i.code}>
                 <span className="font-mono">{i.code}</span> — {i.message}
               </li>
@@ -358,12 +352,11 @@ export default function CoreMonitorPage() {
         </div>
       ) : null}
 
-      <WarningAggregateList warnings={healthData?.warnings ?? []} />
+      <WarningAggregateList warnings={ui.health.warnings ?? []} />
 
       <p className="text-xs text-[var(--muted)]">
         Last consistency: {consistency.data?.lastCheckedAt ?? "—"} · parity:{" "}
-        {parity.data?.lastCheckedAt ?? "—"} · health warnings raw:{" "}
-        {healthData?.rawWarningCount ?? 0} → aggregated: {healthData?.warnings.length ?? 0}
+        {parity.data?.lastCheckedAt ?? "—"} · health warnings: {warningCount}
       </p>
     </div>
   );

@@ -1,8 +1,5 @@
+import { normalizeBinanceStatusForDisplay } from "@/lib/binance/normalize-binance-status";
 import type { BinanceTestnetStatus } from "./binance-testnet-types";
-import {
-  MISSING_BINANCE_CREDENTIALS_REASON,
-  MISSING_BINANCE_CREDENTIALS_RECOMMENDATION,
-} from "./binance-testnet-config";
 
 export interface BinanceStatusDiagnostics extends BinanceTestnetStatus {
   connected: boolean;
@@ -16,30 +13,7 @@ export interface BinanceStatusDiagnostics extends BinanceTestnetStatus {
 export function resolveBinanceStatusConsistency(
   status: BinanceTestnetStatus,
 ): BinanceTestnetStatus {
-  const keysPresent = status.apiKeyPresent && status.apiSecretPresent;
-
-  if (!keysPresent) {
-    if (status.status !== "MISSING_ENV") {
-      return {
-        ...status,
-        status: "MISSING_ENV",
-        reason: MISSING_BINANCE_CREDENTIALS_REASON,
-        recommendation: MISSING_BINANCE_CREDENTIALS_RECOMMENDATION,
-      };
-    }
-    return status;
-  }
-
-  if (status.status === "MISSING_ENV") {
-    return {
-      ...status,
-      status: "DISCONNECTED",
-      reason: "Binance Testnet status check did not complete.",
-      recommendation: "Refresh settings or retry the status probe.",
-    };
-  }
-
-  return status;
+  return normalizeBinanceStatusForDisplay(status);
 }
 
 export function normalizeBinanceStatusDiagnostics(

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { useApi } from "@/components/use-api";
-import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { useUiProjectionData } from "@/components/use-projection-bundle";
 import { ExecutionReviewModal } from "@/components/ExecutionReviewModal";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
 import {
@@ -24,32 +24,13 @@ import {
   zeroDashboardUiContext,
   type DashboardUiContext,
 } from "@/lib/core/ui-context-zero";
-import { mapBundleToDashboardMetrics } from "@/lib/core/dashboard-projection-map";
 import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { deriveLifecycleDisplay } from "@/lib/ui/lifecycle-display";
 
 export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
-  const {
-    ok: bundleOk,
-    ready: bundleReady,
-    loading: bundleLoading,
-    isFallback,
-    debugSource,
-    debugSummary,
-    mission,
-    pnl,
-    evidence,
-    trades,
-    positions,
-    risk,
-    health,
-    binanceStatus: bundleBinance,
-    warnings: bundleWarnings,
-    reload: reloadBundle,
-    loadedAt,
-  } = useProjectionBundle(refreshKey);
+  const ui = useUiProjectionData(refreshKey);
   const ctxFallback = useMemo(() => zeroDashboardUiContext(), []);
   const {
     data: ctx,
@@ -67,33 +48,22 @@ export default function DashboardPage() {
 
   const data = ctx ?? ctxFallback;
   const preview = data.latestPreview;
-  const metrics = mapBundleToDashboardMetrics({
-    ok: bundleOk,
-    mission,
-    trades,
-    pnl,
-    evidence,
-    risk,
-    health,
-  });
-  const showFallbackWarning = isFallback && !bundleLoading;
-  const lifecycle = deriveLifecycleDisplay(mission, data, metrics.evidenceValid);
-  const binance =
-    bundleBinance && !bundleBinance.zeroState
-      ? bundleBinance
-      : data.binanceStatus && data.binanceStatus.status !== "MISSING_ENV"
-        ? data.binanceStatus
-        : bundleBinance;
-  const staleWarnings = trades.staleOpenWarnings ?? [];
+  const showFallbackWarning = ui.isFallback && !ui.loading;
+  const lifecycle = deriveLifecycleDisplay(
+    ui.mission as Parameters<typeof deriveLifecycleDisplay>[0],
+    data,
+    ui.evidence.valid,
+  );
+  const staleWarnings = ui.trades.staleOpenWarnings;
   const projectionWarnings = [
     ...(showFallbackWarning ? [PROJECTION_FALLBACK_ACTIVE_MESSAGE] : []),
-    ...bundleWarnings.filter((w) => w !== PROJECTION_FALLBACK_ACTIVE_MESSAGE),
+    ...ui.warnings.filter((w) => w !== PROJECTION_FALLBACK_ACTIVE_MESSAGE),
     ...(ctxError ? [`ui/context: ${ctxError}`] : []),
   ];
 
   function refresh() {
     setRefreshKey((k) => k + 1);
-    reloadBundle();
+    ui.reload();
     reloadCtx();
   }
 
@@ -121,14 +91,14 @@ export default function DashboardPage() {
   }
 
   const pnlIntent =
-    metrics.netPnl > 0 ? "positive" : metrics.netPnl < 0 ? "negative" : "neutral";
+    ui.mission.netPnl > 0 ? "positive" : ui.mission.netPnl < 0 ? "negative" : "neutral";
 
   return (
     <div className="ui-dashboard-grid">
       <PageHeader
         title="Mission Overview"
-        description={`Testnet mission $${mission.startCapital.toLocaleString()} → $${mission.targetCapital.toLocaleString()}`}
-        updatedAt={loadedAt ? new Date(loadedAt).toLocaleTimeString() : undefined}
+        description={`Testnet mission $${ui.mission.startCapital.toLocaleString()} → $${ui.mission.targetCapital.toLocaleString()}`}
+        updatedAt={ui.loadedAt ? new Date(ui.loadedAt).toLocaleTimeString() : undefined}
         actions={
           <>
             <button type="button" className="btn btn-primary" disabled={running} onClick={startAi}>
@@ -147,15 +117,15 @@ export default function DashboardPage() {
         className="rounded border border-[var(--border)] bg-[var(--panel)] px-3 py-2 font-mono text-xs text-[var(--muted)]"
         aria-label="Projection source diagnostic"
       >
-        Projection source: {debugSource}
+        Projection source: {ui.source}
         {" · "}
-        totalTrades={debugSummary.totalTrades}
+        totalTrades={ui.mission.totalTrades}
         {" · "}
-        closedTrades={debugSummary.closedTrades}
+        closedTrades={ui.mission.closedTrades}
         {" · "}
-        evidence={debugSummary.evidenceValid}/{debugSummary.evidenceRequired}
+        evidence={ui.evidence.valid}/{ui.evidence.required}
         {" · "}
-        health={debugSummary.healthStatus}
+        health={ui.health.status}
       </section>
 
       <ProjectionWarning
@@ -185,51 +155,51 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="ui-dashboard-metrics">
-        <MetricCard label="Current equity" value={`$${metrics.currentEquity.toLocaleString()}`} />
-        <MetricCard label="Target equity" value={`$${metrics.targetEquity.toLocaleString()}`} />
-        <MetricCard label="Progress" value={`${metrics.progressPct}%`} tag="mission" />
-        <MetricCard label="Net PnL" value={`$${metrics.netPnl.toFixed(2)}`} intent={pnlIntent} />
-        <MetricCard label="Total trades" value={String(metrics.totalTrades)} />
-        <MetricCard label="Open trades" value={String(metrics.openTrades)} />
-        <MetricCard label="Closed trades" value={String(metrics.closedTrades)} />
+        <MetricCard label="Current equity" value={`$${ui.mission.currentEquity.toLocaleString()}`} />
+        <MetricCard label="Target equity" value={`$${ui.mission.targetEquity.toLocaleString()}`} />
+        <MetricCard label="Progress" value={`${ui.mission.progressPct}%`} tag="mission" />
+        <MetricCard label="Net PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} intent={pnlIntent} />
+        <MetricCard label="Total trades" value={String(ui.mission.totalTrades)} />
+        <MetricCard label="Open trades" value={String(ui.mission.openTrades)} />
+        <MetricCard label="Closed trades" value={String(ui.mission.closedTrades)} />
       </div>
 
       <SafetyPanel
-        headerAddon={metrics.coreHealthStatus}
+        headerAddon={ui.health.status}
         items={[
           {
             title: "Core health",
-            value: metrics.coreHealthStatus,
+            value: ui.health.status,
             detail:
-              health?.blockingIssues?.length
-                ? `${health.blockingIssues.length} blocker(s)`
-                : `${health?.warnings?.length ?? 0} warning group(s)`,
-            tone: statusFromHealth(metrics.coreHealthStatus),
+              ui.health.blockingIssues?.length
+                ? `${ui.health.blockingIssues.length} blocker(s)`
+                : `${ui.health.warnings?.length ?? 0} warning group(s)`,
+            tone: statusFromHealth(ui.health.status),
           },
           {
             title: "Live locked",
-            value: risk.liveLocked ? "true" : "false",
-            tone: risk.liveLocked ? "ok" : "blocked",
+            value: ui.risk.liveLocked ? "true" : "false",
+            tone: ui.risk.liveLocked ? "ok" : "blocked",
           },
           {
             title: "Binance",
-            value: binance?.status ?? "MISSING_ENV",
-            detail: binance?.baseUrl,
-            tone: statusFromHealth(binance?.status),
+            value: ui.binanceStatus.status,
+            detail: ui.binanceStatus.baseUrl,
+            tone: statusFromHealth(ui.binanceStatus.status),
           },
           {
             title: "Risk mode",
-            value: (risk as { mode?: string }).mode ?? "DEFENSIVE",
-            detail: (risk as { status?: string }).status ?? "SAFE",
-            tone: statusFromHealth((risk as { status?: string }).status),
+            value: (ui.risk as { mode?: string }).mode ?? "DEFENSIVE",
+            detail: (ui.risk as { status?: string }).status ?? "SAFE",
+            tone: statusFromHealth((ui.risk as { status?: string }).status),
           },
         ]}
       />
 
-      {(health?.blockingIssues?.length ?? 0) > 0 ? (
+      {(ui.health.blockingIssues?.length ?? 0) > 0 ? (
         <RiskBanner variant="blocked" title="Execution blockers">
           <ul className="list-inside list-disc">
-            {health!.blockingIssues.map((b) => (
+            {ui.health.blockingIssues.map((b) => (
               <li key={b.code}>
                 {b.code}: {b.message}
               </li>
@@ -283,7 +253,7 @@ export default function DashboardPage() {
               )}
               <p className="text-xs text-[var(--muted)]">
                 Reconciliation: {data.reconciliation?.status ?? "—"} · open count{" "}
-                {positions.openTradeCount}
+                {ui.trades.effectiveOpenCount}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="btn" disabled={refreshingPosition} onClick={refreshPosition}>
@@ -294,7 +264,7 @@ export default function DashboardPage() {
                 </button>
               </div>
             </div>
-          ) : !data.latestOpenTrade && positions.openTradeCount === 0 && data.latestClosedTrade ? (
+          ) : !data.latestOpenTrade && ui.trades.effectiveOpenCount === 0 && data.latestClosedTrade ? (
             <div className="space-y-2 text-sm">
               <StatusBadge
                 label={data.latestClosedTrade.result}
@@ -315,17 +285,17 @@ export default function DashboardPage() {
               </p>
             </div>
           ) : (
-            <p className="empty-state">No open position — projection shows {positions.openTradeCount} active.</p>
+            <p className="empty-state">No open position — projection shows {ui.trades.effectiveOpenCount} active.</p>
           )}
         </SectionCard>
 
         <ProgressCard
           title="Evidence & Learning"
-          current={metrics.evidenceValid}
-          required={metrics.evidenceRequired}
-          statusLabel={evidence.readinessStatus ?? "COLLECTING"}
-          tone={evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
-          message={evidence.message}
+          current={ui.evidence.valid}
+          required={ui.evidence.required}
+          statusLabel={ui.evidence.readinessStatus ?? "COLLECTING"}
+          tone={ui.evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
+          message={ui.evidence.message ?? undefined}
         />
       </div>
 
@@ -335,11 +305,11 @@ export default function DashboardPage() {
             <p>
               Verdict:{" "}
               <StatusBadge
-                label={metrics.latestVerdict ?? mission.latestVerdict ?? "IDLE"}
+                label={ui.mission.latestVerdict ?? "IDLE"}
                 tone={
-                  mission.latestVerdict === "TRADE"
+                  ui.mission.latestVerdict === "TRADE"
                     ? "ok"
-                    : mission.latestVerdict === "BLOCKED"
+                    : ui.mission.latestVerdict === "BLOCKED"
                       ? "blocked"
                       : "warning"
                 }

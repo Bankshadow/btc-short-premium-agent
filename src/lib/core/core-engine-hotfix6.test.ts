@@ -229,25 +229,23 @@ describe("Core Engine hotfix 6 — debug shape + UI binding", () => {
   it("dashboard exposes projection source diagnostic banner", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
     assert.ok(src.includes("Projection source:"));
-    assert.ok(src.includes("debugSource"));
-    assert.ok(src.includes("debugSummary.totalTrades"));
+    assert.ok(src.includes("ui.source") || src.includes("debugSource"));
+    assert.ok(src.includes("ui.mission.totalTrades") || src.includes("debugSummary.totalTrades"));
   });
 
   it("reports page uses bundle binance status not legacy summary", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "page.tsx"), "utf8");
-    assert.ok(src.includes("binanceStatus: bundleBinance"));
-    assert.ok(src.includes("data={bundleBinance}"));
+    assert.ok(src.includes("useUiProjectionData"));
+    assert.ok(src.includes("data={ui.binanceStatus}"));
     assert.ok(!src.includes("data={reportData.binanceStatus}"));
   });
 
-  it("projection provider exposes debugSource and debugSummary", () => {
+  it("projection provider loads via getUiProjectionData", () => {
     const src = fs.readFileSync(
       path.join(process.cwd(), "src", "components", "projection-bundle-provider.tsx"),
       "utf8",
     );
-    assert.ok(src.includes("debugSource"));
-    assert.ok(src.includes("debugSummary"));
-    assert.ok(src.includes("setNormalized"));
+    assert.ok(src.includes("getUiProjectionData"));
   });
 
   it("debug-shape route file exists", () => {
