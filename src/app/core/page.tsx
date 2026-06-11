@@ -177,10 +177,11 @@ export default function CoreMonitorPage() {
     fallback: getDefaultCoreHealth(),
   });
 
-  const healthStatus =
-    ui.source === "REAL_BUNDLE" ? ui.health.status : (coreHealth.data?.status ?? ui.health.status);
+  const healthStatus = ui.health.status;
   const warningCount =
-    ui.health.warnings?.reduce((sum, w) => sum + (w.count ?? 1), 0) ?? 0;
+    ui.health.rawWarningCount > 0
+      ? ui.health.rawWarningCount
+      : (ui.health.warnings?.reduce((sum, w) => sum + (w.count ?? 1), 0) ?? 0);
   const staleWarnings = ui.trades.staleOpenWarnings;
   const latestTradeId =
     ui.trades.open[0]?.tradeId ?? ui.trades.closed[0]?.tradeId ?? null;
@@ -249,8 +250,14 @@ export default function CoreMonitorPage() {
           <p className="text-xs text-[var(--danger)]">Projection fallback active — bundle values may be zero-state.</p>
         ) : null}
         {consistency.data?.note ? (
-          <p className="text-xs text-[var(--muted)]">{consistency.data.note}</p>
-        ) : null}
+          <p className="text-xs text-[var(--muted)]">
+            {consistency.data.note} UI consistency checks projections, not rendered DOM.
+          </p>
+        ) : (
+          <p className="text-xs text-[var(--muted)]">
+            UI consistency checks projections, not rendered DOM.
+          </p>
+        )}
         <div className="flex flex-wrap gap-2">
           <Badge tone={statusTone(consistencyLabel(consistency.data))}>
             UI {consistencyLabel(consistency.data)}

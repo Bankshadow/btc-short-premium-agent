@@ -126,6 +126,10 @@ export default function DashboardPage() {
         evidence={ui.evidence.valid}/{ui.evidence.required}
         {" · "}
         health={ui.health.status}
+        {" · "}
+        verdict={ui.mission.latestVerdict ?? "—"}
+        {" · "}
+        runId={ui.mission.latestRunId ?? "—"}
       </section>
 
       <ProjectionWarning

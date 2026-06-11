@@ -10,11 +10,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { ProjectionSectionError } from "@/lib/core/projection-defaults";
-import {
-  PROJECTION_FALLBACK_ACTIVE_MESSAGE,
-  PROJECTION_UNAVAILABLE_MESSAGE,
-} from "@/lib/core/projection-defaults";
 import {
   getDefaultUiProjectionData,
   getUiProjectionData,
@@ -29,12 +24,18 @@ export interface UiProjectionContextValue extends UiProjectionData {
 
 const UiProjectionContext = createContext<UiProjectionContextValue | null>(null);
 
-export function ProjectionBundleProvider({ children }: { children: ReactNode }) {
-  const initial = useMemo(() => getDefaultUiProjectionData(), []);
-  const [ui, setUi] = useState<UiProjectionData>(initial);
-  const [loading, setLoading] = useState(true);
+export function ProjectionBundleProvider({
+  children,
+  initialUiBundle,
+}: {
+  children: ReactNode;
+  initialUiBundle: UiProjectionData;
+}) {
+  const [ui, setUi] = useState<UiProjectionData>(initialUiBundle);
+  const [loading, setLoading] = useState(initialUiBundle.isFallback);
   const [refreshing, setRefreshing] = useState(false);
   const fetchGeneration = useRef(0);
+  const serverBundleReady = useRef(initialUiBundle.source === "REAL_BUNDLE");
 
   const loadUi = useCallback(async (mode: "initial" | "refresh") => {
     const generation = ++fetchGeneration.current;
@@ -44,10 +45,18 @@ export function ProjectionBundleProvider({ children }: { children: ReactNode }) 
     try {
       const data = await getUiProjectionData({ includeBinance: true });
       if (generation !== fetchGeneration.current) return;
+      if (data.isFallback && serverBundleReady.current) {
+        return;
+      }
+      if (data.source === "REAL_BUNDLE") {
+        serverBundleReady.current = true;
+      }
       setUi(data);
     } catch {
       if (generation !== fetchGeneration.current) return;
-      setUi(getDefaultUiProjectionData());
+      if (!serverBundleReady.current) {
+        setUi(getDefaultUiProjectionData());
+      }
     } finally {
       if (generation === fetchGeneration.current) {
         setLoading(false);
@@ -57,6 +66,10 @@ export function ProjectionBundleProvider({ children }: { children: ReactNode }) 
   }, []);
 
   useEffect(() => {
+    if (serverBundleReady.current) {
+      setLoading(false);
+      return;
+    }
     void loadUi("initial");
   }, [loadUi]);
 
@@ -125,7 +138,7 @@ export function useProjectionBundle(_refreshKey = 0) {
           },
           zeroState: ui.isFallback,
         },
-        positions: getDefaultUiProjectionData().mission as never,
+        positions: { openTradeCount: ui.trades.effectiveOpenCount, zeroState: ui.isFallback },
         pnl: { totalNetPnl: ui.mission.netPnl, zeroState: ui.isFallback },
         evidence: ui.evidence,
         risk: ui.risk,
@@ -144,7 +157,7 @@ export function useProjectionBundle(_refreshKey = 0) {
       risk: ui.risk,
       health: ui.health,
       binanceStatus: ui.binanceStatus,
-      errors: ui.errors as ProjectionSectionError[],
+      errors: ui.errors,
       warnings: ui.warnings,
       ok: !ui.isFallback,
       ready: ui.source === "REAL_BUNDLE",

@@ -59,6 +59,7 @@ export interface UiProjectionHealth {
   status: string;
   warnings: CoreHealthReport["warnings"];
   blockingIssues: CoreHealthReport["blockingIssues"];
+  rawWarningCount: number;
   exchangeStatus: string;
   liveLocked: boolean;
 }
@@ -93,6 +94,22 @@ function fallbackUiProjectionData(
     errors,
     loadedAt: bundle.loadedAt,
   });
+}
+
+/** Aggregate evidence rejection codes for UI display (client-safe). */
+export function aggregateEvidenceRejectionReasons(
+  evidence: UiProjectionEvidence,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const trade of evidence.trades ?? []) {
+    if (trade.status !== "REJECTED") continue;
+    for (const reason of trade.rejectionReasons) {
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, count]) => (count > 1 ? `${reason} (×${count})` : reason));
 }
 
 export function mapNormalizedToUiProjectionData(
@@ -152,6 +169,7 @@ export function mapNormalizedToUiProjectionData(
       status: normalized.health?.status ?? getDefaultCoreHealth().status,
       warnings: normalized.health?.warnings ?? [],
       blockingIssues: normalized.health?.blockingIssues ?? [],
+      rawWarningCount: normalized.health?.rawWarningCount ?? 0,
       exchangeStatus: normalized.health?.exchangeStatus ?? "DISCONNECTED",
       liveLocked: normalized.health?.liveLocked ?? normalized.risk.liveLocked ?? true,
     },

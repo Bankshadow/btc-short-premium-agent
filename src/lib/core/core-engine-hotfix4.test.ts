@@ -240,14 +240,15 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
     assert.ok(!src.includes("useApi<TradesResponse>"));
   });
 
-  it("AppShell mounts shared ProjectionBundleProvider once", () => {
+  it("AppShell mounts shared ProjectionBundleProvider with server bundle", () => {
     const shell = fs.readFileSync(path.join(process.cwd(), "src", "components", "AppShell.tsx"), "utf8");
     assert.ok(shell.includes("ProjectionBundleProvider"));
+    assert.ok(shell.includes("initialUiBundle"));
   });
 
-  it("core page uses bundle health when REAL_BUNDLE", () => {
+  it("core page uses bundle health from ui projection", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
-    assert.ok(src.includes("REAL_BUNDLE"));
+    assert.ok(src.includes("ui.health.status"));
     assert.ok(src.includes("/api/core/health"));
   });
 

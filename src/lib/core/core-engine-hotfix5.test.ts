@@ -155,9 +155,10 @@ describe("Core Engine hotfix 5 — UI projection source + strict evidence", () =
     assert.ok(report.note.includes("not rendered DOM values"));
   });
 
-  it("AppShell mounts shared ProjectionBundleProvider", () => {
+  it("AppShell mounts shared ProjectionBundleProvider with server bundle", () => {
     const shell = fs.readFileSync(path.join(process.cwd(), "src", "components", "AppShell.tsx"), "utf8");
     assert.ok(shell.includes("ProjectionBundleProvider"));
+    assert.ok(shell.includes("initialUiBundle"));
   });
 
   it("trades page uses bundle only", () => {
@@ -169,7 +170,7 @@ describe("Core Engine hotfix 5 — UI projection source + strict evidence", () =
   it("core page shows aggregated warning count", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
     assert.ok(src.includes("warningCount"));
-    assert.ok(src.includes("REAL_BUNDLE"));
+    assert.ok(src.includes("ui.health.status"));
   });
 
   it("no live trading enabled", () => {

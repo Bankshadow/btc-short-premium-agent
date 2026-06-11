@@ -12,8 +12,7 @@ import {
   SectionCard,
 } from "@/components/ui";
 import { useUiProjectionData } from "@/components/use-projection-bundle";
-import type { CoreHealthReport } from "@/lib/core/core-health";
-import { getDefaultCoreHealth } from "@/lib/core/projection-defaults";
+import { aggregateEvidenceRejectionReasons } from "@/lib/core/ui-projection-data";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
@@ -44,11 +43,8 @@ function Field({ label, value }: { label: string; value: string }) {
 
 export default function ReportsPage() {
   const ui = useUiProjectionData();
-  const coreHealthApi = useApi<CoreHealthReport>("/api/core/health", 0, {
-    fallback: getDefaultCoreHealth(),
-  });
-  const coreHealthStatus =
-    ui.source === "REAL_BUNDLE" ? ui.health.status : (coreHealthApi.data?.status ?? ui.health.status);
+  const coreHealthStatus = ui.health.status;
+  const evidenceRejectionReasons = aggregateEvidenceRejectionReasons(ui.evidence);
   const pendingPnlCount = ui.trades.closed.filter(
     (t) =>
       t.status === "CLOSED_PENDING_PNL" ||
@@ -222,8 +218,18 @@ export default function ReportsPage() {
 
       <SectionCard title="Evidence trade details">
         <p className="text-sm text-[var(--muted)] mb-3">
-          {ui.evidence.rejected} rejected · {ui.evidence.required - ui.evidence.valid} remaining
+          {ui.evidence.rejected} rejected · {ui.evidence.required - ui.evidence.valid} remaining · health{" "}
+          {coreHealthStatus}
         </p>
+        {evidenceRejectionReasons.length > 0 ? (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {evidenceRejectionReasons.map((reason) => (
+              <Badge key={reason} tone="blocked">
+                {reason}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
         {(ui.evidence.trades?.length ?? 0) > 0 ? (
           <div className="space-y-2">
             {ui.evidence.trades!.slice(0, 8).map((t) => (

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ProjectionBundleProvider } from "@/components/projection-bundle-provider";
+import type { UiProjectionData } from "@/lib/core/ui-projection-data";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -14,7 +15,13 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  initialUiBundle,
+}: {
+  children: React.ReactNode;
+  initialUiBundle: UiProjectionData;
+}) {
   const pathname = usePathname();
 
   return (
@@ -48,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="mx-auto max-w-7xl px-4 py-6">
-        <ProjectionBundleProvider>{children}</ProjectionBundleProvider>
+        <ProjectionBundleProvider initialUiBundle={initialUiBundle}>{children}</ProjectionBundleProvider>
       </main>
     </div>
   );
