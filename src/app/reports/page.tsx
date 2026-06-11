@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
+import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { ReportsSummary } from "@/lib/reports/reports-types";
@@ -46,6 +47,7 @@ export default function ReportsPage() {
     evidence: projEvidence,
     health: projHealth,
     risk: projRisk,
+    trades: projTrades,
     warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
@@ -158,6 +160,14 @@ export default function ReportsPage() {
       {auditError ? <div className="error-box">{auditError}</div> : null}
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
+      {(projTrades.staleOpenWarnings?.length ?? 0) > 0 ? (
+        <SectionCard title="Stale trade reconciliation" addon="WARNING" tone="warning">
+          <p className="text-sm text-[var(--muted)]">
+            {staleTradeBannerText(projTrades.staleOpenWarnings!.length)}
+          </p>
+        </SectionCard>
+      ) : null}
+
       {!reportData.readyForMvp5 ? (
         <section className="panel text-sm text-[var(--muted)]">{reportData.readyForMvp5Message}</section>
       ) : null}
@@ -193,7 +203,7 @@ export default function ReportsPage() {
           <p className="text-sm text-[var(--muted)]">No realized PnL records yet.</p>
         )}
         {reportData.positionStats.realizedPnlPending ? (
-          <Badge tone="wait">Some closed positions pending PnL calculation</Badge>
+          <Badge tone="wait">{PNL_PENDING_LABEL}</Badge>
         ) : null}
       </SectionCard>
 

@@ -19,6 +19,8 @@ export const DASHBOARD_RENDER_DEADLINE_MS = 5_000;
 export const PROJECTION_UNAVAILABLE_MESSAGE =
   "Projection unavailable. Showing safe zero-state.";
 
+export const PROJECTION_FALLBACK_ACTIVE_MESSAGE = "Projection fallback active.";
+
 export interface ZeroStateMeta {
   zeroState?: boolean;
 }
@@ -41,6 +43,7 @@ export type DefaultTradeProjection = EnrichedTradeProjection &
     totalTrades: number;
     openCount: number;
     closedCount: number;
+    effectiveOpenCount?: number;
   };
 
 export type DefaultPositionProjection = PositionProjection &
@@ -267,7 +270,7 @@ export function getDefaultProjectionBundle(): DefaultProjectionBundle {
     errors: [],
     warnings: [],
     loadedAt,
-    ok: true,
+    ok: false,
   };
 }
 

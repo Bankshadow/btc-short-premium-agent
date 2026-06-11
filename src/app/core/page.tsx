@@ -9,7 +9,10 @@ import type { CoreHealthReport } from "@/lib/core/core-health";
 import { getDefaultCoreHealth } from "@/lib/core/projection-defaults";
 import type { ProjectionParityReport } from "@/lib/core/projection-parity";
 import type { UiConsistencyReport } from "@/lib/core/ui-consistency-check";
-import { LOCAL_OPEN_TRADE_BUT_EXCHANGE_FLAT } from "@/lib/core/trade-reconciliation";
+import {
+  staleTradeBannerText,
+  staleTradeRequiredAction,
+} from "@/lib/core/stale-trade-display";
 
 function statusTone(status: string): "safe" | "blocked" | "wait" {
   if (status === "OK") return "safe";
@@ -254,21 +257,25 @@ export default function CoreMonitorPage() {
       </SectionCard>
 
       {staleWarnings.length > 0 ? (
-        <div className="panel space-y-2 border-[var(--danger)]">
-          <h3 className="font-semibold text-[var(--danger)]">Stale trade reconciliation</h3>
-          <p className="text-sm text-[var(--muted)]">
-            {staleWarnings.length} trade(s) were OPEN locally but exchange position is FLAT (
-            {LOCAL_OPEN_TRADE_BUT_EXCHANGE_FLAT}). They are not counted as active open positions.
-          </p>
-          <ul className="space-y-1 text-sm">
+        <SectionCard title="Stale trade manual repair" addon="WARNING" tone="warning">
+          <p className="text-sm text-[var(--muted)]">{staleTradeBannerText(staleWarnings.length)}</p>
+          <ul className="mt-3 space-y-3 text-sm">
             {staleWarnings.map((w) => (
-              <li key={w.tradeId}>
-                <span className="font-mono">{w.tradeId}</span> → {w.projectedStatus}
-                {w.recommendation ? ` (${w.recommendation})` : ""}
+              <li key={w.tradeId} className="rounded border border-[var(--border)] p-3">
+                <p className="font-mono text-xs">{w.tradeId}</p>
+                <p className="mt-1">
+                  Projected status: <strong>{w.projectedStatus}</strong>
+                </p>
+                {w.recommendation ? (
+                  <p className="text-xs text-[var(--muted)]">Recommendation: {w.recommendation}</p>
+                ) : null}
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Required action: {staleTradeRequiredAction(w)}
+                </p>
               </li>
             ))}
           </ul>
-        </div>
+        </SectionCard>
       ) : null}
 
       <section className="space-y-3">

@@ -24,11 +24,15 @@ import {
   zeroDashboardUiContext,
   type DashboardUiContext,
 } from "@/lib/core/ui-context-zero";
+import { mapBundleToDashboardMetrics } from "@/lib/core/dashboard-projection-map";
+import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
+import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { deriveLifecycleDisplay } from "@/lib/ui/lifecycle-display";
 
 export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const {
+    ok: bundleOk,
     mission,
     pnl,
     evidence,
@@ -58,13 +62,26 @@ export default function DashboardPage() {
 
   const data = ctx ?? ctxFallback;
   const preview = data.latestPreview;
-  const lifecycle = deriveLifecycleDisplay(mission, data, evidence.valid);
+  const metrics = mapBundleToDashboardMetrics({
+    ok: bundleOk,
+    mission,
+    trades,
+    pnl,
+    evidence,
+    risk,
+    health,
+  });
+  const lifecycle = deriveLifecycleDisplay(mission, data, metrics.evidenceValid);
   const binance =
-    bundleBinance && !bundleBinance.zeroState ? bundleBinance : data.binanceStatus ?? bundleBinance;
-  const openTradeCount = mission.openTrades ?? trades.openCount ?? trades.open.length;
-  const closedTradeCount = mission.closedTrades ?? trades.closedCount ?? trades.closed.length;
+    bundleBinance && !bundleBinance.zeroState
+      ? bundleBinance
+      : data.binanceStatus && data.binanceStatus.status !== "MISSING_ENV"
+        ? data.binanceStatus
+        : bundleBinance;
+  const staleWarnings = trades.staleOpenWarnings ?? [];
   const projectionWarnings = [
-    ...bundleWarnings,
+    ...(metrics.usingFallback ? [PROJECTION_FALLBACK_ACTIVE_MESSAGE] : []),
+    ...bundleWarnings.filter((w) => w !== PROJECTION_FALLBACK_ACTIVE_MESSAGE),
     ...(ctxError ? [`ui/context: ${ctxError}`] : []),
   ];
 
@@ -98,7 +115,7 @@ export default function DashboardPage() {
   }
 
   const pnlIntent =
-    pnl.totalNetPnl > 0 ? "positive" : pnl.totalNetPnl < 0 ? "negative" : "neutral";
+    metrics.netPnl > 0 ? "positive" : metrics.netPnl < 0 ? "negative" : "neutral";
 
   return (
     <div className="ui-dashboard-grid">
@@ -120,7 +137,17 @@ export default function DashboardPage() {
 
       <SafetyLabelsBar />
 
-      <ProjectionWarning warnings={projectionWarnings} onRetry={refresh} />
+      <ProjectionWarning
+        warnings={projectionWarnings}
+        title={metrics.usingFallback ? PROJECTION_FALLBACK_ACTIVE_MESSAGE : undefined}
+        onRetry={refresh}
+      />
+
+      {staleWarnings.length > 0 ? (
+        <RiskBanner variant="info" title="Stale trade reconciliation">
+          {staleTradeBannerText(staleWarnings.length)}
+        </RiskBanner>
+      ) : null}
 
       {runError ? <div className="error-box">{runError}</div> : null}
 
@@ -137,13 +164,13 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="ui-dashboard-metrics">
-        <MetricCard label="Current equity" value={`$${mission.currentEquity.toLocaleString()}`} />
-        <MetricCard label="Target equity" value={`$${mission.targetCapital.toLocaleString()}`} />
-        <MetricCard label="Progress" value={`${mission.progressPct}%`} tag="mission" />
-        <MetricCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} intent={pnlIntent} />
-        <MetricCard label="Total trades" value={String(mission.totalTrades)} />
-        <MetricCard label="Open trades" value={String(openTradeCount)} />
-        <MetricCard label="Closed trades" value={String(closedTradeCount)} />
+        <MetricCard label="Current equity" value={`$${metrics.currentEquity.toLocaleString()}`} />
+        <MetricCard label="Target equity" value={`$${metrics.targetEquity.toLocaleString()}`} />
+        <MetricCard label="Progress" value={`${metrics.progressPct}%`} tag="mission" />
+        <MetricCard label="Net PnL" value={`$${metrics.netPnl.toFixed(2)}`} intent={pnlIntent} />
+        <MetricCard label="Total trades" value={String(metrics.totalTrades)} />
+        <MetricCard label="Open trades" value={String(metrics.openTrades)} />
+        <MetricCard label="Closed trades" value={String(metrics.closedTrades)} />
       </div>
 
       <SafetyPanel
@@ -260,8 +287,9 @@ export default function DashboardPage() {
               />
               <p>
                 Latest closed: {data.latestClosedTrade.symbol} ·{" "}
-                {data.latestClosedTrade.status === "CLOSED_PENDING_PNL"
-                  ? "PnL pending data"
+                {data.latestClosedTrade.status === "CLOSED_PENDING_PNL" ||
+                data.latestClosedTrade.result === "PENDING_PNL"
+                  ? PNL_PENDING_LABEL
                   : `$${data.latestClosedTrade.netPnl.toFixed(2)}`}
               </p>
             </div>
@@ -272,8 +300,8 @@ export default function DashboardPage() {
 
         <ProgressCard
           title="Evidence & Learning"
-          current={evidence.valid}
-          required={evidence.required}
+          current={metrics.evidenceValid}
+          required={metrics.evidenceRequired}
           statusLabel={evidence.readinessStatus ?? "COLLECTING"}
           tone={evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
           message={evidence.message}
@@ -286,7 +314,7 @@ export default function DashboardPage() {
             <p>
               Verdict:{" "}
               <StatusBadge
-                label={mission.latestVerdict ?? "IDLE"}
+                label={metrics.latestVerdict ?? mission.latestVerdict ?? "IDLE"}
                 tone={
                   mission.latestVerdict === "TRADE"
                     ? "ok"

@@ -33,7 +33,7 @@ describe("Production loading fix", () => {
     assert.equal(getDefaultRiskProjectionView().zeroState, true);
     assert.equal(getDefaultCoreHealth().zeroState, true);
     assert.equal(getDefaultBinanceStatus().zeroState, true);
-    assert.equal(getDefaultProjectionBundle().ok, true);
+    assert.equal(getDefaultProjectionBundle().ok, false);
   });
 
   it("mission projection returns zero-state", () => {

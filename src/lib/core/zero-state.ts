@@ -47,6 +47,10 @@ export function defaultBinanceTestnetStatus(
     recommendation = "Set BINANCE_TESTNET_ENABLED=true in server env.";
   } else if (!config.apiKeyPresent || !config.apiSecretPresent) {
     status = "MISSING_ENV";
+  } else {
+    status = "DISCONNECTED";
+    reason = "Binance Testnet status check did not complete.";
+    recommendation = "Refresh settings or retry the status probe.";
   }
 
   return {

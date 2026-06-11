@@ -14,6 +14,7 @@ import {
   statusFromHealth,
 } from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { resolveBinanceStatusConsistency } from "@/lib/execution/binance-status-diagnostics";
 import { zeroBinanceStatusApiResponse } from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
@@ -36,6 +37,7 @@ export default function SettingsPage() {
   const {
     health: coreHealth,
     risk,
+    binanceStatus: bundleBinance,
     warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
@@ -129,7 +131,23 @@ export default function SettingsPage() {
     }
   }
 
-  const settingsData = data ?? binanceFallback;
+  const rawSettings = data ?? binanceFallback;
+  const resolvedBinance = resolveBinanceStatusConsistency(rawSettings);
+  const settingsData: BinanceStatusResponse = {
+    ...rawSettings,
+    ...resolvedBinance,
+    status:
+      resolvedBinance.status === "DISCONNECTED" &&
+      bundleBinance &&
+      !bundleBinance.zeroState &&
+      bundleBinance.status === "CONNECTED"
+        ? bundleBinance.status
+        : resolvedBinance.status,
+    connected:
+      bundleBinance && !bundleBinance.zeroState && bundleBinance.status === "CONNECTED"
+        ? true
+        : resolvedBinance.status === "CONNECTED",
+  };
   const projectionWarnings = [
     ...bundleWarnings,
     ...(error ? [`binance/status: ${error}`] : []),

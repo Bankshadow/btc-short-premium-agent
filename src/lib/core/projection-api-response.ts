@@ -68,15 +68,18 @@ export function isProjectionBundleLike(data: unknown): boolean {
 export function unwrapApiData<T>(json: unknown): T | null {
   const first = unwrapProjectionData<unknown>(json);
   if (first == null) return null;
+
   if (isProjectionBundleLike(first)) {
     return first as T;
   }
+
   if (typeof first === "object" && first !== null && "data" in first) {
-    const nested = unwrapProjectionData<unknown>(first);
+    const nested = unwrapProjectionData<unknown>((first as { data: unknown }).data);
     if (nested != null && isProjectionBundleLike(nested)) {
       return nested as T;
     }
   }
+
   return first as T;
 }
 

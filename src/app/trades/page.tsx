@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { getDefaultTradeProjection } from "@/lib/core/projection-defaults";
+import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 
 interface TradesResponse {
   open: Array<{
@@ -149,8 +150,11 @@ export default function TradesPage() {
       </div>
 
       {(tradeData.staleOpenWarnings?.length ?? 0) > 0 ? (
-        <SectionCard title="Stale reconciliation" addon="WARNING" tone="warning">
-          <ul className="space-y-1 text-sm">
+        <SectionCard title="Stale trade reconciliation" addon="WARNING" tone="warning">
+          <p className="text-sm text-[var(--muted)]">
+            {staleTradeBannerText(tradeData.staleOpenWarnings!.length)}
+          </p>
+          <ul className="mt-2 space-y-1 text-sm">
             {tradeData.staleOpenWarnings!.map((w) => (
               <li key={w.tradeId}>
                 {w.tradeId} → {w.projectedStatus}
@@ -231,8 +235,10 @@ export default function TradesPage() {
                 </div>
                 <p className="mt-2 font-medium">
                   {t.symbol} {t.side}
-                  {t.status === "CLOSED_PENDING_PNL"
-                    ? " · PnL pending: missing entry/exit price or fill data."
+                  {t.status === "CLOSED_PENDING_PNL" ||
+                  t.result === "PENDING_PNL" ||
+                  t.pnlStatus === "PENDING_DATA"
+                    ? ` · ${PNL_PENDING_LABEL}`
                     : ` · $${t.netPnl.toFixed(2)} net`}
                 </p>
                 <p className="text-xs text-[var(--muted)]">{t.tradeId}</p>

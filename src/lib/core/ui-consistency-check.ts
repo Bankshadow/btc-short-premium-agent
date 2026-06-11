@@ -39,9 +39,13 @@ function deriveStatus(
   timedOut: boolean,
 ): UiConsistencyReport["status"] {
   if (timedOut) return "WARNING";
-  const mismatches = checks.filter((c) => !c.ok && !c.skipped);
-  if (mismatches.some((m) => m.id.includes("blocked"))) return "BLOCKED";
-  return mismatches.length > 0 ? "WARNING" : "OK";
+  const hardMismatches = checks.filter(
+    (c) => !c.ok && !c.skipped && c.id !== "STALE_TRADE_MANUAL_REPAIR_REQUIRED",
+  );
+  const hasStaleRepair = checks.some((c) => c.id === "STALE_TRADE_MANUAL_REPAIR_REQUIRED");
+  if (hardMismatches.some((m) => m.id.includes("blocked"))) return "BLOCKED";
+  if (hardMismatches.length > 0 || hasStaleRepair) return "WARNING";
+  return "OK";
 }
 
 export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
@@ -178,19 +182,22 @@ export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
     );
   }
 
-  if ((bundle.trades.staleOpenWarnings?.length ?? 0) > 0) {
+  const staleCount = bundle.trades.staleOpenWarnings?.length ?? 0;
+  if (staleCount > 0) {
     checks.push(
       check(
-        "stale_open_trades",
+        "STALE_TRADE_MANUAL_REPAIR_REQUIRED",
         false,
-        `${bundle.trades.staleOpenWarnings!.length} stale OPEN trade(s) reconciled against FLAT exchange position`,
+        `${staleCount} stale trade(s) require manual repair — not counted as active open exposure`,
         "0",
-        String(bundle.trades.staleOpenWarnings!.length),
+        String(staleCount),
       ),
     );
   }
 
-  const mismatches = checks.filter((c) => !c.ok && !c.skipped);
+  const mismatches = checks.filter(
+    (c) => !c.ok && !c.skipped && c.id !== "STALE_TRADE_MANUAL_REPAIR_REQUIRED",
+  );
   return {
     status: deriveStatus(checks, timedOut),
     checks,

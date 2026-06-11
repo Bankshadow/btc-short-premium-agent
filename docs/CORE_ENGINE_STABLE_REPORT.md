@@ -28,16 +28,20 @@ See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECT
 
 **Journal repair (2026-06-11):** See [CORE_ENGINE_JOURNAL_REPAIR.md](./CORE_ENGINE_JOURNAL_REPAIR.md). Repairs zero-fill reconciliation trades, backfills `CLOSE_REVIEWED`, runs post-trade loop. **Requires deploy + `POST /api/journal/repair` on production.**
 
+**Hotfix 3 (2026-06-11):** See [CORE_ENGINE_HOTFIX3_PROJECTION_MAPPING_STATUS.md](./CORE_ENGINE_HOTFIX3_PROJECTION_MAPPING_STATUS.md). Dashboard bundle mapping, Binance status consistency, stale trade soft warning, PnL pending labels.
+
 | Criterion | Status |
 |-----------|--------|
 | `/` dashboard renders (no permanent Loading) | ✅ Hotfix 1 + 2 |
 | `/trades`, `/ai-status`, `/reports`, `/settings` render | ✅ Hotfix 2 — stable fallbacks + bundle-first |
-| Dashboard uses real bundle values when API OK | ✅ `unwrapApiData` + Binance from health |
+| Dashboard uses real bundle values when API OK | ✅ Hotfix 3 — `mapBundleToDashboardMetrics` + default `ok:false` |
+| Binance status consistent when keys present | ✅ Hotfix 3 — `resolveBinanceStatusConsistency` |
+| Stale trade manual repair (soft WARNING) | ✅ Hotfix 3 — `STALE_TRADE_MANUAL_REPAIR_REQUIRED` |
 | `GET /api/core/ui-consistency` < 5s | ✅ `buildProjectionBundleFast()` — verify post-deploy |
 | `GET /api/core/projection-parity` < 5s | ✅ bundle-only parity — verify post-deploy |
 | No P0/P1 lifecycle gaps in journal | ✅ journal repair applied (8 closed, 8/12 evidence valid) |
 | Stale OPEN not counted as active open | ✅ reconciliation in projections |
-| `npm run build` passes | ✅ 281/281 tests |
+| `npm run build` passes | ✅ 299/299 tests |
 | Evidence 8/12 (zero-fill reconciliation trades valid) | ✅ post-repair — collecting toward 12 |
 
 **Recommendation (after journal repair — 2026-06-11): `CORE_ENGINE_STABLE`**

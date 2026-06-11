@@ -156,12 +156,20 @@ export async function getBinanceTestnetStatusBounded(
   try {
     return await withTimeout("getBinanceTestnetStatus", getBinanceTestnetStatus(), boundMs);
   } catch (err) {
+    const config = resolveBinanceClientConfig();
     const baseUrl = resolveTestnetBaseUrl() || DEFAULT_BINANCE_FUTURES_TESTNET_BASE_URL;
     const timedOut = err instanceof OperationTimeoutError;
+    if (!hasBinanceApiCredentials(config)) {
+      return statusResult("MISSING_ENV", {
+        baseUrl,
+        reason: MISSING_BINANCE_CREDENTIALS_REASON,
+        recommendation: MISSING_BINANCE_CREDENTIALS_RECOMMENDATION,
+      });
+    }
     return statusResult(timedOut ? "DISCONNECTED" : "API_ERROR", {
       baseUrl,
       reason: timedOut
-        ? `Binance status check timed out after ${boundMs}ms.`
+        ? "Binance Testnet status check did not complete."
         : err instanceof Error
           ? err.message
           : "Binance status check failed.",

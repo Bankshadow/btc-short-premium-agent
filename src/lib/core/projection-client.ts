@@ -14,6 +14,7 @@ import {
   getDefaultProjectionBundle,
   getDefaultRiskProjectionView,
   getDefaultTradeProjection,
+  PROJECTION_FALLBACK_ACTIVE_MESSAGE,
   PROJECTION_FETCH_TIMEOUT_MS,
   PROJECTION_UNAVAILABLE_MESSAGE,
   type DefaultEvidenceProjection,
@@ -191,8 +192,9 @@ function normalizeMissionFromBundle(
   const base = getDefaultMissionProjection();
   const effectiveOpen =
     trades?.effectiveOpenCount ?? trades?.open?.length ?? mission.openPositions ?? 0;
-  const closedCount =
-    trades?.closed?.length ?? Math.max(0, mission.totalTrades - effectiveOpen);
+  const closedCount = trades?.closed?.length ?? mission.totalTrades ?? 0;
+  const hasMissionData =
+    mission.totalTrades > 0 || mission.latestRunId != null || closedCount > 0;
   return {
     ...base,
     ...mission,
@@ -204,7 +206,9 @@ function normalizeMissionFromBundle(
     lossCount: mission.loss,
     breakevenCount: mission.breakeven,
     netPnl: mission.netPnl,
-    zeroState: "zeroState" in mission && Boolean((mission as { zeroState?: boolean }).zeroState),
+    zeroState:
+      ("zeroState" in mission && Boolean((mission as { zeroState?: boolean }).zeroState)) ||
+      !hasMissionData,
   };
 }
 
@@ -213,11 +217,13 @@ function normalizeTradesFromBundle(trades: TradeProjection): DefaultTradeProject
   const closed = (trades.closed ?? []) as DefaultTradeProjection["closed"];
   const base = getDefaultTradeProjection();
   const openCount = trades.effectiveOpenCount ?? open.length;
+  const hasTrades = open.length > 0 || closed.length > 0;
   return {
     ...base,
     ...trades,
     open,
     closed,
+    staleOpenWarnings: trades.staleOpenWarnings ?? [],
     trades: open,
     openTrades: open,
     closedTrades: closed,
@@ -230,7 +236,9 @@ function normalizeTradesFromBundle(trades: TradeProjection): DefaultTradeProject
       realizedPnl: base.summary.realizedPnl,
       executionCount: openCount + closed.length,
     },
-    zeroState: "zeroState" in trades && Boolean((trades as { zeroState?: boolean }).zeroState),
+    zeroState:
+      ("zeroState" in trades && Boolean((trades as { zeroState?: boolean }).zeroState)) ||
+      !hasTrades,
   };
 }
 
@@ -283,10 +291,16 @@ interface BundleApiPayload {
   health?: CoreHealthReport | null;
 }
 
+function stripBundleEnvelope(raw: Record<string, unknown>): BundleApiPayload {
+  const { ok: _ok, meta: _meta, error: _error, ...rest } = raw;
+  return rest as BundleApiPayload;
+}
+
 function extractBundlePayload(raw: unknown): BundleApiPayload | null {
   if (raw == null || typeof raw !== "object") return null;
-  if (isProjectionBundleLike(raw)) {
-    return raw as BundleApiPayload;
+  const record = raw as Record<string, unknown>;
+  if (isProjectionBundleLike(record)) {
+    return stripBundleEnvelope(record);
   }
   return null;
 }
@@ -311,11 +325,12 @@ function mapBundlePayloadToClient(
       ? exchangeStatusToBinanceStatus(health.exchangeStatus, binanceStatus)
       : binanceStatus;
 
-  const hasRealMission =
+  const missionHasData =
     payload.mission != null &&
     (payload.mission.totalTrades > 0 ||
       payload.mission.latestRunId != null ||
-      !("zeroState" in payload.mission && (payload.mission as { zeroState?: boolean }).zeroState));
+      (payload.trades?.closed?.length ?? 0) > 0);
+  const hasRealMission = missionHasData;
 
   return {
     mission: payload.mission
@@ -330,8 +345,8 @@ function mapBundlePayloadToClient(
     binanceStatus: resolvedBinance,
     errors,
     warnings:
-      bundleFetchFailed || (errors.length > 0 && !hasRealMission)
-        ? [PROJECTION_UNAVAILABLE_MESSAGE, ...warnings]
+      bundleFetchFailed || !hasRealMission
+        ? [PROJECTION_FALLBACK_ACTIVE_MESSAGE, PROJECTION_UNAVAILABLE_MESSAGE, ...warnings]
         : errors.length > 0
           ? warnings
           : warnings,
