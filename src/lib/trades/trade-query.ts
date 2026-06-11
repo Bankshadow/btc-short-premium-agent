@@ -3,6 +3,7 @@ import { getLatestClosePreviewForTrade } from "@/lib/execution/close-preview-sto
 import type { ClosePreview } from "@/lib/execution/close-preview-types";
 import { getLatestMonitoredSnapshots } from "@/lib/positions/position-monitor";
 import type { PositionSnapshot } from "@/lib/positions/position-types";
+import { applyTradeReconciliation } from "@/lib/core/trade-reconciliation";
 import { buildClosedTradesFromEvents, buildOpenTradesFromEvents } from "./trade-store";
 import type { ClosedTrade, OpenTrade } from "./trade-types";
 
@@ -24,23 +25,24 @@ export interface TradesSummary {
 
 export async function getTradesSummary(): Promise<TradesSummary> {
   const events = await getEvents();
-  const openTrades = buildOpenTradesFromEvents(events);
+  const reconciled = applyTradeReconciliation(events);
   const snapshots = getLatestMonitoredSnapshots(events);
   const open: OpenTradeWithPosition[] = await Promise.all(
-    openTrades.map(async (t) => ({
+    reconciled.open.map(async (t) => ({
       ...t,
       position: snapshots.get(t.tradeId) ?? null,
       closePreview: await getLatestClosePreviewForTrade(t.tradeId),
     })),
   );
-  const closed = buildClosedTradesFromEvents(events);  const realizedPnl = closed.reduce((sum, t) => sum + t.netPnl, 0);
+  const closed = reconciled.closed;
+  const realizedPnl = closed.reduce((sum, t) => sum + t.netPnl, 0);
   const executionCount = events.filter((e) => e.type === "ORDER_EXECUTED").length;
 
   return {
     open,
     closed,
     summary: {
-      openCount: open.length,
+      openCount: reconciled.effectiveOpenCount,
       closedCount: closed.length,
       realizedPnl: Number(realizedPnl.toFixed(4)),
       executionCount,

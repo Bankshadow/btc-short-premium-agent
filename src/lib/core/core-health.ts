@@ -7,6 +7,11 @@ import { readCoreEvents } from "./event-store";
 import { validateEventBatch } from "./event-validator";
 import { buildAllProjections } from "./projection-engine";
 import type { CoreValidationIssue } from "./core-errors";
+import {
+  aggregateHealthWarnings,
+  type AggregatedCoreHealthWarning,
+  type RawHealthWarning,
+} from "./health-warning-aggregate";
 
 export interface CoreHealthIssue {
   code: string;
@@ -24,16 +29,18 @@ export interface CoreHealthReport {
   operatorStatus: string;
   safetyStatus: "OK" | "BLOCKED";
   blockingIssues: CoreHealthIssue[];
-  warnings: CoreHealthIssue[];
+  warnings: AggregatedCoreHealthWarning[];
+  rawWarningCount: number;
   lastCheckedAt: string;
   liveLocked: true;
 }
 
-function toHealthIssue(i: CoreValidationIssue): CoreHealthIssue {
+function toHealthIssue(i: CoreValidationIssue): RawHealthWarning {
   return {
     code: i.code,
     message: i.message,
     severity: i.severity === "ERROR" ? "BLOCK" : "WARNING",
+    tradeId: i.tradeId,
   };
 }
 
@@ -54,11 +61,14 @@ export async function evaluateCoreHealth(): Promise<CoreHealthReport> {
   const testnet = await resolveTestnetConnectionStatus();
 
   const blockingIssues: CoreHealthIssue[] = [];
-  const warnings: CoreHealthIssue[] = [];
+  const rawWarnings: RawHealthWarning[] = [];
 
   for (const issue of validationIssues.map(toHealthIssue)) {
-    if (issue.severity === "BLOCK") blockingIssues.push(issue);
-    else warnings.push(issue);
+    if (issue.severity === "BLOCK") {
+      blockingIssues.push({ code: issue.code, message: issue.message, severity: "BLOCK" });
+    } else {
+      rawWarnings.push(issue);
+    }
   }
 
   if (engine.blocksExecution) {
@@ -67,7 +77,7 @@ export async function evaluateCoreHealth(): Promise<CoreHealthReport> {
     }
   } else {
     for (const i of engine.issues) {
-      warnings.push({ code: i.code, message: i.message, severity: "WARNING" });
+      rawWarnings.push({ code: i.code, message: i.message, severity: "WARNING" });
     }
   }
 
@@ -102,6 +112,7 @@ export async function evaluateCoreHealth(): Promise<CoreHealthReport> {
       ? "DEFENSIVE"
       : "SAFE";
 
+  const warnings = aggregateHealthWarnings(rawWarnings);
   const status: CoreHealthReport["status"] =
     blockingIssues.length > 0 ? "BLOCKED" : warnings.length > 0 ? "WARNING" : "OK";
 
@@ -116,6 +127,7 @@ export async function evaluateCoreHealth(): Promise<CoreHealthReport> {
     safetyStatus: isLiveEnabled() || engine.blocksExecution ? "BLOCKED" : "OK",
     blockingIssues,
     warnings,
+    rawWarningCount: rawWarnings.length,
     lastCheckedAt: new Date().toISOString(),
     liveLocked: true,
   };

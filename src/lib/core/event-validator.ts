@@ -2,7 +2,12 @@ import type { AppendEventInput, JournalEvent } from "@/lib/journal/journal-types
 import { validateJournalChain } from "@/lib/journal/journal-chain-validator";
 import type { CoreValidationIssue, EventValidationIssue, EventValidationResult } from "./core-errors";
 import { isBlockingIssue, toCoreValidationIssues } from "./core-errors";
-import { validateAllTradeLifecycles, validateLifecycleForCoreEvent, validateLifecycleTransition, deriveLifecycleState } from "./lifecycle-state-machine";
+import {
+  deriveTradeLifecycleState,
+  validateLifecycleForCoreEvent,
+  validateLifecycleTransition,
+  deriveLifecycleState,
+} from "./lifecycle-state-machine";
 import {
   attachCoreMetadata,
   type CoreAppendInput,
@@ -389,12 +394,20 @@ export function validateEventBatch(
   }
 
   if (options.checkLifecycle !== false) {
-    for (const life of validateAllTradeLifecycles(events, { mode: "read" })) {
-      issues.push({
-        code: life.code,
-        message: life.message,
-        severity: life.severity === "BLOCK" ? "ERROR" : "WARNING",
-      });
+    const tradeIds = [
+      ...new Set(events.filter((e) => e.tradeId).map((e) => e.tradeId as string)),
+    ];
+    for (const tradeId of tradeIds) {
+      const snapshot = deriveTradeLifecycleState(tradeId, events);
+      for (const life of snapshot.issues) {
+        // Read-mode journal scan: lifecycle BLOCK issues are warnings, not execution blockers.
+        issues.push({
+          code: life.code,
+          message: life.message,
+          severity: "WARNING",
+          tradeId,
+        });
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import type { AnalysisVerdict, VerdictPayload } from "@/lib/analysis/analysis-types";
 import type { JournalEvent } from "@/lib/journal/journal-types";
+import { countEffectiveOpenPositions } from "@/lib/core/trade-reconciliation";
 import {
   DEFAULT_START_CAPITAL,
   DEFAULT_TARGET_CAPITAL,
@@ -57,23 +58,7 @@ function sumNetPnl(events: JournalEvent[]): number {
 }
 
 function countOpenPositions(events: JournalEvent[]): number {
-  const opened = new Set(
-    events
-      .filter((e) => e.type === "POSITION_OPENED" || e.type === "ORDER_EXECUTED")
-      .map((e) => e.tradeId)
-      .filter(Boolean) as string[],
-  );
-  const closed = new Set(
-    events
-      .filter((e) => e.type === "POSITION_CLOSED")
-      .map((e) => e.tradeId)
-      .filter(Boolean) as string[],
-  );
-  let open = 0;
-  for (const id of opened) {
-    if (!closed.has(id)) open += 1;
-  }
-  return open;
+  return countEffectiveOpenPositions(events);
 }
 
 export function buildMissionSnapshot(events: JournalEvent[]): MissionSnapshot {

@@ -83,6 +83,7 @@ export function zeroProjectionBundle(): ProjectionBundlePayload {
       safetyStatus: "OK",
       blockingIssues: [],
       warnings: [],
+      rawWarningCount: 0,
       lastCheckedAt: builtAt,
       liveLocked: true,
     },

@@ -1,4 +1,5 @@
 import { appendEvent, getEvents } from "@/lib/journal/journal-query";
+import { PNL_PENDING_MESSAGE } from "@/lib/core/trade-reconciliation";
 import { listClosedTradeIds, validateTradeEvidence } from "./evidence-validator";
 import type { EvidenceProgress } from "./evidence-types";
 
@@ -52,6 +53,20 @@ export async function recalculateEvidenceProgress(): Promise<EvidenceProgress> {
   return progress;
 }
 
+function evidenceProgressMessage(
+  valid: number,
+  rejectedTrades: ReturnType<typeof validateTradeEvidence>[],
+): string {
+  if (valid >= EVIDENCE_TARGET) {
+    return "Evidence target reached — live remains locked.";
+  }
+  const pendingPnl = rejectedTrades.some((t) =>
+    t.rejectionReasons.includes("MISSING_PNL_REALIZED"),
+  );
+  const base = `${valid}/${EVIDENCE_TARGET} valid evidence trades collected.`;
+  return pendingPnl ? `${base} ${PNL_PENDING_MESSAGE}` : base;
+}
+
 export function buildEvidenceProgressFromEvents(events: Awaited<ReturnType<typeof getEvents>>): EvidenceProgress {
   const tradeIds = listClosedTradeIds(events);
   const trades = tradeIds.map((id) => validateTradeEvidence(id, events));
@@ -65,10 +80,7 @@ export function buildEvidenceProgressFromEvents(events: Awaited<ReturnType<typeo
     trades,
     readinessStatus:
       valid >= EVIDENCE_TARGET ? "COMPLETE" : rejectedTrades.length > 0 ? "BLOCKED" : "COLLECTING",
-    message:
-      valid >= EVIDENCE_TARGET
-        ? "Evidence target reached — live remains locked."
-        : `${valid}/${EVIDENCE_TARGET} valid evidence trades collected.`,
+    message: evidenceProgressMessage(valid, rejectedTrades),
   };
 }
 

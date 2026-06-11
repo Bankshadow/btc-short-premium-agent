@@ -1,16 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { Badge, StatCard, useApi } from "@/components/use-api";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
+import type { AggregatedCoreHealthWarning } from "@/lib/core/health-warning-aggregate";
 import type { CoreHealthReport } from "@/lib/core/core-health";
+import { getDefaultCoreHealth } from "@/lib/core/projection-defaults";
 import type { ProjectionParityReport } from "@/lib/core/projection-parity";
 import type { UiConsistencyReport } from "@/lib/core/ui-consistency-check";
+import { LOCAL_OPEN_TRADE_BUT_EXCHANGE_FLAT } from "@/lib/core/trade-reconciliation";
 
 function statusTone(status: string): "safe" | "blocked" | "wait" {
   if (status === "OK") return "safe";
-  if (status === "WARNING") return "wait";
+  if (status === "WARNING" || status === "TIMEOUT_FIXED") return "wait";
   return "blocked";
+}
+
+function consistencyLabel(report: UiConsistencyReport | null): string {
+  if (!report) return "—";
+  if (report.timedOut) return "TIMEOUT_FIXED";
+  return report.status;
 }
 
 function ApiLink({ href, label }: { href: string; label: string }) {
@@ -32,8 +41,21 @@ function CheckList({
   mismatches,
 }: {
   title: string;
-  checks: Array<{ id: string; ok: boolean; message: string; expected?: string; actual?: string }>;
-  mismatches: Array<{ id: string; ok: boolean; message: string; expected?: string; actual?: string }>;
+  checks: Array<{
+    id: string;
+    ok: boolean;
+    message: string;
+    expected?: string;
+    actual?: string;
+    skipped?: boolean;
+  }>;
+  mismatches: Array<{
+    id: string;
+    ok: boolean;
+    message: string;
+    expected?: string;
+    actual?: string;
+  }>;
 }) {
   return (
     <div className="panel space-y-3">
@@ -45,7 +67,9 @@ function CheckList({
             className="flex flex-wrap items-start justify-between gap-2 rounded border border-[var(--border)] p-2 text-sm"
           >
             <div>
-              <Badge tone={c.ok ? "safe" : "blocked"}>{c.ok ? "PASS" : "FAIL"}</Badge>
+              <Badge tone={c.skipped ? "wait" : c.ok ? "safe" : "blocked"}>
+                {c.skipped ? "SKIP" : c.ok ? "PASS" : "FAIL"}
+              </Badge>
               <span className="ml-2 font-mono text-xs text-[var(--muted)]">{c.id}</span>
               <p className="mt-1 text-[var(--muted)]">{c.message}</p>
               {c.expected != null && c.actual != null && !c.ok ? (
@@ -60,8 +84,37 @@ function CheckList({
       {mismatches.length > 0 ? (
         <p className="text-xs text-[var(--danger)]">{mismatches.length} mismatch(es)</p>
       ) : (
-        <p className="text-xs text-[var(--muted)]">All checks passed</p>
+        <p className="text-xs text-[var(--muted)]">All active checks passed</p>
       )}
+    </div>
+  );
+}
+
+function WarningAggregateList({ warnings }: { warnings: AggregatedCoreHealthWarning[] }) {
+  if (warnings.length === 0) return null;
+  return (
+    <div className="panel space-y-2">
+      <h3 className="font-semibold">Health warnings (aggregated)</h3>
+      <ul className="space-y-2 text-sm">
+        {warnings.map((w) => (
+          <li key={w.code} className="rounded border border-[var(--border)] p-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone={w.severity === "BLOCK" ? "blocked" : "wait"}>{w.severity}</Badge>
+              <span className="font-mono text-xs">{w.code}</span>
+              <span className="text-[var(--muted)]">×{w.count}</span>
+            </div>
+            <p className="mt-1">{w.message}</p>
+            {w.affectedTradeIds.length > 0 ? (
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Trades: {w.affectedTradeIds.slice(0, 5).join(", ")}
+                {w.affectedTradeIds.length > 5
+                  ? ` (+${w.affectedTradeIds.length - 5} more)`
+                  : ""}
+              </p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -87,6 +140,25 @@ const API_LINKS = [
   { href: "/api/core/projections/risk", label: "Risk projection" },
 ] as const;
 
+const ZERO_CONSISTENCY: UiConsistencyReport = {
+  status: "WARNING",
+  checks: [],
+  mismatches: [],
+  skippedChecks: [],
+  lastCheckedAt: new Date().toISOString(),
+};
+
+const ZERO_PARITY: ProjectionParityReport = {
+  status: "WARNING",
+  eventCount: 0,
+  checkedSections: [],
+  parityIssues: [],
+  skippedChecks: [],
+  checks: [],
+  mismatches: [],
+  lastCheckedAt: new Date().toISOString(),
+};
+
 export default function CoreMonitorPage() {
   const {
     mission,
@@ -95,33 +167,30 @@ export default function CoreMonitorPage() {
     trades,
     risk,
     health,
-    loading: bundleLoading,
-    error: bundleError,
     reload: reloadBundle,
   } = useProjectionBundle();
-  const consistency = useApi<UiConsistencyReport>("/api/core/ui-consistency");
-  const parity = useApi<ProjectionParityReport>("/api/core/projection-parity");
-  const coreHealth = useApi<CoreHealthReport>("/api/core/health");
-
-  const loading =
-    bundleLoading || consistency.loading || parity.loading || coreHealth.loading;
-  const error =
-    bundleError ?? consistency.error ?? parity.error ?? coreHealth.error;
-
-  const pending = LoadingOrError({
-    loading,
-    error,
-    onRetry: () => {
-      reloadBundle();
-      void consistency.reload();
-      void parity.reload();
-      void coreHealth.reload();
-    },
+  const consistency = useApi<UiConsistencyReport>("/api/core/ui-consistency", 0, {
+    fallback: ZERO_CONSISTENCY,
   });
-  if (pending) return pending;
+  const parity = useApi<ProjectionParityReport>("/api/core/projection-parity", 0, {
+    fallback: ZERO_PARITY,
+  });
+  const coreHealth = useApi<CoreHealthReport>("/api/core/health", 0, {
+    fallback: getDefaultCoreHealth(),
+  });
 
+  const healthData = health ?? coreHealth.data;
+  const staleWarnings = trades.staleOpenWarnings ?? [];
   const latestTradeId =
     trades.open[0]?.tradeId ?? trades.closed[0]?.tradeId ?? null;
+
+  const nextAction =
+    healthData?.status === "OK" &&
+    consistency.data?.status === "OK" &&
+    parity.data?.status === "OK" &&
+    staleWarnings.length === 0
+      ? "Core engine checks passed — monitor lifecycle and evidence progress."
+      : "Fix pending PnL and lifecycle gaps before CORE_ENGINE_STABLE.";
 
   return (
     <div className="space-y-6">
@@ -146,11 +215,16 @@ export default function CoreMonitorPage() {
         </button>
       </div>
 
+      <div className="panel border-[var(--accent)]">
+        <p className="text-sm font-semibold">Next action</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">{nextAction}</p>
+      </div>
+
       <section className="space-y-3">
         <h3 className="text-lg font-semibold">System status</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Core health" value={health?.status ?? coreHealth.data?.status ?? "—"} />
-          <StatCard label="UI consistency" value={consistency.data?.status ?? "—"} />
+          <StatCard label="Core health" value={healthData?.status ?? "—"} />
+          <StatCard label="UI consistency" value={consistencyLabel(consistency.data)} />
           <StatCard label="Projection parity" value={parity.data?.status ?? "—"} />
           <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
           <StatCard label="Equity" value={`$${mission.currentEquity.toLocaleString()}`} />
@@ -163,19 +237,47 @@ export default function CoreMonitorPage() {
             label="Trades"
             value={`${trades.open.length} open / ${trades.closed.length} closed`}
           />
+          <StatCard
+            label="Health warnings"
+            value={String(healthData?.rawWarningCount ?? healthData?.warnings.length ?? 0)}
+          />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge tone={statusTone(consistency.data?.status ?? "OK")}>
-            UI {consistency.data?.status ?? "—"}
+          <Badge tone={statusTone(consistencyLabel(consistency.data))}>
+            UI {consistencyLabel(consistency.data)}
           </Badge>
           <Badge tone={statusTone(parity.data?.status ?? "OK")}>
             Parity {parity.data?.status ?? "—"}
           </Badge>
-          <Badge tone={statusTone(health?.status ?? "OK")}>
-            Health {health?.status ?? "—"}
+          <Badge tone={statusTone(healthData?.status ?? "OK")}>
+            Health {healthData?.status ?? "—"}
           </Badge>
         </div>
+        {(consistency.error || parity.error || coreHealth.error) && (
+          <p className="text-xs text-[var(--danger)]">
+            API note: {consistency.error ?? parity.error ?? coreHealth.error} — showing cached/zero-state
+            data.
+          </p>
+        )}
       </section>
+
+      {staleWarnings.length > 0 ? (
+        <div className="panel space-y-2 border-[var(--danger)]">
+          <h3 className="font-semibold text-[var(--danger)]">Stale trade reconciliation</h3>
+          <p className="text-sm text-[var(--muted)]">
+            {staleWarnings.length} trade(s) were OPEN locally but exchange position is FLAT (
+            {LOCAL_OPEN_TRADE_BUT_EXCHANGE_FLAT}). They are not counted as active open positions.
+          </p>
+          <ul className="space-y-1 text-sm">
+            {staleWarnings.map((w) => (
+              <li key={w.tradeId}>
+                <span className="font-mono">{w.tradeId}</span> → {w.projectedStatus}
+                {w.recommendation ? ` (${w.recommendation})` : ""}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <section className="space-y-3">
         <h3 className="text-lg font-semibold">App pages</h3>
@@ -208,7 +310,7 @@ export default function CoreMonitorPage() {
         </div>
       </section>
 
-      {consistency.data ? (
+      {consistency.data && consistency.data.checks.length > 0 ? (
         <CheckList
           title="UI consistency checks"
           checks={consistency.data.checks}
@@ -216,7 +318,7 @@ export default function CoreMonitorPage() {
         />
       ) : null}
 
-      {parity.data ? (
+      {parity.data && parity.data.checks.length > 0 ? (
         <CheckList
           title="Projection parity checks (bundle vs legacy)"
           checks={parity.data.checks}
@@ -224,11 +326,11 @@ export default function CoreMonitorPage() {
         />
       ) : null}
 
-      {coreHealth.data?.blockingIssues?.length ? (
+      {healthData?.blockingIssues?.length ? (
         <div className="panel space-y-2">
           <h3 className="font-semibold">Core health blockers</h3>
           <ul className="space-y-1 text-sm text-[var(--danger)]">
-            {coreHealth.data.blockingIssues.map((i) => (
+            {healthData.blockingIssues.map((i) => (
               <li key={i.code}>
                 <span className="font-mono">{i.code}</span> — {i.message}
               </li>
@@ -237,9 +339,12 @@ export default function CoreMonitorPage() {
         </div>
       ) : null}
 
+      <WarningAggregateList warnings={healthData?.warnings ?? []} />
+
       <p className="text-xs text-[var(--muted)]">
         Last consistency: {consistency.data?.lastCheckedAt ?? "—"} · parity:{" "}
-        {parity.data?.lastCheckedAt ?? "—"}
+        {parity.data?.lastCheckedAt ?? "—"} · health warnings raw:{" "}
+        {healthData?.rawWarningCount ?? 0} → aggregated: {healthData?.warnings.length ?? 0}
       </p>
     </div>
   );

@@ -1,13 +1,15 @@
 import { getLatestClosePreviewForTrade } from "@/lib/execution/close-preview-store";
 import type { JournalEvent } from "@/lib/journal/journal-types";
-import { getLatestMonitoredSnapshots } from "@/lib/positions/position-monitor";
+import { getLatestMonitoredSnapshots } from "@/lib/positions/position-snapshots-from-events";
 import type { OpenTradeWithPosition } from "@/lib/trades/trade-query";
 import { buildPnlProjection } from "./projections/pnl-projection";
 import { buildTradeProjection } from "./projections/trade-projection";
+import { applyTradeReconciliation } from "./trade-reconciliation";
 
 export interface EnrichedTradeProjection {
   open: OpenTradeWithPosition[];
   closed: ReturnType<typeof buildTradeProjection>["closed"];
+  staleOpenWarnings: ReturnType<typeof applyTradeReconciliation>["staleOpenWarnings"];
   summary: {
     openCount: number;
     closedCount: number;
@@ -19,10 +21,10 @@ export interface EnrichedTradeProjection {
 export async function buildEnrichedTradeProjection(
   events: JournalEvent[],
 ): Promise<EnrichedTradeProjection> {
-  const { open, closed } = buildTradeProjection(events);
+  const reconciled = applyTradeReconciliation(events);
   const snapshots = getLatestMonitoredSnapshots(events);
   const enrichedOpen: OpenTradeWithPosition[] = await Promise.all(
-    open.map(async (t) => ({
+    reconciled.open.map(async (t) => ({
       ...t,
       position: snapshots.get(t.tradeId) ?? null,
       closePreview: await getLatestClosePreviewForTrade(t.tradeId),
@@ -33,10 +35,11 @@ export async function buildEnrichedTradeProjection(
 
   return {
     open: enrichedOpen,
-    closed,
+    closed: reconciled.closed,
+    staleOpenWarnings: reconciled.staleOpenWarnings,
     summary: {
-      openCount: enrichedOpen.length,
-      closedCount: closed.length,
+      openCount: reconciled.effectiveOpenCount,
+      closedCount: reconciled.closed.length,
       realizedPnl: pnl.totalNetPnl,
       executionCount,
     },

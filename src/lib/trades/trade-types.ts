@@ -1,6 +1,7 @@
 export type TradeEnvironment = "TESTNET";
 export type TradeStatus = "OPEN" | "CLOSED" | "CLOSED_PENDING_PNL";
 export type TradeSource = "BINANCE_TESTNET";
+export type PnlStatus = "REALIZED" | "PENDING_DATA";
 
 export interface OpenTrade {
   tradeId: string;
@@ -35,6 +36,7 @@ export interface ClosedTrade {
   netPnl: number;
   result: string;
   status: "CLOSED" | "CLOSED_PENDING_PNL";
+  pnlStatus?: PnlStatus;
   closeOrderId: string | null;
   openedAt: string;
   closedAt: string;

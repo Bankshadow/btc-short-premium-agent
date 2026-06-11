@@ -5,6 +5,10 @@ import {
   type EvidenceTradeResult,
 } from "./evidence-types";
 
+function uniqueRejectionReasons(reasons: string[]): string[] {
+  return [...new Set(reasons)];
+}
+
 export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): EvidenceTradeResult {
   const rejectionReasons: string[] = [];
   const validatedAt = new Date().toISOString();
@@ -43,9 +47,6 @@ export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): 
     }
   }
 
-  const pnl = events.find((e) => e.type === "PNL_REALIZED" && e.tradeId === tradeId);
-  if (!pnl) rejectionReasons.push("MISSING_PNL_REALIZED");
-
   const execReview = events.some((e) => e.type === "EXECUTION_REVIEWED" && e.tradeId === tradeId);
   if (!execReview) {
     const order = events.find((e) => e.type === "ORDER_EXECUTED" && e.tradeId === tradeId);
@@ -58,7 +59,7 @@ export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): 
   return {
     tradeId,
     status: rejectionReasons.length === 0 ? "VALID" : "REJECTED",
-    rejectionReasons,
+    rejectionReasons: uniqueRejectionReasons(rejectionReasons),
     validatedAt,
   };
 }

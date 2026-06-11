@@ -32,6 +32,7 @@ export interface CoreValidationIssue {
   message: string;
   severity: "ERROR" | "WARNING";
   field?: string;
+  tradeId?: string;
 }
 
 export function toCoreValidationIssues(issues: EventValidationIssue[]): CoreValidationIssue[] {

@@ -131,6 +131,7 @@ export function getDefaultTradeProjection(): DefaultTradeProjection {
   return {
     open: [],
     closed: [],
+    staleOpenWarnings: [],
     trades: [],
     openTrades: [],
     closedTrades: [],
@@ -219,6 +220,7 @@ export function getDefaultCoreHealth(): DefaultCoreHealth {
     safetyStatus: "OK",
     blockingIssues: [],
     warnings: [],
+    rawWarningCount: 0,
     lastCheckedAt,
     liveLocked: true,
     zeroState: true,

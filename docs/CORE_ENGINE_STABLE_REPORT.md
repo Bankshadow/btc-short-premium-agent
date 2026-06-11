@@ -20,6 +20,21 @@ Slice 8 ran a full automated regression across MVP 1–24, Core Engine modules (
 
 Regression is green (239/239 tests), build passes. Production loading fix: `getDefault*()` projection defaults, API envelopes with `PROJECTION_FALLBACK`, `fetchWithTimeout` (4s), zero-state-first pages, `GET /api/core/boot-check`. **Requires Vercel redeploy of `v2-core` to take effect in production.** Remaining limitations: legacy API retention (adapter parity) and Reports briefing/audit sections — documented, non-blocking.
 
+**Incident (production): P1 — `/core` partial stability** — See [CORE_ENGINE_PARTIAL_STABILITY_FIX.md](./CORE_ENGINE_PARTIAL_STABILITY_FIX.md). Root cause: ui-consistency and projection-parity rebuilt expensive projections (Binance, reports summary, enriched trades) on every request; stale OPEN trades counted against FLAT exchange positions; lifecycle warnings unaggregated.
+
+**Recommendation (after partial stability fix): `CORE_ENGINE_PARTIAL` until production verifies:**
+
+| Criterion | Required for STABLE |
+|-----------|---------------------|
+| `GET /api/core/ui-consistency` returns within 5s | ✅ code fix — verify post-deploy |
+| `GET /api/core/projection-parity` returns within 5s | ✅ code fix — verify post-deploy |
+| No P0/P1 lifecycle gaps in journal | ❌ production data — manual repair |
+| Stale OPEN not counted as active open | ✅ reconciliation in projections |
+| `npm run build` passes | verify in CI |
+| Evidence 0/12 with missing PNL | Expected until valid lifecycle trades complete |
+
+Assign **`CORE_ENGINE_STABLE`** only when ui-consistency + projection-parity respond in production, build passes, and no P0/P1 lifecycle issue remains. Otherwise **`CORE_ENGINE_PARTIAL`**.
+
 ---
 
 ## 2. Build / Test Results
@@ -27,7 +42,7 @@ Regression is green (239/239 tests), build passes. Production loading fix: `getD
 | Command | Exists | Result | Notes |
 |---------|--------|--------|-------|
 | `npm run build` | ✅ | **PASS** | Next.js 16.2.7, TypeScript clean |
-| `npm test` | ✅ | **PASS — 239/239** | 26 suites |
+| `npm test` | ✅ | **PASS — 254/254** | 27 suites |
 | `npm run test` | ❌ | N/A | Not defined; use `npm test` |
 | `npm run lint` | ✅ | **PASS — 0 errors, 2 warnings** | Config/worker export warnings only |
 | `npm run typecheck` | ❌ | N/A | TypeScript runs inside `npm run build` |
