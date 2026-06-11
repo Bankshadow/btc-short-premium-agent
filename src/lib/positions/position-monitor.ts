@@ -167,6 +167,8 @@ function resolvePositionId(
   return existing.get(tradeId)?.positionId ?? newPositionId();
 }
 
+const ORPHAN_RECONCILE_GRACE_MS = 2 * 60 * 1000;
+
 async function reconcileOrphanFlatTrades(
   openTrades: OpenTrade[],
   snapshots: PositionSnapshot[],
@@ -177,9 +179,12 @@ async function reconcileOrphanFlatTrades(
   const closedIds = new Set(
     events.filter((e) => e.type === "POSITION_CLOSED").map((e) => e.tradeId).filter(Boolean),
   );
+  const now = Date.now();
 
   for (const trade of openTrades) {
     if (closedIds.has(trade.tradeId)) continue;
+    const openedAge = now - Date.parse(trade.openedAt);
+    if (openedAge < ORPHAN_RECONCILE_GRACE_MS) continue;
     if (findBinanceForTrade(trade, nonZero)) continue;
     const snapshot = snapshots.find((s) => s.tradeId === trade.tradeId);
     if (snapshot?.status !== "FLAT") continue;
