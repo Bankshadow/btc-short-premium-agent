@@ -241,14 +241,14 @@ describe("Core Engine hotfix 3 — projection mapping + status consistency", () 
   });
 
   it("dashboard page uses canonical UI projection data", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     assert.ok(src.includes("useUiProjectionData"));
     assert.ok(src.includes("PROJECTION_FALLBACK_ACTIVE_MESSAGE"));
     assert.ok(!src.includes("openTradeCount = mission.openTrades"));
   });
 
   it("no secrets exposed on hotfix pages", () => {
-    for (const rel of ["page.tsx", "settings/page.tsx", "core/page.tsx", "trades/page.tsx", "reports/page.tsx"]) {
+    for (const rel of ["dashboard-client.tsx", "settings/page.tsx", "core/core-client.tsx", "trades/trades-client.tsx", "reports/reports-client.tsx"]) {
       const src = fs.readFileSync(path.join(process.cwd(), "src", "app", rel), "utf8");
       assert.ok(!src.includes("BINANCE_API_SECRET"));
       assert.ok(!src.includes("process.env.BINANCE"));

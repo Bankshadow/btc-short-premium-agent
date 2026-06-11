@@ -39,27 +39,26 @@ describe("UI v0 dashboard migration", () => {
   });
 
   it("dashboard page does not calculate PnL locally", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     const forbidden = ["calculatePnlForTrade", "buildPnlProjection", "sumNetPnl"];
     for (const token of forbidden) {
       assert.ok(!src.includes(token), `dashboard must not use ${token}`);
     }
-    assert.ok(src.includes("useUiProjectionData") || src.includes("useProjectionBundle"));
+    assert.ok(src.includes("useUiProjectionData") || src.includes("coalesceUiProjection"));
   });
 
   it("reports page does not calculate evidence locally", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "reports-client.tsx"), "utf8");
     const forbidden = ["buildEvidenceProgress", "validateTradeEvidence", "EVIDENCE_TARGET"];
     for (const token of forbidden) {
       assert.ok(!src.includes(token), `reports must not use ${token}`);
     }
-    assert.ok(src.includes("useUiProjectionData") || src.includes("useProjectionBundle"));
+    assert.ok(src.includes("useUiProjectionData") || src.includes("coalesceUiProjection"));
   });
 
   it("trades page uses shared projection bundle", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
-    assert.ok(src.includes("useUiProjectionData") || src.includes("useProjectionBundle"));
-    assert.ok(src.includes("bundleProjectionReady") || src.includes("useUiProjectionData"));
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
+    assert.ok(src.includes("useUiProjectionData") || src.includes("coalesceUiProjection"));
     assert.ok(!src.includes("buildOpenTradesFromEvents"));
   });
 
@@ -72,7 +71,7 @@ describe("UI v0 dashboard migration", () => {
   });
 
   it("core page shows health and consistency status", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "core-client.tsx"), "utf8");
     assert.ok(src.includes("UI consistency"));
     assert.ok(src.includes("Projection parity"));
     assert.ok(src.includes("warningCount") || src.includes("rawWarningCount"));
@@ -80,7 +79,7 @@ describe("UI v0 dashboard migration", () => {
   });
 
   it("pages do not use permanent LoadingOrError gate", () => {
-    const pages = ["page.tsx", "trades/page.tsx", "ai-status/page.tsx", "reports/page.tsx", "settings/page.tsx", "core/page.tsx"];
+    const pages = ["dashboard-client.tsx", "trades/trades-client.tsx", "ai-status/page.tsx", "reports/reports-client.tsx", "settings/page.tsx", "core/core-client.tsx"];
     for (const rel of pages) {
       const src = fs.readFileSync(path.join(process.cwd(), "src", "app", rel), "utf8");
       assert.ok(!src.includes("LoadingOrError"), `${rel} must not block on LoadingOrError`);
@@ -88,7 +87,7 @@ describe("UI v0 dashboard migration", () => {
   });
 
   it("dashboard does not import v0 mock data", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     assert.ok(!src.includes("mock.json"));
     assert.ok(!src.includes("mockData"));
   });

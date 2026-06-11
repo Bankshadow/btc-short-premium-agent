@@ -96,6 +96,49 @@ function fallbackUiProjectionData(
   });
 }
 
+export function uiProjectionHasRealTrades(ui: UiProjectionData): boolean {
+  return (
+    ui.source === "REAL_BUNDLE" ||
+    ui.mission.totalTrades > 0 ||
+    ui.trades.closed.length > 0 ||
+    ui.trades.open.length > 0
+  );
+}
+
+/** Prefer server getUiBundle() over stale client context fallback. */
+export function coalesceUiProjection(
+  serverUi: UiProjectionData,
+  ctx: UiProjectionData & { loading?: boolean; refreshing?: boolean; reload?: () => Promise<void> },
+): UiProjectionData & {
+  loading: boolean;
+  refreshing: boolean;
+  reload: () => Promise<void>;
+} {
+  const ctxReady = uiProjectionHasRealTrades(ctx);
+  if (ctxReady) {
+    return {
+      ...ctx,
+      loading: ctx.loading ?? false,
+      refreshing: ctx.refreshing ?? false,
+      reload: ctx.reload ?? (async () => {}),
+    };
+  }
+  if (uiProjectionHasRealTrades(serverUi)) {
+    return {
+      ...serverUi,
+      loading: ctx.loading ?? false,
+      refreshing: ctx.refreshing ?? false,
+      reload: ctx.reload ?? (async () => {}),
+    };
+  }
+  return {
+    ...ctx,
+    loading: ctx.loading ?? false,
+    refreshing: ctx.refreshing ?? false,
+    reload: ctx.reload ?? (async () => {}),
+  };
+}
+
 /** Aggregate evidence rejection codes for UI display (client-safe). */
 export function aggregateEvidenceRejectionReasons(
   evidence: UiProjectionEvidence,

@@ -91,7 +91,8 @@ describe("UI dashboard loading fix", () => {
   });
 
   it("dashboard does not stay Loading forever", () => {
-    const pageSrc = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const pageSrc = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
+    const serverPageSrc = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
     const providerSrc = fs.readFileSync(
       path.join(process.cwd(), "src", "components", "projection-bundle-provider.tsx"),
       "utf8",
@@ -103,14 +104,15 @@ describe("UI dashboard loading fix", () => {
     assert.ok(!pageSrc.includes("LoadingOrError"));
     assert.ok(!pageSrc.includes("if (loading)"));
     assert.ok(pageSrc.includes("useMemo"));
-    assert.ok(pageSrc.includes("useUiProjectionData") || pageSrc.includes("useProjectionBundle"));
+    assert.ok(pageSrc.includes("useUiProjectionData") || pageSrc.includes("coalesceUiProjection"));
+    assert.ok(serverPageSrc.includes("getUiBundle"));
     assert.ok(providerSrc.includes("ProjectionBundleProvider"));
     assert.ok(shellSrc.includes("ProjectionBundleProvider"));
     assert.ok(providerSrc.includes("loading"));
   });
 
   it("dashboard does not expose secrets", () => {
-    const pageSrc = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const pageSrc = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     assert.ok(!pageSrc.includes("BINANCE_API_SECRET"));
     assert.ok(!pageSrc.includes("process.env"));
   });

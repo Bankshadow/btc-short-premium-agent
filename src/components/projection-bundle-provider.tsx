@@ -13,6 +13,7 @@ import {
 import {
   getDefaultUiProjectionData,
   getUiProjectionData,
+  uiProjectionHasRealTrades,
   type UiProjectionData,
 } from "@/lib/core/ui-projection-data";
 
@@ -35,7 +36,7 @@ export function ProjectionBundleProvider({
   const [loading, setLoading] = useState(initialUiBundle.isFallback);
   const [refreshing, setRefreshing] = useState(false);
   const fetchGeneration = useRef(0);
-  const serverBundleReady = useRef(initialUiBundle.source === "REAL_BUNDLE");
+  const serverBundleReady = useRef(uiProjectionHasRealTrades(initialUiBundle));
 
   const loadUi = useCallback(async (mode: "initial" | "refresh") => {
     const generation = ++fetchGeneration.current;

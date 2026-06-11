@@ -228,14 +228,14 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
   });
 
   it("dashboard page binds bundle metrics and health status", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     assert.ok(src.includes("useUiProjectionData") || src.includes("mapBundleToDashboardMetrics"));
     assert.ok(src.includes("ui.health.status") || src.includes("metrics.coreHealthStatus"));
     assert.ok(src.includes("isFallback") || src.includes("ui.isFallback"));
   });
 
   it("trades page prefers bundle when projection ready", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
     assert.ok(src.includes("useUiProjectionData"));
     assert.ok(!src.includes("useApi<TradesResponse>"));
   });
@@ -247,13 +247,13 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
   });
 
   it("core page uses bundle health from ui projection", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "core-client.tsx"), "utf8");
     assert.ok(src.includes("ui.health.status"));
     assert.ok(src.includes("/api/core/health"));
   });
 
   it("reports page uses strict evidence projection and bundle health", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "reports-client.tsx"), "utf8");
     assert.ok(src.includes("ui.evidence.valid"));
     assert.ok(src.includes("REAL_BUNDLE") || src.includes("ui.health.status"));
   });
@@ -263,7 +263,7 @@ describe("Core Engine hotfix 4 — UI binding + evidence strictness", () => {
   });
 
   it("no secrets exposed on hotfix 4 pages", () => {
-    for (const rel of ["page.tsx", "trades/page.tsx", "reports/page.tsx", "core/page.tsx"]) {
+    for (const rel of ["dashboard-client.tsx", "trades/trades-client.tsx", "reports/reports-client.tsx", "core/core-client.tsx"]) {
       const src = fs.readFileSync(path.join(process.cwd(), "src", "app", rel), "utf8");
       assert.ok(!src.includes("BINANCE_API_SECRET"));
       assert.ok(!src.includes("process.env.BINANCE"));

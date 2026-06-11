@@ -122,7 +122,7 @@ describe("Core Engine hotfix 2 — UI projection sync", () => {
   });
 
   it("trades page renders without LoadingOrError gate", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
     assert.ok(!src.includes("LoadingOrError"));
     assert.ok(src.includes("useUiProjectionData"));
   });
@@ -134,7 +134,7 @@ describe("Core Engine hotfix 2 — UI projection sync", () => {
   });
 
   it("reports page renders without LoadingOrError gate", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "reports-client.tsx"), "utf8");
     assert.ok(!src.includes("LoadingOrError"));
     assert.ok(src.includes("useMemo"));
   });
@@ -163,7 +163,7 @@ describe("Core Engine hotfix 2 — UI projection sync", () => {
   });
 
   it("no secrets exposed on updated pages", () => {
-    for (const rel of ["page.tsx", "trades/page.tsx", "ai-status/page.tsx", "reports/page.tsx", "settings/page.tsx"]) {
+    for (const rel of ["dashboard-client.tsx", "trades/trades-client.tsx", "ai-status/page.tsx", "reports/reports-client.tsx", "settings/page.tsx"]) {
       const src = fs.readFileSync(path.join(process.cwd(), "src", "app", rel), "utf8");
       assert.ok(!src.includes("BINANCE_API_SECRET"));
       assert.ok(!src.includes("process.env.BINANCE"));

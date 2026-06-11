@@ -203,10 +203,10 @@ describe("Production loading fix", () => {
   it("no page relies on endless Loading", () => {
     const root = path.join(process.cwd(), "src", "app");
     const pages = [
-      "page.tsx",
-      "trades/page.tsx",
+      "dashboard-client.tsx",
+      "trades/trades-client.tsx",
       "ai-status/page.tsx",
-      "reports/page.tsx",
+      "reports/reports-client.tsx",
       "settings/page.tsx",
     ];
     for (const rel of pages) {

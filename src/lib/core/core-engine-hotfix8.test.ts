@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { getUiBundle } from "./get-ui-bundle";
+import { getUiBundle, resolveUiBundleSource } from "./get-ui-bundle";
 import { normalizeProjectionBundle } from "./normalize-projection-bundle";
 import {
   aggregateEvidenceRejectionReasons,
@@ -95,12 +95,24 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
     assert.ok(reasons.some((r) => r.startsWith("MISSING_EXIT_PRICE")));
   });
 
-  it("getUiBundle returns REAL_BUNDLE shape when builder succeeds", async () => {
+  it("getUiBundle maps builder payload directly and marks REAL_BUNDLE when trades exist", async () => {
     const ui = await getUiBundle();
     assert.ok(["REAL_BUNDLE", "FALLBACK"].includes(ui.source));
+    if (ui.mission.totalTrades > 0 || ui.trades.closed.length > 0) {
+      assert.equal(ui.source, "REAL_BUNDLE");
+    }
     assert.ok(typeof ui.mission.totalTrades === "number");
     assert.ok(Array.isArray(ui.trades.closed));
     assert.equal(ui.risk.liveLocked, true);
+  });
+
+  it("resolveUiBundleSource returns REAL_BUNDLE when builder has closed trades", () => {
+    const normalized = normalizeProjectionBundle(productionBundleFixture(8));
+    const source = resolveUiBundleSource(
+      { ok: true, ...productionBundleFixture(8) } as import("./projection-bundle-shared").ProjectionBundleResponse,
+      normalized,
+    );
+    assert.equal(source, "REAL_BUNDLE");
   });
 
   it("layout loads server bundle via getUiBundle", () => {
@@ -120,31 +132,40 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
     assert.ok(provider.includes("data.isFallback && serverBundleReady.current"));
   });
 
-  it("dashboard renders bundle metrics from ui projection", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
-    assert.ok(src.includes("ui.mission.totalTrades"));
-    assert.ok(src.includes("ui.mission.closedTrades"));
-    assert.ok(src.includes("ui.health.status"));
-    assert.ok(src.includes("Projection source:"));
+  it("dashboard server page loads getUiBundle and passes to client", () => {
+    const page = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const client = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
+    assert.ok(page.includes("getUiBundle"));
+    assert.ok(page.includes("DashboardClient"));
+    assert.ok(client.includes("coalesceUiProjection"));
+    assert.ok(client.includes("ui.mission.totalTrades"));
+    assert.ok(client.includes("ui.health.status"));
+    assert.ok(client.includes("Projection source:"));
+  });
+
+  it("trades server page loads getUiBundle", () => {
+    const page = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
+    assert.ok(page.includes("getUiBundle"));
+    assert.ok(page.includes("TradesClient"));
   });
 
   it("core page renders bundle health and trade counts", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
-    assert.ok(src.includes("ui.health.status"));
-    assert.ok(src.includes("rawWarningCount"));
-    assert.ok(src.includes("not rendered DOM"));
+    const client = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "core-client.tsx"), "utf8");
+    assert.ok(client.includes("ui.health.status"));
+    assert.ok(client.includes("rawWarningCount"));
+    assert.ok(client.includes("Projection source:"));
   });
 
   it("trades page renders closed rows from ui bundle", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
-    assert.ok(src.includes("ui.trades.closed.map"));
-    assert.ok(src.includes("PNL_PENDING_LABEL"));
+    const client = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
+    assert.ok(client.includes("ui.trades.closed.map"));
+    assert.ok(client.includes("PNL_PENDING_LABEL"));
   });
 
   it("reports page shows evidence rejection reasons", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "page.tsx"), "utf8");
-    assert.ok(src.includes("aggregateEvidenceRejectionReasons"));
-    assert.ok(src.includes("ui.evidence.rejected"));
+    const client = fs.readFileSync(path.join(process.cwd(), "src", "app", "reports", "reports-client.tsx"), "utf8");
+    assert.ok(client.includes("aggregateEvidenceRejectionReasons"));
+    assert.ok(client.includes("ui.evidence.rejected"));
   });
 
   it("live trading remains locked", () => {

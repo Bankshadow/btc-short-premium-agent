@@ -148,21 +148,21 @@ describe("Core Engine hotfix 7 — UI real bundle binding", () => {
   });
 
   it("dashboard uses useUiProjectionData", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     assert.ok(src.includes("useUiProjectionData"));
     assert.ok(src.includes("ui.mission.totalTrades"));
     assert.ok(src.includes("ui.health.status"));
   });
 
   it("trades page binds closed rows from ui projection", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
     assert.ok(src.includes("useUiProjectionData"));
     assert.ok(src.includes("ui.trades.closed.map"));
     assert.ok(src.includes("PNL_PENDING_LABEL"));
   });
 
   it("core page shows projection source and bundle health", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "core-client.tsx"), "utf8");
     assert.ok(src.includes("Projection source:"));
     assert.ok(src.includes("ui.mission.closedTrades"));
   });

@@ -92,36 +92,29 @@ The API and UI *intended* to share the same bundle, but they ran on different ru
 Single server-safe loader shared with the API route:
 
 ```typescript
-// src/lib/core/get-ui-bundle.ts
-export async function getUiBundle() {
-  const bundle = await buildProjectionBundle();  // same as GET /api/core/projections/bundle
-  const normalized = normalizeProjectionBundle(bundle, { binanceStatus, errors });
-  return mapNormalizedToUiProjectionData(normalized, { source: "REAL_BUNDLE" | "FALLBACK" });
-}
+// src/lib/core/get-ui-bundle.ts — React cache() + buildProjectionBundle()
+export const getUiBundle = cache(loadUiBundle);
 ```
 
 Wiring:
 
 | File | Change |
 |------|--------|
-| `src/app/layout.tsx` | `await getUiBundle()` → pass `initialUiBundle` to `AppShell`. Add `export const dynamic = "force-dynamic"`. |
-| `src/components/AppShell.tsx` | Forward `initialUiBundle` to `ProjectionBundleProvider`. |
-| `src/components/projection-bundle-provider.tsx` | Seed state from `initialUiBundle`; skip initial client fetch when `source === "REAL_BUNDLE"`; do not downgrade REAL_BUNDLE → FALLBACK on failed refresh. |
-| `src/app/page.tsx` | Metrics from `ui.mission.*`, health from `ui.health.status` (no ctx fallback for counts). |
-| `src/app/trades/page.tsx` | Already uses `ui.trades.closed` — benefits from server seed. |
-| `src/app/core/page.tsx` | Health from `ui.health.status` only (removed health API override for display). |
-| `src/app/reports/page.tsx` | Evidence from `ui.evidence` + `aggregateEvidenceRejectionReasons()`. |
+| `src/lib/core/get-ui-bundle.ts` | Maps **builder payload directly** (not HTTP envelope). `resolveUiBundleSource()` → `REAL_BUNDLE` when trades exist. |
+| `src/app/*/page.tsx` | Server components: `await getUiBundle()` → pass `initialUi` to `*-client.tsx`. |
+| `src/app/*-client.tsx` | Client UI: `coalesceUiProjection(initialUi, ctx)` — server bundle wins over stale context fallback. |
+| `src/app/layout.tsx` | Still seeds provider via `getUiBundle()` + `force-dynamic`. |
+| `src/lib/core/ui-projection-data.ts` | `coalesceUiProjection()`, `uiProjectionHasRealTrades()`. |
 
 Data flow after fix:
 
 ```
-layout.tsx (server, force-dynamic)
-  └─ getUiBundle() → buildProjectionBundle()
-       └─ AppShell → ProjectionBundleProvider(initialUiBundle)
-            └─ useUiProjectionData() on all four pages
+app/page.tsx (server)
+  └─ getUiBundle() → buildProjectionBundle()     ← same builder as API route
+       └─ DashboardClient(initialUi)
+            └─ coalesceUiProjection(initialUi, context)
+                 └─ metrics render from REAL_BUNDLE (8 trades)
 ```
-
-Client refresh still calls `getUiProjectionData()` → `/api/core/projections/bundle`, but only to update — not to establish initial truth.
 
 ---
 

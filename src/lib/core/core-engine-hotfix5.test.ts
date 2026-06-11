@@ -162,13 +162,13 @@ describe("Core Engine hotfix 5 — UI projection source + strict evidence", () =
   });
 
   it("trades page uses bundle only", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
     assert.ok(src.includes("useUiProjectionData"));
     assert.ok(!src.includes("useApi<TradesResponse>"));
   });
 
   it("core page shows aggregated warning count", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "page.tsx"), "utf8");
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "core", "core-client.tsx"), "utf8");
     assert.ok(src.includes("warningCount"));
     assert.ok(src.includes("ui.health.status"));
   });
@@ -178,7 +178,7 @@ describe("Core Engine hotfix 5 — UI projection source + strict evidence", () =
   });
 
   it("no secrets exposed on hotfix 5 pages", () => {
-    for (const rel of ["page.tsx", "trades/page.tsx", "reports/page.tsx", "core/page.tsx"]) {
+    for (const rel of ["dashboard-client.tsx", "trades/trades-client.tsx", "reports/reports-client.tsx", "core/core-client.tsx"]) {
       const src = fs.readFileSync(path.join(process.cwd(), "src", "app", rel), "utf8");
       assert.ok(!src.includes("BINANCE_API_SECRET"));
       assert.ok(!src.includes("process.env.BINANCE"));
