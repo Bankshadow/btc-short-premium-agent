@@ -22,6 +22,7 @@ import {
 } from "./normalize-projection-bundle";
 import { getProjectionBundleForUI } from "./projection-client";
 import type { RiskProjectionView } from "./projection-bundle-shared";
+import type { ProjectionBundleResponse } from "./projection-bundle-shared";
 import type { StaleOpenTradeWarning } from "./trade-reconciliation";
 
 export interface UiProjectionMission {
@@ -114,28 +115,114 @@ export function coalesceUiProjection(
   refreshing: boolean;
   reload: () => Promise<void>;
 } {
+  const reload = ctx.reload ?? (async () => {});
+  const refreshing = ctx.refreshing ?? false;
+
+  if (serverUi.source === "REAL_BUNDLE") {
+    return {
+      ...serverUi,
+      loading: false,
+      refreshing,
+      reload,
+    };
+  }
+
   const ctxReady = uiProjectionHasRealTrades(ctx);
   if (ctxReady) {
     return {
       ...ctx,
       loading: ctx.loading ?? false,
-      refreshing: ctx.refreshing ?? false,
-      reload: ctx.reload ?? (async () => {}),
+      refreshing,
+      reload,
     };
   }
   if (uiProjectionHasRealTrades(serverUi)) {
     return {
       ...serverUi,
-      loading: ctx.loading ?? false,
-      refreshing: ctx.refreshing ?? false,
-      reload: ctx.reload ?? (async () => {}),
+      loading: false,
+      refreshing,
+      reload,
     };
   }
   return {
     ...ctx,
     loading: ctx.loading ?? false,
-    refreshing: ctx.refreshing ?? false,
-    reload: ctx.reload ?? (async () => {}),
+    refreshing,
+    reload,
+  };
+}
+
+/** Map buildProjectionBundle() output directly — same fields as GET /api/core/projections/bundle data. */
+export function mapProjectionBundleToUi(
+  bundle: Extract<ProjectionBundleResponse, { ok: true }>,
+  options?: {
+    binanceStatus?: DefaultBinanceStatus;
+    errors?: ProjectionSectionError[];
+    warnings?: string[];
+  },
+): UiProjectionData {
+  const mission = bundle.mission;
+  const trades = bundle.trades;
+  const closed = trades.closed ?? [];
+  const open = trades.open ?? [];
+  const openCount = trades.effectiveOpenCount ?? open.length;
+  const closedCount = closed.length;
+  const totalTrades = mission.totalTrades ?? (closedCount > 0 ? closedCount : openCount);
+
+  const binanceNormalized = normalizeBinanceStatusForDisplay(
+    (options?.binanceStatus ?? getDefaultBinanceStatus()) as BinanceStatusDiagnostics,
+  );
+
+  return {
+    source: "REAL_BUNDLE",
+    isFallback: false,
+    mission: {
+      currentEquity: mission.currentEquity,
+      targetEquity: mission.targetCapital,
+      progressPct: mission.progressPct,
+      totalTrades,
+      openTrades: openCount,
+      closedTrades: closedCount > 0 ? closedCount : (mission.totalTrades ?? 0),
+      netPnl: bundle.pnl?.totalNetPnl ?? mission.netPnl ?? 0,
+      latestRunId: mission.latestRunId ?? null,
+      latestDecisionLogId: mission.latestDecisionLogId ?? null,
+      latestVerdict: mission.latestVerdict ?? null,
+      startCapital: mission.startCapital,
+      targetCapital: mission.targetCapital,
+    },
+    trades: {
+      open: open as UiProjectionTrades["open"],
+      closed: closed as UiProjectionTrades["closed"],
+      effectiveOpenCount: openCount,
+      staleOpenWarnings: trades.staleOpenWarnings ?? [],
+    },
+    evidence: {
+      valid: bundle.evidence.valid,
+      required: bundle.evidence.required,
+      rejected: bundle.evidence.rejected ?? 0,
+      readinessStatus: bundle.evidence.readinessStatus ?? "COLLECTING",
+      message: bundle.evidence.message ?? null,
+      trades: bundle.evidence.trades,
+    },
+    health: {
+      status: bundle.health.status,
+      warnings: bundle.health.warnings ?? [],
+      blockingIssues: bundle.health.blockingIssues ?? [],
+      rawWarningCount: bundle.health.rawWarningCount ?? 0,
+      exchangeStatus: bundle.health.exchangeStatus ?? "DISCONNECTED",
+      liveLocked: bundle.health.liveLocked ?? bundle.risk.liveLocked ?? true,
+    },
+    binanceStatus: {
+      ...getDefaultBinanceStatus(),
+      ...(options?.binanceStatus ?? getDefaultBinanceStatus()),
+      ...binanceNormalized,
+      zeroState: false,
+    },
+    risk: bundle.risk ?? getDefaultRiskProjectionView(),
+    meta: bundle.meta ?? {},
+    warnings: options?.warnings ?? [],
+    errors: options?.errors ?? [],
+    loadedAt: bundle.meta?.builtAt ?? new Date().toISOString(),
   };
 }
 
@@ -235,16 +322,21 @@ export async function getUiProjectionData(
 ): Promise<UiProjectionData> {
   try {
     const result = await getProjectionBundleForUI(options);
-    const source: UiProjectionData["source"] = result.normalized.isFallback
+    let source: UiProjectionData["source"] = result.normalized.isFallback
       ? "FALLBACK"
       : "REAL_BUNDLE";
 
-    return mapNormalizedToUiProjectionData(result.normalized, {
+    const ui = mapNormalizedToUiProjectionData(result.normalized, {
       source,
       warnings: result.warnings,
       errors: result.errors,
       loadedAt: result.bundle.loadedAt,
     });
+
+    if (uiProjectionHasRealTrades(ui)) {
+      return { ...ui, source: "REAL_BUNDLE", isFallback: false };
+    }
+    return ui;
   } catch (err) {
     const errors: ProjectionSectionError[] = [
       {

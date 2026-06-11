@@ -7,6 +7,7 @@ import { normalizeProjectionBundle } from "./normalize-projection-bundle";
 import {
   aggregateEvidenceRejectionReasons,
   mapNormalizedToUiProjectionData,
+  mapProjectionBundleToUi,
 } from "./ui-projection-data";
 import {
   getDefaultMissionProjection,
@@ -95,6 +96,21 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
     assert.ok(reasons.some((r) => r.startsWith("MISSING_EXIT_PRICE")));
   });
 
+  it("mapProjectionBundleToUi maps production fixture to REAL_BUNDLE 8/8", () => {
+    const fixture = productionBundleFixture(8) as Extract<
+      import("./projection-bundle-shared").ProjectionBundleResponse,
+      { ok: true }
+    >;
+    const ui = mapProjectionBundleToUi(fixture);
+    assert.equal(ui.source, "REAL_BUNDLE");
+    assert.equal(ui.isFallback, false);
+    assert.equal(ui.mission.totalTrades, 8);
+    assert.equal(ui.mission.closedTrades, 8);
+    assert.equal(ui.health.status, "WARNING");
+    assert.equal(ui.evidence.valid, 0);
+    assert.equal(ui.evidence.rejected, 8);
+  });
+
   it("getUiBundle maps builder payload directly and marks REAL_BUNDLE when trades exist", async () => {
     const ui = await getUiBundle();
     assert.ok(["REAL_BUNDLE", "FALLBACK"].includes(ui.source));
@@ -113,6 +129,13 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
       normalized,
     );
     assert.equal(source, "REAL_BUNDLE");
+  });
+
+  it("getUiBundle opts out of data cache with noStore", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "lib", "core", "get-ui-bundle.ts"), "utf8");
+    assert.ok(src.includes("noStore"));
+    assert.ok(src.includes("mapProjectionBundleToUi"));
+    assert.ok(!src.includes("normalizeProjectionBundle("));
   });
 
   it("layout loads server bundle via getUiBundle", () => {
