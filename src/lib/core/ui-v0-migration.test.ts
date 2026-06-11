@@ -44,7 +44,7 @@ describe("UI v0 dashboard migration", () => {
     for (const token of forbidden) {
       assert.ok(!src.includes(token), `dashboard must not use ${token}`);
     }
-    assert.ok(src.includes("useUiProjectionData") || src.includes("coalesceUiProjection"));
+    assert.ok(src.includes("useUiProjectionData") || src.includes("mergePageUiProjection") || src.includes("coalesceUiProjection"));
   });
 
   it("reports page does not calculate evidence locally", () => {
@@ -53,12 +53,12 @@ describe("UI v0 dashboard migration", () => {
     for (const token of forbidden) {
       assert.ok(!src.includes(token), `reports must not use ${token}`);
     }
-    assert.ok(src.includes("useUiProjectionData") || src.includes("coalesceUiProjection"));
+    assert.ok(src.includes("useUiProjectionData") || src.includes("mergePageUiProjection") || src.includes("coalesceUiProjection"));
   });
 
   it("trades page uses shared projection bundle", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src", "app", "trades", "trades-client.tsx"), "utf8");
-    assert.ok(src.includes("useUiProjectionData") || src.includes("coalesceUiProjection"));
+    assert.ok(src.includes("useUiProjectionData") || src.includes("mergePageUiProjection") || src.includes("coalesceUiProjection"));
     assert.ok(!src.includes("buildOpenTradesFromEvents"));
   });
 

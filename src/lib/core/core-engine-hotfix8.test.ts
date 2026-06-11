@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
-import { getUiBundle, resolveUiBundleSource } from "./get-ui-bundle";
 import { normalizeProjectionBundle } from "./normalize-projection-bundle";
+import { getUiBundle } from "./get-ui-bundle";
 import {
   aggregateEvidenceRejectionReasons,
+  getDefaultUiProjectionData,
   mapNormalizedToUiProjectionData,
   mapProjectionBundleToUi,
+  mergePageUiProjection,
 } from "./ui-projection-data";
 import {
   getDefaultMissionProjection,
@@ -122,13 +124,23 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
     assert.equal(ui.risk.liveLocked, true);
   });
 
-  it("resolveUiBundleSource returns REAL_BUNDLE when builder has closed trades", () => {
-    const normalized = normalizeProjectionBundle(productionBundleFixture(8));
-    const source = resolveUiBundleSource(
-      { ok: true, ...productionBundleFixture(8) } as import("./projection-bundle-shared").ProjectionBundleResponse,
-      normalized,
+  it("loadServerProjectionBundle uses buildProjectionBundle without HTTP fetch", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "src", "lib", "core", "get-ui-bundle.ts"), "utf8");
+    assert.ok(src.includes("loadServerProjectionBundle"));
+    assert.ok(src.includes("buildProjectionBundle()"));
+    assert.ok(!src.includes("fetch("));
+    assert.ok(!src.includes("fetchJson"));
+  });
+
+  it("mergePageUiProjection prefers server bundle over context fallback", () => {
+    const serverUi = mapProjectionBundleToUi(
+      productionBundleFixture(8) as import("./projection-bundle-shared").ProjectionBundleResponse & { ok: true },
     );
-    assert.equal(source, "REAL_BUNDLE");
+    const ctx = getDefaultUiProjectionData();
+    const merged = mergePageUiProjection(serverUi, { ...ctx, loading: false, reload: async () => {} });
+    assert.equal(merged.source, "REAL_BUNDLE");
+    assert.equal(merged.mission.totalTrades, 8);
+    assert.equal(merged.health.status, "WARNING");
   });
 
   it("getUiBundle opts out of data cache with noStore", () => {
@@ -138,21 +150,21 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
     assert.ok(!src.includes("normalizeProjectionBundle("));
   });
 
-  it("layout loads server bundle via getUiBundle", () => {
+  it("layout seeds provider placeholder; pages load getUiBundle", () => {
     const layout = fs.readFileSync(path.join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
-    assert.ok(layout.includes("getUiBundle"));
+    assert.ok(layout.includes("getDefaultUiProjectionData"));
     assert.ok(layout.includes("initialUiBundle"));
     assert.ok(layout.includes('dynamic = "force-dynamic"'));
   });
 
-  it("provider accepts server initialUiBundle and skips client zero-state", () => {
+  it("provider does not auto-fetch on mount", () => {
     const provider = fs.readFileSync(
       path.join(process.cwd(), "src", "components", "projection-bundle-provider.tsx"),
       "utf8",
     );
     assert.ok(provider.includes("initialUiBundle"));
-    assert.ok(provider.includes("serverBundleReady"));
-    assert.ok(provider.includes("data.isFallback && serverBundleReady.current"));
+    assert.ok(provider.includes("setLoading(false)"));
+    assert.ok(!provider.includes('loadUi("initial")'));
   });
 
   it("dashboard server page loads getUiBundle and passes to client", () => {
@@ -160,7 +172,7 @@ describe("Core Engine hotfix 8 — server/UI bundle binding", () => {
     const client = fs.readFileSync(path.join(process.cwd(), "src", "app", "dashboard-client.tsx"), "utf8");
     assert.ok(page.includes("getUiBundle"));
     assert.ok(page.includes("DashboardClient"));
-    assert.ok(client.includes("coalesceUiProjection"));
+    assert.ok(client.includes("mergePageUiProjection"));
     assert.ok(client.includes("ui.mission.totalTrades"));
     assert.ok(client.includes("ui.health.status"));
     assert.ok(client.includes("Projection source:"));

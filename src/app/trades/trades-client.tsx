@@ -13,7 +13,7 @@ import {
 } from "@/components/ui";
 import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
-import { coalesceUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+import { mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
 
 function pnlStatusLabel(trade: {
   status: string;
@@ -35,7 +35,7 @@ function lifecycleLabel(open: boolean, hasClosePreview: boolean): string {
 
 export function TradesClient({ initialUi }: { initialUi: UiProjectionData }) {
   const ctx = useUiProjectionData();
-  const ui = coalesceUiProjection(initialUi, ctx);
+  const ui = mergePageUiProjection(initialUi, ctx);
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
   const closeTrade = ui.trades.open.find((t) => t.tradeId === closeTradeId);

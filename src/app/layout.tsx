@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/AppShell";
-import { getUiBundle } from "@/lib/core/get-ui-bundle";
+import { getDefaultUiProjectionData } from "@/lib/core/ui-projection-data";
 import "./globals.css";
 
 /** Journal-backed bundle must run per request, not at static build time. */
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const initialUiBundle = await getUiBundle();
+  const initialUiBundle = getDefaultUiProjectionData();
 
   return (
     <html lang="en">

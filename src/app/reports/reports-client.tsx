@@ -12,7 +12,7 @@ import {
   SectionCard,
 } from "@/components/ui";
 import { useUiProjectionData } from "@/components/use-projection-bundle";
-import { aggregateEvidenceRejectionReasons, coalesceUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+import { aggregateEvidenceRejectionReasons, mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
@@ -43,7 +43,7 @@ function Field({ label, value }: { label: string; value: string }) {
 
 export function ReportsClient({ initialUi }: { initialUi: UiProjectionData }) {
   const ctx = useUiProjectionData();
-  const ui = coalesceUiProjection(initialUi, ctx);
+  const ui = mergePageUiProjection(initialUi, ctx);
   const coreHealthStatus = ui.health.status;
   const evidenceRejectionReasons = aggregateEvidenceRejectionReasons(ui.evidence);
   const pendingPnlCount = ui.trades.closed.filter(

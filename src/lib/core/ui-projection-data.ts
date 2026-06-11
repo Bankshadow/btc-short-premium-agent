@@ -106,8 +106,33 @@ export function uiProjectionHasRealTrades(ui: UiProjectionData): boolean {
   );
 }
 
-/** Prefer server getUiBundle() over stale client context fallback. */
-export function coalesceUiProjection(
+/** True when server bundle has journal-backed projection data (matches API meta). */
+export function uiBundleHasRealData(ui: UiProjectionData): boolean {
+  return uiProjectionHasRealTrades(ui) || (ui.meta?.eventCount ?? 0) > 0;
+}
+
+function applyBundleExchangeToBinanceStatus(
+  bundle: Extract<ProjectionBundleResponse, { ok: true }>,
+  probed: DefaultBinanceStatus,
+): DefaultBinanceStatus {
+  if (probed.status !== "MISSING_ENV" && probed.status !== "DISCONNECTED") {
+    return probed;
+  }
+  const exchange = bundle.health?.exchangeStatus;
+  if (exchange === "CONNECTED") {
+    return {
+      ...probed,
+      status: "CONNECTED",
+      connected: true,
+      testnetEnabled: true,
+      zeroState: false,
+    };
+  }
+  return probed;
+}
+
+/** Page UI: server getUiBundle() wins over client context fallback. */
+export function mergePageUiProjection(
   serverUi: UiProjectionData,
   ctx: UiProjectionData & { loading?: boolean; refreshing?: boolean; reload?: () => Promise<void> },
 ): UiProjectionData & {
@@ -118,32 +143,28 @@ export function coalesceUiProjection(
   const reload = ctx.reload ?? (async () => {});
   const refreshing = ctx.refreshing ?? false;
 
-  if (serverUi.source === "REAL_BUNDLE") {
+  if (uiBundleHasRealData(serverUi)) {
     return {
       ...serverUi,
+      source: "REAL_BUNDLE",
+      isFallback: false,
       loading: false,
       refreshing,
       reload,
     };
   }
 
-  const ctxReady = uiProjectionHasRealTrades(ctx);
-  if (ctxReady) {
+  if (uiBundleHasRealData(ctx)) {
     return {
       ...ctx,
+      source: "REAL_BUNDLE",
+      isFallback: false,
       loading: ctx.loading ?? false,
       refreshing,
       reload,
     };
   }
-  if (uiProjectionHasRealTrades(serverUi)) {
-    return {
-      ...serverUi,
-      loading: false,
-      refreshing,
-      reload,
-    };
-  }
+
   return {
     ...ctx,
     loading: ctx.loading ?? false,
@@ -151,6 +172,9 @@ export function coalesceUiProjection(
     reload,
   };
 }
+
+/** @deprecated Use mergePageUiProjection */
+export const coalesceUiProjection = mergePageUiProjection;
 
 /** Map buildProjectionBundle() output directly — same fields as GET /api/core/projections/bundle data. */
 export function mapProjectionBundleToUi(
@@ -169,8 +193,10 @@ export function mapProjectionBundleToUi(
   const closedCount = closed.length;
   const totalTrades = mission.totalTrades ?? (closedCount > 0 ? closedCount : openCount);
 
+  const probedBinance = options?.binanceStatus ?? getDefaultBinanceStatus();
+  const bundleBinance = applyBundleExchangeToBinanceStatus(bundle, probedBinance);
   const binanceNormalized = normalizeBinanceStatusForDisplay(
-    (options?.binanceStatus ?? getDefaultBinanceStatus()) as BinanceStatusDiagnostics,
+    bundleBinance as BinanceStatusDiagnostics,
   );
 
   return {
@@ -214,7 +240,7 @@ export function mapProjectionBundleToUi(
     },
     binanceStatus: {
       ...getDefaultBinanceStatus(),
-      ...(options?.binanceStatus ?? getDefaultBinanceStatus()),
+      ...bundleBinance,
       ...binanceNormalized,
       zeroState: false,
     },
@@ -333,7 +359,7 @@ export async function getUiProjectionData(
       loadedAt: result.bundle.loadedAt,
     });
 
-    if (uiProjectionHasRealTrades(ui)) {
+    if (uiBundleHasRealData(ui)) {
       return { ...ui, source: "REAL_BUNDLE", isFallback: false };
     }
     return ui;

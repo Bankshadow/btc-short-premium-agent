@@ -13,7 +13,7 @@ import {
   staleTradeBannerText,
   staleTradeRequiredAction,
 } from "@/lib/core/stale-trade-display";
-import { coalesceUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+import { mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
 
 function statusTone(status: string): "safe" | "blocked" | "wait" {
   if (status === "OK") return "safe";
@@ -168,7 +168,7 @@ const ZERO_PARITY: ProjectionParityReport = {
 
 export function CoreClient({ initialUi }: { initialUi: UiProjectionData }) {
   const ctx = useUiProjectionData();
-  const ui = coalesceUiProjection(initialUi, ctx);
+  const ui = mergePageUiProjection(initialUi, ctx);
   const consistency = useApi<UiConsistencyReport>("/api/core/ui-consistency", 0, {
     fallback: ZERO_CONSISTENCY,
   });

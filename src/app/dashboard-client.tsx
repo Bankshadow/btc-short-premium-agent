@@ -27,12 +27,12 @@ import {
 import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { deriveLifecycleDisplay } from "@/lib/ui/lifecycle-display";
-import { coalesceUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+import { mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
 
 export function DashboardClient({ initialUi }: { initialUi: UiProjectionData }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const projectionCtx = useUiProjectionData(refreshKey);
-  const ui = coalesceUiProjection(initialUi, projectionCtx);
+  const ui = mergePageUiProjection(initialUi, projectionCtx);
   const ctxFallback = useMemo(() => zeroDashboardUiContext(), []);
   const {
     data: ctx,

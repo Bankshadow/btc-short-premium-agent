@@ -33,10 +33,10 @@ export function ProjectionBundleProvider({
   initialUiBundle: UiProjectionData;
 }) {
   const [ui, setUi] = useState<UiProjectionData>(initialUiBundle);
-  const [loading, setLoading] = useState(initialUiBundle.isFallback);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const fetchGeneration = useRef(0);
-  const serverBundleReady = useRef(uiProjectionHasRealTrades(initialUiBundle));
+  const serverBundleReady = useRef(false);
 
   const loadUi = useCallback(async (mode: "initial" | "refresh") => {
     const generation = ++fetchGeneration.current;
@@ -67,12 +67,8 @@ export function ProjectionBundleProvider({
   }, []);
 
   useEffect(() => {
-    if (serverBundleReady.current) {
-      setLoading(false);
-      return;
-    }
-    void loadUi("initial");
-  }, [loadUi]);
+    setLoading(false);
+  }, []);
 
   const reload = useCallback(async () => {
     await loadUi("refresh");
