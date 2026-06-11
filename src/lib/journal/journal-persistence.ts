@@ -45,12 +45,12 @@ function useBlobPersistence(): boolean {
 }
 
 async function readFromBlob(): Promise<JournalEvent[]> {
-  const { head } = await import("@vercel/blob");
+  const { get } = await import("@vercel/blob");
   try {
-    const meta = await head(BLOB_PATHNAME);
-    const res = await fetch(meta.url);
-    if (!res.ok) return [];
-    return parseEvents(await res.text());
+    const result = await get(BLOB_PATHNAME, { access: "private", useCache: false });
+    if (!result || result.statusCode !== 200 || !result.stream) return [];
+    const text = await new Response(result.stream).text();
+    return parseEvents(text);
   } catch {
     return [];
   }
