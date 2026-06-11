@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Badge, useApi } from "@/components/use-api";
 import {
   EventFeed,
@@ -103,19 +104,23 @@ const SAFETY_EVENTS = new Set([
 ]);
 
 export default function AiStatusPage() {
-  const { mission, health, risk, warnings: bundleWarnings, reload: reloadBundle } =
+  const { mission, health, risk, binanceStatus: bundleBinance, warnings: bundleWarnings, reload: reloadBundle } =
     useProjectionBundle();
+  const analysisFallback = useMemo(() => zeroAnalysisLatest(), []);
+  const reviewFallback = useMemo(() => ({ review: null }), []);
+  const binanceFallback = useMemo(() => zeroBinanceStatusApiResponse(), []);
+  const eventsFallback = useMemo(() => zeroJournalEventsResponse(), []);
   const latest = useApi<LatestAnalysis>("/api/analysis/latest", 0, {
-    fallback: zeroAnalysisLatest(),
+    fallback: analysisFallback,
   });
   const review = useApi<ReviewResponse>("/api/execution/review/latest", 0, {
-    fallback: { review: null },
+    fallback: reviewFallback,
   });
   const binance = useApi<BinanceStatusDiagnostics>("/api/binance/status", 0, {
-    fallback: zeroBinanceStatusApiResponse(),
+    fallback: binanceFallback,
   });
   const events = useApi<EventsResponse>("/api/journal/events?limit=30", 0, {
-    fallback: zeroJournalEventsResponse(),
+    fallback: eventsFallback,
   });
   const traceTradeId =
     events.data?.events.find(
@@ -145,12 +150,12 @@ export default function AiStatusPage() {
     ...(trace.error ? [`core/trace: ${trace.error}`] : []),
   ];
 
-  const d = latest.data ?? zeroAnalysisLatest();
+  const d = latest.data ?? analysisFallback;
   const r = review.data?.review ?? null;
   const safetyEvents =
-    (events.data ?? zeroJournalEventsResponse()).events.filter((e) => SAFETY_EVENTS.has(e.type));
+    (events.data ?? eventsFallback).events.filter((e) => SAFETY_EVENTS.has(e.type));
 
-  const eventList = (events.data ?? zeroJournalEventsResponse()).events;
+  const eventList = (events.data ?? eventsFallback).events;
 
   const latestTradeEvent = eventList.find(
     (e) => e.type === "ORDER_EXECUTED" || e.type === "POSITION_OPENED",
@@ -170,7 +175,8 @@ export default function AiStatusPage() {
     (e) => e.type === "POSITION_RECONCILIATION_WARNING",
   );
 
-  const binanceData = binance.data ?? getDefaultBinanceStatus();
+  const binanceData =
+    bundleBinance && !bundleBinance.zeroState ? bundleBinance : binance.data ?? binanceFallback;
 
   return (
     <div className="ui-dashboard-grid">

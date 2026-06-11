@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Badge, useApi } from "@/components/use-api";
@@ -39,20 +39,36 @@ export default function SettingsPage() {
     warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
-  const binanceFallback = zeroBinanceStatusApiResponse();
+  const binanceFallback = useMemo(() => zeroBinanceStatusApiResponse(), []);
+  const healthFallback = useMemo<EngineHealthReport>(
+    () => ({
+      status: "OK",
+      message: "No health report yet.",
+      blocksExecution: false,
+      checkedAt: new Date().toISOString(),
+      issues: [],
+      orphanTrades: [],
+      missingPnlTrades: [],
+      stalePositionTrades: [],
+    }),
+    [],
+  );
+  const sandboxFallback = useMemo<LiveSandboxStatus>(
+    () => ({
+      liveLocked: true,
+      liveEnvPresent: false,
+      liveEnvDisabledByPolicy: true,
+      policyLocked: true,
+      lastPreflightAt: null,
+      lastDryRunAt: null,
+      blockers: [],
+      message: "Live sandbox dry-run only — live trading locked.",
+    }),
+    [],
+  );
   const { data, error, reload } = useApi<BinanceStatusResponse>("/api/binance/status", 0, {
     fallback: binanceFallback,
   });
-  const healthFallback: EngineHealthReport = {
-    status: "OK",
-    message: "No health report yet.",
-    blocksExecution: false,
-    checkedAt: new Date().toISOString(),
-    issues: [],
-    orphanTrades: [],
-    missingPnlTrades: [],
-    stalePositionTrades: [],
-  };
   const {
     data: health,
     error: healthError,
@@ -60,6 +76,8 @@ export default function SettingsPage() {
   } = useApi<EngineHealthReport>("/api/health/engine", 0, { fallback: healthFallback });
   const { data: sandbox, reload: reloadSandbox } = useApi<LiveSandboxStatus>(
     "/api/live-sandbox/status",
+    0,
+    { fallback: sandboxFallback },
   );
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [runningProduction, setRunningProduction] = useState(false);
@@ -295,21 +313,17 @@ export default function SettingsPage() {
 
       <div className="panel space-y-3">
         <h3 className="font-semibold">Live sandbox</h3>
-        {sandbox ? (
-          <>
-            <Badge tone="safe">Dry-run only</Badge>
-            <p className="text-sm text-[var(--muted)]">{sandbox.message}</p>
-            {sandbox.blockers.length > 0 ? (
-              <ul className="list-inside list-disc text-sm text-[var(--muted)]">
-                {sandbox.blockers.map((b) => (
-                  <li key={b}>{b}</li>
-                ))}
-              </ul>
-            ) : null}
-          </>
-        ) : (
-          <p className="text-sm text-[var(--muted)]">Loading sandbox status…</p>
-        )}
+        <>
+          <Badge tone="safe">Dry-run only</Badge>
+          <p className="text-sm text-[var(--muted)]">{(sandbox ?? sandboxFallback).message}</p>
+          {(sandbox ?? sandboxFallback).blockers.length > 0 ? (
+            <ul className="list-inside list-disc text-sm text-[var(--muted)]">
+              {(sandbox ?? sandboxFallback).blockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          ) : null}
+        </>
       </div>
 
       <div className="panel space-y-3">

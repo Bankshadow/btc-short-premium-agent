@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { unwrapProjectionData } from "@/lib/core/projection-api-response";
+import { unwrapApiData } from "@/lib/core/projection-api-response";
 import { PROJECTION_FETCH_TIMEOUT_MS } from "@/lib/core/projection-defaults";
 
 function normalizeApiPayload<T>(json: T, fallback?: T): T {
-  const data = unwrapProjectionData<T>(json);
+  const data = unwrapApiData<T>(json);
   if (data === null) return fallback ?? (json as T);
   return data;
 }

@@ -55,6 +55,31 @@ export function unwrapProjectionData<T>(json: unknown): T | null {
   return json as T;
 }
 
+export function isProjectionBundleLike(data: unknown): boolean {
+  if (data == null || typeof data !== "object") return false;
+  return "mission" in data || "trades" in data || "pnl" in data || "evidence" in data;
+}
+
+/**
+ * Unwrap API envelopes including nested bundle shapes:
+ * - { ok, data: projection }
+ * - { ok, data: { ok, mission, trades, ... } }
+ */
+export function unwrapApiData<T>(json: unknown): T | null {
+  const first = unwrapProjectionData<unknown>(json);
+  if (first == null) return null;
+  if (isProjectionBundleLike(first)) {
+    return first as T;
+  }
+  if (typeof first === "object" && first !== null && "data" in first) {
+    const nested = unwrapProjectionData<unknown>(first);
+    if (nested != null && isProjectionBundleLike(nested)) {
+      return nested as T;
+    }
+  }
+  return first as T;
+}
+
 export function isValidProjectionData<T>(data: T | null): data is T {
   return data !== null && data !== undefined;
 }

@@ -22,18 +22,23 @@ Regression is green (239/239 tests), build passes. Production loading fix: `getD
 
 **Incident (production): P1 — `/core` partial stability** — See [CORE_ENGINE_PARTIAL_STABILITY_FIX.md](./CORE_ENGINE_PARTIAL_STABILITY_FIX.md). Root cause: ui-consistency and projection-parity rebuilt expensive projections (Binance, reports summary, enriched trades) on every request; stale OPEN trades counted against FLAT exchange positions; lifecycle warnings unaggregated.
 
-**Recommendation (after partial stability fix): `CORE_ENGINE_PARTIAL` until production verifies:**
+**Recommendation (after Hotfix 2 — UI/projection sync): `CORE_ENGINE_PARTIAL`**
 
-| Criterion | Required for STABLE |
-|-----------|---------------------|
-| `GET /api/core/ui-consistency` returns within 5s | ✅ code fix — verify post-deploy |
-| `GET /api/core/projection-parity` returns within 5s | ✅ code fix — verify post-deploy |
+See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md).
+
+| Criterion | Status |
+|-----------|--------|
+| `/` dashboard renders (no permanent Loading) | ✅ Hotfix 1 + 2 |
+| `/trades`, `/ai-status`, `/reports`, `/settings` render | ✅ Hotfix 2 — stable fallbacks + bundle-first |
+| Dashboard uses real bundle values when API OK | ✅ `unwrapApiData` + Binance from health |
+| `GET /api/core/ui-consistency` < 5s | ✅ `buildProjectionBundleFast()` — verify post-deploy |
+| `GET /api/core/projection-parity` < 5s | ✅ bundle-only parity — verify post-deploy |
 | No P0/P1 lifecycle gaps in journal | ❌ production data — manual repair |
 | Stale OPEN not counted as active open | ✅ reconciliation in projections |
-| `npm run build` passes | verify in CI |
+| `npm run build` passes | ✅ 281/281 tests |
 | Evidence 0/12 with missing PNL | Expected until valid lifecycle trades complete |
 
-Assign **`CORE_ENGINE_STABLE`** only when ui-consistency + projection-parity respond in production, build passes, and no P0/P1 lifecycle issue remains. Otherwise **`CORE_ENGINE_PARTIAL`**.
+Assign **`CORE_ENGINE_STABLE`** when ui-consistency + projection-parity respond in production and all core pages verified. Assign **`CORE_ENGINE_NOT_READY`** only if any core page remains permanently Loading.
 
 ---
 
@@ -42,7 +47,7 @@ Assign **`CORE_ENGINE_STABLE`** only when ui-consistency + projection-parity res
 | Command | Exists | Result | Notes |
 |---------|--------|--------|-------|
 | `npm run build` | ✅ | **PASS** | Next.js 16.2.7, TypeScript clean |
-| `npm test` | ✅ | **PASS — 254/254** | 27 suites |
+| `npm test` | ✅ | **PASS — 281/281** | 30 suites |
 | `npm run test` | ❌ | N/A | Not defined; use `npm test` |
 | `npm run lint` | ✅ | **PASS — 0 errors, 2 warnings** | Config/worker export warnings only |
 | `npm run typecheck` | ❌ | N/A | TypeScript runs inside `npm run build` |

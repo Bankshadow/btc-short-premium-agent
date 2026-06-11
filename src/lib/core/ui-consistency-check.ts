@@ -1,5 +1,5 @@
 import { withBoundedCheck } from "./core-bounded";
-import { buildProjectionBundle } from "./projection-bundle";
+import { buildProjectionBundleFast } from "./projection-bundle";
 
 export interface UiConsistencyCheck {
   id: string;
@@ -49,7 +49,7 @@ export async function runUiConsistencyCheck(): Promise<UiConsistencyReport> {
   const skippedChecks: string[] = [];
 
   const { result: bundle, timedOut } = await withBoundedCheck(
-    () => buildProjectionBundle(),
+    () => buildProjectionBundleFast(),
     null,
   );
 

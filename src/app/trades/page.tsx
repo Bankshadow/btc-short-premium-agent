@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApi } from "@/components/use-api";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
@@ -84,14 +84,34 @@ function lifecycleLabel(open: boolean, hasClosePreview: boolean): string {
 }
 
 export default function TradesPage() {
-  const fallback = getDefaultTradeProjection();
-  const { evidence, warnings: bundleWarnings } = useProjectionBundle();
+  const fallback = useMemo(() => getDefaultTradeProjection(), []);
+  const { trades: bundleTrades, evidence, warnings: bundleWarnings, reload: reloadBundle } =
+    useProjectionBundle();
   const { data, error, reload } = useApi<TradesResponse>("/api/core/projections/trades", 0, {
     fallback,
   });
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
-  const tradeData = data ?? fallback;
+  const tradeData = useMemo((): TradesResponse => {
+    if (data?.summary) return data;
+    if (!bundleTrades.zeroState) {
+      return {
+        open: bundleTrades.open as TradesResponse["open"],
+        closed: bundleTrades.closed as TradesResponse["closed"],
+        summary: {
+          openCount: bundleTrades.openCount,
+          closedCount: bundleTrades.closedCount,
+          realizedPnl:
+            "summary" in bundleTrades && bundleTrades.summary
+              ? bundleTrades.summary.realizedPnl
+              : 0,
+          executionCount: bundleTrades.totalTrades,
+        },
+        staleOpenWarnings: bundleTrades.staleOpenWarnings,
+      };
+    }
+    return data ?? fallback;
+  }, [bundleTrades, data, fallback]);
   const closeTrade = tradeData.open.find((t) => t.tradeId === closeTradeId);
   const evidenceByTrade = new Map(
     (evidence.trades ?? []).map((t) => [t.tradeId, t.status]),
@@ -103,7 +123,14 @@ export default function TradesPage() {
         title="Trades"
         description="Trade projection — journal-derived open/closed state"
         actions={
-          <button type="button" className="btn" onClick={reload}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              reloadBundle();
+              reload();
+            }}
+          >
             Refresh
           </button>
         }

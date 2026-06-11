@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Badge, StatCard, useApi } from "@/components/use-api";
 import {
@@ -49,13 +49,18 @@ export default function ReportsPage() {
     warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
-  const reportsFallback = zeroReportsSummary(
-    computeReadyForMvp5({
-      binanceStatus: defaultBinanceDiagnostics(),
-      events: [],
-      openTradeCount: 0,
-    }),
+  const reportsFallback = useMemo(
+    () =>
+      zeroReportsSummary(
+        computeReadyForMvp5({
+          binanceStatus: defaultBinanceDiagnostics(),
+          events: [],
+          openTradeCount: 0,
+        }),
+      ),
+    [],
   );
+  const replayFallback = useMemo(() => ({ sessions: [] as Array<{ sessionId: string; tradeId: string | null; createdAt: string; stepCount: number }> }), []);
   const { data, error, reload } = useApi<ReportsSummary>("/api/reports/summary", 0, {
     fallback: reportsFallback,
   });
@@ -65,9 +70,9 @@ export default function ReportsPage() {
   const [evaluatingRisk, setEvaluatingRisk] = useState(false);
   const [creatingReplay, setCreatingReplay] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const { data: replayData, reload: reloadReplay } = useApi<{ sessions: Array<{ sessionId: string; tradeId: string | null; createdAt: string; stepCount: number }> }>(
-    "/api/replay/sessions",
-  );
+  const { data: replayData, reload: reloadReplay } = useApi<{
+    sessions: Array<{ sessionId: string; tradeId: string | null; createdAt: string; stepCount: number }>;
+  }>("/api/replay/sessions", 0, { fallback: replayFallback });
 
   async function createBriefing() {
     setCreatingBriefing(true);

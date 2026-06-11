@@ -59,7 +59,10 @@ export default function DashboardPage() {
   const data = ctx ?? ctxFallback;
   const preview = data.latestPreview;
   const lifecycle = deriveLifecycleDisplay(mission, data, evidence.valid);
-  const binance = data.binanceStatus ?? bundleBinance;
+  const binance =
+    bundleBinance && !bundleBinance.zeroState ? bundleBinance : data.binanceStatus ?? bundleBinance;
+  const openTradeCount = mission.openTrades ?? trades.openCount ?? trades.open.length;
+  const closedTradeCount = mission.closedTrades ?? trades.closedCount ?? trades.closed.length;
   const projectionWarnings = [
     ...bundleWarnings,
     ...(ctxError ? [`ui/context: ${ctxError}`] : []),
@@ -139,8 +142,8 @@ export default function DashboardPage() {
         <MetricCard label="Progress" value={`${mission.progressPct}%`} tag="mission" />
         <MetricCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} intent={pnlIntent} />
         <MetricCard label="Total trades" value={String(mission.totalTrades)} />
-        <MetricCard label="Open trades" value={String(trades.open.length)} />
-        <MetricCard label="Closed trades" value={String(trades.closed.length)} />
+        <MetricCard label="Open trades" value={String(openTradeCount)} />
+        <MetricCard label="Closed trades" value={String(closedTradeCount)} />
       </div>
 
       <SafetyPanel

@@ -14,7 +14,7 @@ import type { PositionProjection } from "./projections/position-projection";
 import type { RiskProjection } from "./projections/risk-projection";
 import type { RiskProjectionView } from "./projection-bundle-shared";
 
-export const PROJECTION_FETCH_TIMEOUT_MS = 4_000;
+export const PROJECTION_FETCH_TIMEOUT_MS = 5_000;
 export const DASHBOARD_RENDER_DEADLINE_MS = 5_000;
 export const PROJECTION_UNAVAILABLE_MESSAGE =
   "Projection unavailable. Showing safe zero-state.";
