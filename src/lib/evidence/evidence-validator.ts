@@ -1,3 +1,4 @@
+import { hasTradeChainEvent } from "@/lib/journal/trade-chain";
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import {
   CRITICAL_RECONCILIATION_CODES,
@@ -24,15 +25,9 @@ export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): 
   }
 
   for (const required of EVIDENCE_REQUIRED_EVENTS) {
-    const has =
-      required === "LEARNING_RECORD_CREATED"
-        ? events.some(
-            (e) =>
-              e.tradeId === tradeId &&
-              (e.type === "LEARNING_RECORD_CREATED" || e.type === "LEARNING_CREATED"),
-          )
-        : events.some((e) => e.type === required && e.tradeId === tradeId);
-    if (!has) rejectionReasons.push(`MISSING_${required}`);
+    if (!hasTradeChainEvent(required, tradeId, events)) {
+      rejectionReasons.push(`MISSING_${required}`);
+    }
   }
 
   const reconWarnings = events.filter(
@@ -45,15 +40,6 @@ export function validateTradeEvidence(tradeId: string, events: JournalEvent[]): 
         rejectionReasons.push(`CRITICAL_RECONCILIATION:${issue.code}`);
       }
     }
-  }
-
-  const execReview = events.some((e) => e.type === "EXECUTION_REVIEWED" && e.tradeId === tradeId);
-  if (!execReview) {
-    const order = events.find((e) => e.type === "ORDER_EXECUTED" && e.tradeId === tradeId);
-    const reviewByPreview = order?.previewId
-      ? events.some((e) => e.type === "EXECUTION_REVIEWED" && e.previewId === order.previewId)
-      : false;
-    if (!reviewByPreview) rejectionReasons.push("MISSING_EXECUTION_REVIEWED");
   }
 
   return {

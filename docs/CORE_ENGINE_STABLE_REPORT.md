@@ -26,6 +26,8 @@ Regression is green (239/239 tests), build passes. Production loading fix: `getD
 
 See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md).
 
+**Journal repair (2026-06-11):** See [CORE_ENGINE_JOURNAL_REPAIR.md](./CORE_ENGINE_JOURNAL_REPAIR.md). Repairs zero-fill reconciliation trades, backfills `CLOSE_REVIEWED`, runs post-trade loop. **Requires deploy + `POST /api/journal/repair` on production.**
+
 | Criterion | Status |
 |-----------|--------|
 | `/` dashboard renders (no permanent Loading) | ✅ Hotfix 1 + 2 |

@@ -20,6 +20,92 @@ function closeOrderPayload(evt: JournalEvent) {
   return evt.payload as { avgPrice?: number | string; executedQty?: string; qty?: string };
 }
 
+function isZeroFillReconciliationTrade(ctx: ReturnType<typeof loadTradeContext>): boolean {
+  const closedPayload = (ctx.closedEvt?.payload ?? {}) as { source?: string };
+  if (closedPayload.source === "RECONCILIATION_BACKFILL") return true;
+
+  const closePayload = (ctx.closeOrderEvt?.payload ?? {}) as { source?: string };
+  if (closePayload.source === "RECONCILIATION_BACKFILL") return true;
+
+  const qty = Math.abs(Number.parseFloat(ctx.qty));
+  return !Number.isFinite(qty) || qty <= 0;
+}
+
+async function realizeZeroFillPnl(
+  tradeId: string,
+  ctx: ReturnType<typeof loadTradeContext>,
+): Promise<CalculatePnlResult> {
+  const calculatedAt = new Date().toISOString();
+  const record: RealizedPnlRecord = {
+    tradeId,
+    runId: ctx.runId,
+    decisionLogId: ctx.decisionLogId,
+    symbol: ctx.symbol,
+    side: ctx.side,
+    qty: ctx.qty,
+    entryPrice: 0,
+    exitPrice: 0,
+    grossPnl: 0,
+    feeEstimate: 0,
+    netPnl: 0,
+    pnlPct: 0,
+    result: "BREAKEVEN",
+    calculatedAt,
+    status: "REALIZED",
+  };
+
+  await appendEvent({
+    type: "PNL_REALIZED",
+    environment: "testnet",
+    runId: ctx.runId ?? undefined,
+    decisionLogId: ctx.decisionLogId ?? undefined,
+    tradeId,
+    payload: {
+      ...record,
+      source: "ZERO_FILL_RECONCILIATION",
+      message: "Zero-fill reconciliation — no economic exposure; net PnL recorded as 0.",
+    },
+  });
+
+  await appendEvent({
+    type: "TRADE_RESULT_CLASSIFIED",
+    environment: "testnet",
+    runId: ctx.runId ?? undefined,
+    decisionLogId: ctx.decisionLogId ?? undefined,
+    tradeId,
+    payload: { tradeId, result: "BREAKEVEN", netPnl: 0, source: "ZERO_FILL_RECONCILIATION" },
+  });
+
+  const updatedEvents = await getEvents();
+  const mission = buildMissionSnapshot(updatedEvents);
+  await appendEvent({
+    type: "MISSION_SNAPSHOT_UPDATED",
+    environment: "testnet",
+    runId: ctx.runId ?? undefined,
+    decisionLogId: ctx.decisionLogId ?? undefined,
+    tradeId,
+    payload: {
+      currentEquity: mission.currentEquity,
+      netPnl: mission.netPnl,
+      win: mission.win,
+      loss: mission.loss,
+      breakeven: mission.breakeven,
+      totalTrades: mission.totalTrades,
+      phase: "PNL_REALIZED",
+      source: "ZERO_FILL_RECONCILIATION",
+    },
+  });
+
+  await afterPnlHooks(tradeId);
+
+  return {
+    ok: true,
+    record,
+    status: "REALIZED",
+    message: "Zero-fill reconciliation — PnL recorded as breakeven (0).",
+  };
+}
+
 function loadTradeContext(tradeId: string, events: JournalEvent[]) {
   const closedEvt = events.find((e) => e.type === "POSITION_CLOSED" && e.tradeId === tradeId);
   const orderEvt = events.find((e) => e.type === "ORDER_EXECUTED" && e.tradeId === tradeId);
@@ -93,6 +179,10 @@ export async function calculatePnlForTrade(tradeId: string): Promise<CalculatePn
       status: "PNL_PENDING_DATA",
       message: "POSITION_CLOSED not found for trade.",
     };
+  }
+
+  if (isZeroFillReconciliationTrade(ctx)) {
+    return realizeZeroFillPnl(tradeId, ctx);
   }
 
   await appendEvent({
