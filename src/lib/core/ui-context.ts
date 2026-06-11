@@ -22,50 +22,13 @@ import { runEngineHealthCheck } from "@/lib/health/engine-health-check";
 import { getLatestSwarmReport } from "@/lib/skills/mirofish-swarm/swarm-runner";
 import { buildStrategyHealthView } from "@/lib/strategy/strategy-health";
 import { isTestnetConfigured, RISK_POLICY } from "@/lib/risk/risk-gate";
+import {
+  zeroDashboardUiContext,
+  type DashboardUiContext,
+} from "@/lib/core/ui-context-zero";
 
-/** Non-critical UI context — previews, modals, advisory. Critical metrics come from projections. */
-export interface DashboardUiContext {
-  sprint: string;
-  testnetConfigured: boolean;
-  binanceStatus: ReturnType<typeof normalizeBinanceStatusDiagnostics>;
-  riskPolicy: typeof RISK_POLICY;
-  nextAction: string;
-  latestPreview: Awaited<ReturnType<typeof getLatestActivePreview>>;
-  previewCount: number;
-  latestPreviewStatus: string | null;
-  executionEnabled: boolean;
-  latestExecutionReview: Awaited<ReturnType<typeof getLatestExecutionReview>>;
-  executionSafetyStatus: string;
-  latestOpenTrade: Awaited<ReturnType<typeof buildEnrichedTradeProjection>>["open"][number] | null;
-  latestPosition: Awaited<ReturnType<typeof buildEnrichedTradeProjection>>["open"][number]["position"];
-  reconciliation: Awaited<ReturnType<typeof getReconciliationStatus>>;
-  readyForMvp5: boolean;
-  readyForMvp5Message: string | null;
-  latestClosePreview: Awaited<ReturnType<typeof getLatestActiveClosePreview>>;
-  latestCloseReview: {
-    allowed: boolean;
-    blocked: boolean;
-    requiresDoubleConfirm: boolean;
-    blockers: Array<{ code: string; message: string; requiredAction: string }>;
-    warnings: string[];
-    closePreviewId: string | null;
-    tradeId: string | null;
-    positionId: string | null;
-    decisionLogId: string | null;
-    runId: string | null;
-    environment: "TESTNET";
-    reviewedAt: string;
-    message: string;
-  } | null;
-  latestClosedTrade: Awaited<ReturnType<typeof buildEnrichedTradeProjection>>["closed"][number] | null;
-  engineHealth: Awaited<ReturnType<typeof runEngineHealthCheck>>;
-  strategyHealth: Awaited<ReturnType<typeof buildStrategyHealthView>>;
-  swarmReport: Awaited<ReturnType<typeof getLatestSwarmReport>>;
-  latestRegime: string | null;
-  noTradeBlockReason: string | null;
-  scenarioNote: string | null;
-  portfolioRiskStatus: string;
-}
+export type { DashboardUiContext };
+export { zeroDashboardUiContext };
 
 function resolveNextAction(input: {
   binanceStatusCode: string;
@@ -192,4 +155,12 @@ export async function buildDashboardUiContext(): Promise<DashboardUiContext> {
     scenarioNote: latestAnalysis.scenarioNote ?? null,
     portfolioRiskStatus: portfolioRisk.status,
   };
+}
+
+export async function buildDashboardUiContextSafe(): Promise<DashboardUiContext> {
+  try {
+    return await buildDashboardUiContext();
+  } catch {
+    return zeroDashboardUiContext();
+  }
 }

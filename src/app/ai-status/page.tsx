@@ -1,7 +1,14 @@
 "use client";
 
-import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { Badge, StatCard, useApi } from "@/components/use-api";
+import { ProjectionWarningPanel } from "@/components/projection-warning";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { getDefaultBinanceStatus } from "@/lib/core/projection-defaults";
+import {
+  zeroAnalysisLatest,
+  zeroBinanceStatusApiResponse,
+  zeroJournalEventsResponse,
+} from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { AnalysisVerdict } from "@/lib/analysis/analysis-types";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
@@ -89,12 +96,20 @@ const SAFETY_EVENTS = new Set([
 ]);
 
 export default function AiStatusPage() {
-  const { mission, health, risk, loading: bundleLoading, error: bundleError, reload: reloadBundle } =
+  const { mission, health, risk, warnings: bundleWarnings, reload: reloadBundle } =
     useProjectionBundle();
-  const latest = useApi<LatestAnalysis>("/api/analysis/latest");
-  const review = useApi<ReviewResponse>("/api/execution/review/latest");
-  const binance = useApi<BinanceStatusDiagnostics>("/api/binance/status");
-  const events = useApi<EventsResponse>("/api/journal/events?limit=30");
+  const latest = useApi<LatestAnalysis>("/api/analysis/latest", 0, {
+    fallback: zeroAnalysisLatest(),
+  });
+  const review = useApi<ReviewResponse>("/api/execution/review/latest", 0, {
+    fallback: { review: null },
+  });
+  const binance = useApi<BinanceStatusDiagnostics>("/api/binance/status", 0, {
+    fallback: zeroBinanceStatusApiResponse(),
+  });
+  const events = useApi<EventsResponse>("/api/journal/events?limit=30", 0, {
+    fallback: zeroJournalEventsResponse(),
+  });
   const traceTradeId =
     events.data?.events.find(
       (e) => e.type === "ORDER_EXECUTED" || e.type === "POSITION_OPENED",
@@ -105,40 +120,37 @@ export default function AiStatusPage() {
     { enabled: Boolean(traceTradeId) },
   );
 
-  const loading =
-    bundleLoading ||
-    latest.loading ||
-    events.loading ||
-    review.loading ||
-    binance.loading ||
-    trace.loading;
-  const error = bundleError ?? latest.error ?? events.error ?? review.error ?? binance.error;
+  const refreshAll = () => {
+    reloadBundle();
+    void latest.reload();
+    void events.reload();
+    void review.reload();
+    void binance.reload();
+    void trace.reload();
+  };
 
-  const pending = LoadingOrError({
-    loading,
-    error,
-    onRetry: () => {
-      reloadBundle();
-      void latest.reload();
-      void events.reload();
-      void review.reload();
-      void binance.reload();
-      void trace.reload();
-    },
-  });
-  if (pending) return pending;
+  const projectionWarnings = [
+    ...bundleWarnings,
+    ...(latest.error ? [`analysis/latest: ${latest.error}`] : []),
+    ...(events.error ? [`journal/events: ${events.error}`] : []),
+    ...(review.error ? [`execution/review: ${review.error}`] : []),
+    ...(binance.error ? [`binance/status: ${binance.error}`] : []),
+    ...(trace.error ? [`core/trace: ${trace.error}`] : []),
+  ];
 
-  const d = latest.data;
-  const r = review.data?.review;
+  const d = latest.data ?? zeroAnalysisLatest();
+  const r = review.data?.review ?? null;
   const safetyEvents =
-    events.data?.events.filter((e) => SAFETY_EVENTS.has(e.type)) ?? [];
+    (events.data ?? zeroJournalEventsResponse()).events.filter((e) => SAFETY_EVENTS.has(e.type));
 
-  const latestTradeEvent = events.data?.events.find(
+  const eventList = (events.data ?? zeroJournalEventsResponse()).events;
+
+  const latestTradeEvent = eventList.find(
     (e) => e.type === "ORDER_EXECUTED" || e.type === "POSITION_OPENED",
   );
 
-  const latestMonitored = events.data?.events.find((e) => e.type === "POSITION_MONITORED");
-  const latestCloseEvent = events.data?.events.find(
+  const latestMonitored = eventList.find((e) => e.type === "POSITION_MONITORED");
+  const latestCloseEvent = eventList.find(
     (e) =>
       e.type === "CLOSE_ORDER_EXECUTED" ||
       e.type === "CLOSE_PREVIEW_CREATED" ||
@@ -147,29 +159,22 @@ export default function AiStatusPage() {
       e.type === "CLOSE_BLOCKED" ||
       e.type === "POSITION_CLOSED",
   );
-  const reconciliationWarning = events.data?.events.find(
+  const reconciliationWarning = eventList.find(
     (e) => e.type === "POSITION_RECONCILIATION_WARNING",
   );
+
+  const binanceData = binance.data ?? getDefaultBinanceStatus();
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">AI Status</h2>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            reloadBundle();
-            void latest.reload();
-            void events.reload();
-            void review.reload();
-            void binance.reload();
-            void trace.reload();
-          }}
-        >
+        <button type="button" className="btn" onClick={refreshAll}>
           Refresh
         </button>
       </div>
+
+      <ProjectionWarningPanel warnings={projectionWarnings} onRetry={refreshAll} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Core health" value={health?.status ?? "OK"} />
@@ -218,9 +223,7 @@ export default function AiStatusPage() {
         </div>
       </div>
 
-      {binance.data ? (
-        <BinanceTestnetDiagnosticsPanel data={binance.data} title="Binance testnet status" />
-      ) : null}
+      <BinanceTestnetDiagnosticsPanel data={binanceData} title="Binance testnet status" />
 
       {reconciliationWarning ? (
         <div className="panel space-y-2 border border-[var(--danger)]/30">
@@ -235,8 +238,6 @@ export default function AiStatusPage() {
         <h3 className="font-semibold">Lifecycle trace</h3>
         {!traceTradeId ? (
           <p className="empty-state">No tradeId yet — trace appears after first execution.</p>
-        ) : trace.loading ? (
-          <p className="text-sm text-[var(--muted)]">Loading trace…</p>
         ) : trace.error ? (
           <p className="text-sm text-[var(--danger)]">{trace.error}</p>
         ) : trace.data ? (

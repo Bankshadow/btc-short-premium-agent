@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { Badge, StatCard, useApi } from "@/components/use-api";
+import { ProjectionWarningPanel } from "@/components/projection-warning";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { zeroBinanceStatusApiResponse } from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
 import type { EngineHealthReport } from "@/lib/health/engine-health-types";
@@ -26,11 +28,13 @@ export default function SettingsPage() {
   const {
     health: coreHealth,
     risk,
-    loading: bundleLoading,
-    error: bundleError,
+    warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
-  const { data, error, loading, reload } = useApi<BinanceStatusResponse>("/api/binance/status");
+  const binanceFallback = zeroBinanceStatusApiResponse();
+  const { data, error, reload } = useApi<BinanceStatusResponse>("/api/binance/status", 0, {
+    fallback: binanceFallback,
+  });
   const {
     data: health,
     error: healthError,
@@ -90,16 +94,11 @@ export default function SettingsPage() {
     }
   }
 
-  const pending = LoadingOrError({
-    loading: loading || bundleLoading,
-    error: error ?? bundleError,
-    onRetry: () => {
-      reload();
-      reloadBundle();
-    },
-  });
-  if (pending) return pending;
-  if (!data) return <p className="empty-state">No settings data.</p>;
+  const settingsData = data ?? binanceFallback;
+  const projectionWarnings = [
+    ...bundleWarnings,
+    ...(error ? [`binance/status: ${error}`] : []),
+  ];
 
   return (
     <div className="space-y-6">
@@ -113,16 +112,24 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      <ProjectionWarningPanel
+        warnings={projectionWarnings}
+        onRetry={() => {
+          reload();
+          reloadBundle();
+        }}
+      />
+
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Core health" value={coreHealth?.status ?? "OK"} />
         <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
-        <StatCard label="Kill switch" value={data.killSwitch.active ? "ACTIVE" : "OFF"} />
-        <StatCard label="Binance" value={data.status} sub={data.baseUrl} />
+        <StatCard label="Kill switch" value={settingsData.killSwitch.active ? "ACTIVE" : "OFF"} />
+        <StatCard label="Binance" value={settingsData.status} sub={settingsData.baseUrl} />
       </div>
 
-      <BinanceTestnetDiagnosticsPanel data={data} title="Binance testnet" />
+      <BinanceTestnetDiagnosticsPanel data={settingsData} title="Binance testnet" />
 
       <div className="panel space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -241,7 +248,7 @@ export default function SettingsPage() {
       <div className="panel space-y-3">
         <h3 className="font-semibold">Live trading</h3>
         <Badge tone="safe">Live locked</Badge>
-        {data.liveEnabled ? (
+        {settingsData.liveEnabled ? (
           <p className="text-sm text-[var(--danger)]">
             Live env flag detected — v2 execution remains blocked.
           </p>
@@ -283,19 +290,19 @@ export default function SettingsPage() {
 
       <div className="panel space-y-3">
         <h3 className="font-semibold">Risk limits</h3>
-        <p className="text-sm">Max notional: ${data.limits.maxNotionalUsd}</p>
+        <p className="text-sm">Max notional: ${settingsData.limits.maxNotionalUsd}</p>
         <p className="text-sm text-[var(--muted)]">
-          Symbols: {data.limits.allowedSymbols.join(", ")}
+          Symbols: {settingsData.limits.allowedSymbols.join(", ")}
         </p>
       </div>
 
       <div className="panel space-y-3">
         <h3 className="font-semibold">Kill switch &amp; operator controls</h3>
-        <Badge tone={data.killSwitch.active ? "blocked" : "safe"}>
-          {data.killSwitch.active ? "ACTIVE" : "OFF"}
+        <Badge tone={settingsData.killSwitch.active ? "blocked" : "safe"}>
+          {settingsData.killSwitch.active ? "ACTIVE" : "OFF"}
         </Badge>
-        {data.killSwitch.reason ? (
-          <p className="text-sm text-[var(--muted)]">{data.killSwitch.reason}</p>
+        {settingsData.killSwitch.reason ? (
+          <p className="text-sm text-[var(--muted)]">{settingsData.killSwitch.reason}</p>
         ) : null}
         <p className="text-sm text-[var(--muted)]">
           Critical operator actions require double confirm on the{" "}

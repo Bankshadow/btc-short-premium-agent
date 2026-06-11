@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { Badge, StatCard, useApi } from "@/components/use-api";
+import { ProjectionWarningPanel } from "@/components/projection-warning";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { ExecutionReviewModal } from "@/components/ExecutionReviewModal";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
-import type { DashboardUiContext } from "@/lib/core/ui-context";
+import {
+  zeroDashboardUiContext,
+  type DashboardUiContext,
+} from "@/lib/core/ui-context-zero";
 
 export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -18,18 +22,17 @@ export default function DashboardPage() {
     positions,
     risk,
     health,
-    loading: bundleLoading,
-    error: bundleError,
+    warnings: bundleWarnings,
+    errors: bundleErrors,
     reload: reloadBundle,
   } = useProjectionBundle(refreshKey);
   const {
     data: ctx,
     error: ctxError,
-    loading: ctxLoading,
     reload: reloadCtx,
-  } = useApi<DashboardUiContext>("/api/core/ui/context", refreshKey);
-  const loading = bundleLoading || ctxLoading;
-  const error = bundleError ?? ctxError;
+  } = useApi<DashboardUiContext>("/api/core/ui/context", refreshKey, {
+    fallback: zeroDashboardUiContext(),
+  });
   const reload = () => {
     reloadBundle();
     reloadCtx();
@@ -68,11 +71,11 @@ export default function DashboardPage() {
     }
   }
 
-  const pending = LoadingOrError({ loading, error, onRetry: refresh });
-  if (pending) return pending;
-  if (!ctx) return <p className="empty-state">No dashboard context.</p>;
-
-  const data = ctx;
+  const data = ctx ?? zeroDashboardUiContext();
+  const projectionWarnings = [
+    ...bundleWarnings,
+    ...(ctxError ? [`ui/context: ${ctxError}`] : []),
+  ];
   const preview = data.latestPreview;
   const safetyTone =
     data.executionSafetyStatus === "ready"
@@ -100,6 +103,8 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      <ProjectionWarningPanel warnings={projectionWarnings} onRetry={refresh} />
 
       {runError ? <div className="error-box">{runError}</div> : null}
 

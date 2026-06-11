@@ -12,9 +12,13 @@ Slice 8 ran a full automated regression across MVP 1–24, Core Engine modules (
 
 **No P0 safety regressions found.** Live trading remains locked. Guard chains block unsafe execute/close. Secrets are not exposed in UI or API payloads tested.
 
-**Recommendation: `CORE_ENGINE_STABLE`**
+**Recommendation (2026-06-06 post-Slice 8): `CORE_ENGINE_STABLE`**
 
-Regression is green (219/219 tests), build and lint pass, production checklist 10/10. Post-regression fixes wired `appendCoreEventStrict` on execute/close hot paths, fixed lifecycle strict-validation linking, added AI Status trace panel, and resolved ESLint errors. Remaining limitations are legacy API retention (adapter parity) and Reports briefing/audit sections — documented, non-blocking.
+**Incident (production): P1 — core pages stuck at `Loading…`** — See [PRODUCTION_LOADING_FIX_REPORT.md](./PRODUCTION_LOADING_FIX_REPORT.md). Root cause: full-page `LoadingOrError` gate + `useApi` effect cleanup leaving `loading=true` forever when fetch outlived unmount; no immediate zero-state render on client.
+
+**Recommendation (after loading fix): `CORE_ENGINE_STABLE`**
+
+Regression is green (239/239 tests), build passes. Production loading fix: `getDefault*()` projection defaults, API envelopes with `PROJECTION_FALLBACK`, `fetchWithTimeout` (4s), zero-state-first pages, `GET /api/core/boot-check`. **Requires Vercel redeploy of `v2-core` to take effect in production.** Remaining limitations: legacy API retention (adapter parity) and Reports briefing/audit sections — documented, non-blocking.
 
 ---
 
@@ -23,7 +27,7 @@ Regression is green (219/219 tests), build and lint pass, production checklist 1
 | Command | Exists | Result | Notes |
 |---------|--------|--------|-------|
 | `npm run build` | ✅ | **PASS** | Next.js 16.2.7, TypeScript clean |
-| `npm test` | ✅ | **PASS — 219/219** | 24 suites |
+| `npm test` | ✅ | **PASS — 239/239** | 26 suites |
 | `npm run test` | ❌ | N/A | Not defined; use `npm test` |
 | `npm run lint` | ✅ | **PASS — 0 errors, 2 warnings** | Config/worker export warnings only |
 | `npm run typecheck` | ❌ | N/A | TypeScript runs inside `npm run build` |
@@ -246,6 +250,12 @@ APIs tested via underlying server modules (isolated journal) unless noted. HTTP 
 | P3 (adapter) | Legacy APIs retained (`/api/mission/snapshot`, `/api/trades`) | Parity period; not removed until CI gate |
 | P3 | No `npm run typecheck` script | TypeScript covered by `npm run build` |
 
+### Resolved P1 (production loading)
+
+| Priority | Issue | Fix |
+|----------|-------|-----|
+| P1 | Production core pages stuck at `Loading…` | Zero-state-first pages, `useApi` hard timeout, `projection-defaults.ts`, `getProjectionBundle()` partial fallbacks, `GET /api/core/boot-check` |
+
 ---
 
 ## 13. Known Limitations
@@ -262,7 +272,7 @@ APIs tested via underlying server modules (isolated journal) unless noted. HTTP 
 
 ### **`CORE_ENGINE_STABLE`**
 
-**Rationale:** 219/219 tests pass, build and lint pass, production checklist 10/10, no P0 safety issues, UI reads projections for critical state, execute/close hot paths use strict core append, trace UI wired, guard chains active.
+**Rationale:** 239/239 tests pass, build passes, production loading fix ready (zero-state-first UI, `getDefault*()` defaults, boot-check), no P0 safety issues, UI reads projections for critical state, execute/close hot paths use strict core append, trace UI wired, guard chains active.
 
 **Post-STABLE roadmap (non-blocking):**
 1. Automated projection vs legacy parity CI gate

@@ -1,68 +1,121 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
+import { unwrapProjectionData } from "@/lib/core/projection-api-response";
+import { PROJECTION_FETCH_TIMEOUT_MS } from "@/lib/core/projection-defaults";
 
-export function useApi<T>(url: string, refreshKey = 0, options?: { enabled?: boolean }) {
+function normalizeApiPayload<T>(json: T, fallback?: T): T {
+  const data = unwrapProjectionData<T>(json);
+  if (data === null) return fallback ?? (json as T);
+  return data;
+}
+
+export function useApi<T>(
+  url: string,
+  refreshKey = 0,
+  options?: { enabled?: boolean; fallback?: T; timeoutMs?: number },
+) {
   const enabled = options?.enabled !== false && Boolean(url);
-  const [data, setData] = useState<T | null>(null);
+  const fallback = options?.fallback;
+  const timeoutMs = options?.timeoutMs ?? PROJECTION_FETCH_TIMEOUT_MS;
+  const [data, setData] = useState<T | null>(fallback ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(enabled);
+  const requestId = useRef(0);
 
   const reload = useCallback(async () => {
     if (!enabled) {
       setLoading(false);
-      setData(null);
+      setRefreshing(false);
+      setData(fallback ?? null);
       setError(null);
       return;
     }
-    setLoading(true);
+    const id = ++requestId.current;
+    setRefreshing(true);
+    setLoading(!fallback);
     setError(null);
     try {
-      const json = await fetchJson<T>(url);
+      const json = normalizeApiPayload(await fetchJson<T>(url, { timeoutMs }), fallback);
+      if (id !== requestId.current) return;
       setData(json);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Load failed");
-      setData(null);
+      if (id !== requestId.current) return;
+      const message = err instanceof Error ? err.message : "Load failed";
+      setError(message);
+      if (fallback !== undefined) setData(fallback);
+      else setData(null);
     } finally {
-      setLoading(false);
+      if (id === requestId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [enabled, url]);
+  }, [enabled, fallback, timeoutMs, url]);
 
   useEffect(() => {
-    if (!enabled) return;
-    let active = true;
-    void (async () => {
-      setLoading(true);
+    if (!enabled) {
+      setLoading(false);
+      setRefreshing(false);
+      setData(fallback ?? null);
       setError(null);
+      return;
+    }
+
+    const id = ++requestId.current;
+    setRefreshing(true);
+    setLoading(!fallback);
+    setError(null);
+
+    const hardStop = setTimeout(() => {
+      if (id === requestId.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    }, timeoutMs + 250);
+
+    void (async () => {
       try {
-        const json = await fetchJson<T>(url);
-        if (active) setData(json);
+        const json = normalizeApiPayload(await fetchJson<T>(url, { timeoutMs }), fallback);
+        if (id !== requestId.current) return;
+        setData(json);
       } catch (err) {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : "Load failed");
-        setData(null);
+        if (id !== requestId.current) return;
+        const message = err instanceof Error ? err.message : "Load failed";
+        setError(message);
+        if (fallback !== undefined) setData(fallback);
+        else setData(null);
       } finally {
-        if (active) setLoading(false);
+        if (id === requestId.current) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     })();
-    return () => {
-      active = false;
-    };
-  }, [enabled, url, refreshKey]);
 
-  return { data, error, loading, reload };
+    return () => {
+      clearTimeout(hardStop);
+    };
+  }, [enabled, fallback, timeoutMs, url, refreshKey]);
+
+  return { data, error, loading, refreshing, reload };
 }
 
 export function LoadingOrError({
   loading,
   error,
   onRetry,
+  blocking = true,
 }: {
   loading: boolean;
   error: string | null;
   onRetry?: () => void;
+  /** When false, never block page render — use ProjectionWarningPanel instead. */
+  blocking?: boolean;
 }) {
+  if (!blocking) return null;
   if (loading) {
     return <p className="empty-state">Loading…</p>;
   }

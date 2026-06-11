@@ -1,25 +1,21 @@
-import { NextResponse } from "next/server";
 import { runUiConsistencyCheck } from "@/lib/core/ui-consistency-check";
+import { projectionApiFail, projectionApiOk } from "@/lib/core/projection-api-response";
+
+const ZERO_CONSISTENCY = {
+  status: "OK" as const,
+  checks: [],
+  mismatches: [],
+  lastCheckedAt: new Date().toISOString(),
+};
 
 export async function GET() {
   try {
     const report = await runUiConsistencyCheck();
-    return NextResponse.json(report);
+    return projectionApiOk(report);
   } catch (err) {
-    return NextResponse.json(
-      {
-        status: "BLOCKED",
-        checks: [],
-        mismatches: [
-          {
-            id: "ui_consistency_failed",
-            ok: false,
-            message: err instanceof Error ? err.message : "Consistency check failed",
-          },
-        ],
-        lastCheckedAt: new Date().toISOString(),
-      },
-      { status: 500 },
+    return projectionApiFail(
+      ZERO_CONSISTENCY,
+      err instanceof Error ? err.message : "UI consistency check failed",
     );
   }
 }

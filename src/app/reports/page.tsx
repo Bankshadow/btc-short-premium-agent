@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { Badge, StatCard, useApi } from "@/components/use-api";
+import { ProjectionWarningPanel } from "@/components/projection-warning";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
+import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
+import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { ReportsSummary } from "@/lib/reports/reports-types";
 import type { ReportsGateStatus } from "@/lib/reports/execution-safety-report";
@@ -36,11 +39,19 @@ export default function ReportsPage() {
     evidence: projEvidence,
     health: projHealth,
     risk: projRisk,
-    loading: bundleLoading,
-    error: bundleError,
+    warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
-  const { data, error, loading, reload } = useApi<ReportsSummary>("/api/reports/summary");
+  const reportsFallback = zeroReportsSummary(
+    computeReadyForMvp5({
+      binanceStatus: defaultBinanceDiagnostics(),
+      events: [],
+      openTradeCount: 0,
+    }),
+  );
+  const { data, error, reload } = useApi<ReportsSummary>("/api/reports/summary", 0, {
+    fallback: reportsFallback,
+  });
   const [generatingAudit, setGeneratingAudit] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
   const [creatingBriefing, setCreatingBriefing] = useState(false);
@@ -103,18 +114,13 @@ export default function ReportsPage() {
     }
   }
 
-  const pending = LoadingOrError({
-    loading: loading || bundleLoading,
-    error: error ?? bundleError,
-    onRetry: () => {
-      reload();
-      reloadBundle();
-    },
-  });
-  if (pending) return pending;
-  if (!data) return <p className="empty-state">No reports data.</p>;
+  const reportData = data ?? reportsFallback;
+  const projectionWarnings = [
+    ...bundleWarnings,
+    ...(error ? [`reports/summary: ${error}`] : []),
+  ];
 
-  const { executionSafetyGate: gate, pnlSummary, learningSummary } = data;
+  const { executionSafetyGate: gate, pnlSummary, learningSummary } = reportData;
   const tone = gateTone(gate.status);
 
   return (
@@ -123,7 +129,7 @@ export default function ReportsPage() {
         <div>
           <h2 className="text-2xl font-bold">Reports</h2>
           <p className="text-sm text-[var(--muted)]">
-            MVP 24 · Generated {new Date(data.generatedAt).toLocaleString()}
+            MVP 24 · Generated {new Date(reportData.generatedAt).toLocaleString()}
           </p>
         </div>
         <button type="button" className="btn" onClick={reload}>
@@ -131,11 +137,19 @@ export default function ReportsPage() {
         </button>
       </div>
 
+      <ProjectionWarningPanel
+        warnings={projectionWarnings}
+        onRetry={() => {
+          reload();
+          reloadBundle();
+        }}
+      />
+
       {auditError ? <div className="error-box">{auditError}</div> : null}
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
-      {!data.readyForMvp5 ? (
-        <section className="panel text-sm text-[var(--muted)]">{data.readyForMvp5Message}</section>
+      {!reportData.readyForMvp5 ? (
+        <section className="panel text-sm text-[var(--muted)]">{reportData.readyForMvp5Message}</section>
       ) : null}
 
       <section className="space-y-3">
@@ -173,7 +187,7 @@ export default function ReportsPage() {
         ) : (
           <p className="text-sm text-[var(--muted)]">No realized PnL records yet.</p>
         )}
-        {data.positionStats.realizedPnlPending ? (
+        {reportData.positionStats.realizedPnlPending ? (
           <Badge tone="wait">Some closed positions pending PnL calculation</Badge>
         ) : null}
       </section>
@@ -230,40 +244,40 @@ export default function ReportsPage() {
         <div className="flex flex-wrap gap-2">
           <Badge
             tone={
-              data.portfolioRisk.status === "OK"
+              reportData.portfolioRisk.status === "OK"
                 ? "safe"
-                : data.portfolioRisk.status === "WARNING"
+                : reportData.portfolioRisk.status === "WARNING"
                   ? "wait"
                   : "blocked"
             }
           >
-            {data.portfolioRisk.status}
+            {reportData.portfolioRisk.status}
           </Badge>
-          {data.portfolioRisk.blocksExecution ? (
+          {reportData.portfolioRisk.blocksExecution ? (
             <Badge tone="blocked">Blocks new execution</Badge>
           ) : null}
           <Badge tone="safe">Live locked</Badge>
         </div>
-        <p className="text-sm text-[var(--muted)]">{data.portfolioRisk.message}</p>
+        <p className="text-sm text-[var(--muted)]">{reportData.portfolioRisk.message}</p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Daily PnL" value={`$${data.portfolioRisk.dailyPnl.toFixed(2)}`} />
-          <StatCard label="Drawdown" value={`${data.portfolioRisk.drawdownPct}%`} />
-          <StatCard label="Open exposure" value={`$${data.portfolioRisk.openExposureUsd.toFixed(2)}`} />
-          <StatCard label="Open positions" value={String(data.portfolioRisk.openPositions)} />
+          <StatCard label="Daily PnL" value={`$${reportData.portfolioRisk.dailyPnl.toFixed(2)}`} />
+          <StatCard label="Drawdown" value={`${reportData.portfolioRisk.drawdownPct}%`} />
+          <StatCard label="Open exposure" value={`$${reportData.portfolioRisk.openExposureUsd.toFixed(2)}`} />
+          <StatCard label="Open positions" value={String(reportData.portfolioRisk.openPositions)} />
         </div>
-        {data.portfolioRisk.issues.length > 0 ? (
+        {reportData.portfolioRisk.issues.length > 0 ? (
           <ul className="space-y-1 text-sm">
-            {data.portfolioRisk.issues.map((i) => (
+            {reportData.portfolioRisk.issues.map((i) => (
               <li key={i.code} className="text-[var(--danger)]">
                 {i.code}: {i.message}
               </li>
             ))}
           </ul>
         ) : null}
-        {data.portfolioRiskHistory.length > 0 ? (
+        {reportData.portfolioRiskHistory.length > 0 ? (
           <div className="space-y-2">
             <p className="text-sm font-medium">Risk history</p>
-            {data.portfolioRiskHistory.map((h) => (
+            {reportData.portfolioRiskHistory.map((h) => (
               <div key={h.timestamp} className="rounded border border-[var(--border)] p-2 text-xs">
                 <span className="font-mono">{new Date(h.timestamp).toLocaleString()}</span>
                 <span className="ml-2">{h.status}</span>
@@ -290,16 +304,16 @@ export default function ReportsPage() {
             {creatingBriefing ? "Creating…" : "Generate briefing"}
           </button>
         </div>
-        {data.latestBriefing ? (
+        {reportData.latestBriefing ? (
           <>
             <p className="text-xs text-[var(--muted)]">
-              {new Date(data.latestBriefing.createdAt).toLocaleString()}
+              {new Date(reportData.latestBriefing.createdAt).toLocaleString()}
             </p>
-            <p className="text-sm">{data.latestBriefing.nextRecommendedAction}</p>
-            <p className="text-sm text-[var(--muted)]">Risk: {data.latestBriefing.riskState}</p>
-            {data.latestBriefing.learningHighlights.length > 0 ? (
+            <p className="text-sm">{reportData.latestBriefing.nextRecommendedAction}</p>
+            <p className="text-sm text-[var(--muted)]">Risk: {reportData.latestBriefing.riskState}</p>
+            {reportData.latestBriefing.learningHighlights.length > 0 ? (
               <ul className="list-inside list-disc text-sm text-[var(--muted)]">
-                {data.latestBriefing.learningHighlights.map((l) => (
+                {reportData.latestBriefing.learningHighlights.map((l) => (
                   <li key={l}>{l}</li>
                 ))}
               </ul>
@@ -342,22 +356,22 @@ export default function ReportsPage() {
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Micro-live readiness</h3>
         <div className="flex flex-wrap gap-2">
-          <Badge tone={data.microLiveReadiness.status === "NOT_READY" ? "wait" : "safe"}>
-            {data.microLiveReadiness.status}
+          <Badge tone={reportData.microLiveReadiness.status === "NOT_READY" ? "wait" : "safe"}>
+            {reportData.microLiveReadiness.status}
           </Badge>
           <Badge
             tone={
-              data.microLiveReadiness.recommendation === "READY_FOR_CONTROLLED_MICRO_LIVE"
+              reportData.microLiveReadiness.recommendation === "READY_FOR_CONTROLLED_MICRO_LIVE"
                 ? "safe"
                 : "blocked"
             }
           >
-            {data.microLiveReadiness.recommendation}
+            {reportData.microLiveReadiness.recommendation}
           </Badge>
         </div>
-        {data.microLiveReadiness.gaps.length > 0 ? (
+        {reportData.microLiveReadiness.gaps.length > 0 ? (
           <ul className="list-inside list-disc text-sm text-[var(--muted)]">
-            {data.microLiveReadiness.gaps.map((g) => (
+            {reportData.microLiveReadiness.gaps.map((g) => (
               <li key={g}>{g}</li>
             ))}
           </ul>
@@ -367,7 +381,7 @@ export default function ReportsPage() {
         <details>
           <summary className="cursor-pointer text-sm text-[var(--muted)]">Readiness checklist</summary>
           <div className="mt-2 space-y-1">
-            {data.microLiveReadiness.criteria.map((c) => (
+            {reportData.microLiveReadiness.criteria.map((c) => (
               <div key={c.id} className="flex items-center gap-2 text-sm">
                 <Badge tone={c.met ? "safe" : "blocked"}>{c.met ? "met" : "gap"}</Badge>
                 <span>{c.label}</span>
@@ -390,23 +404,23 @@ export default function ReportsPage() {
             {generatingAudit ? "Generating…" : "Generate audit pack"}
           </button>
         </div>
-        {data.latestAuditPack ? (
+        {reportData.latestAuditPack ? (
           <>
             <p className="text-xs text-[var(--muted)]">
-              {data.latestAuditPack.auditId} ·{" "}
-              {new Date(data.latestAuditPack.generatedAt).toLocaleString()}
+              {reportData.latestAuditPack.auditId} ·{" "}
+              {new Date(reportData.latestAuditPack.generatedAt).toLocaleString()}
             </p>
             <Badge
               tone={
-                data.latestAuditPack.recommendation === "READY_FOR_CONTROLLED_MICRO_LIVE"
+                reportData.latestAuditPack.recommendation === "READY_FOR_CONTROLLED_MICRO_LIVE"
                   ? "safe"
                   : "wait"
               }
             >
-              {data.latestAuditPack.recommendation}
+              {reportData.latestAuditPack.recommendation}
             </Badge>
             <div className="space-y-1">
-              {data.latestAuditPack.sections.map((s) => (
+              {reportData.latestAuditPack.sections.map((s) => (
                 <div key={s.name} className="rounded border border-[var(--border)] p-2 text-xs">
                   <span className="font-semibold">{s.name}</span>
                   <span className="ml-2 text-[var(--muted)]">
@@ -424,10 +438,10 @@ export default function ReportsPage() {
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Live sandbox</h3>
         <Badge tone="safe">Live locked</Badge>
-        <p className="text-sm text-[var(--muted)]">{data.liveSandbox.message}</p>
-        {data.liveSandbox.blockers.length > 0 ? (
+        <p className="text-sm text-[var(--muted)]">{reportData.liveSandbox.message}</p>
+        {reportData.liveSandbox.blockers.length > 0 ? (
           <ul className="list-inside list-disc text-sm text-[var(--muted)]">
-            {data.liveSandbox.blockers.map((b) => (
+            {reportData.liveSandbox.blockers.map((b) => (
               <li key={b}>{b}</li>
             ))}
           </ul>
@@ -437,15 +451,15 @@ export default function ReportsPage() {
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Engine reliability</h3>
         <div className="flex flex-wrap gap-2">
-          <Badge tone={healthTone(data.engineHealth.status)}>{data.engineHealth.status}</Badge>
-          {data.engineHealth.blocksExecution ? (
+          <Badge tone={healthTone(reportData.engineHealth.status)}>{reportData.engineHealth.status}</Badge>
+          {reportData.engineHealth.blocksExecution ? (
             <Badge tone="blocked">Execution blocked</Badge>
           ) : null}
         </div>
-        <p className="text-sm text-[var(--muted)]">{data.engineHealth.message}</p>
-        {data.engineHealth.issues.length > 0 ? (
+        <p className="text-sm text-[var(--muted)]">{reportData.engineHealth.message}</p>
+        {reportData.engineHealth.issues.length > 0 ? (
           <ul className="space-y-1 text-sm">
-            {data.engineHealth.issues.map((i) => (
+            {reportData.engineHealth.issues.map((i) => (
               <li key={i.code} className="text-[var(--danger)]">
                 {i.code}: {i.message}
               </li>
@@ -457,41 +471,41 @@ export default function ReportsPage() {
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Strategy quality</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Evidence trades" value={String(data.strategyHealth.evidenceTrades)} />
-          <StatCard label="Win rate" value={`${(data.strategyHealth.winRate * 100).toFixed(1)}%`} />
-          <StatCard label="Avg PnL" value={`$${data.strategyHealth.averagePnl.toFixed(2)}`} />
-          <StatCard label="Max loss" value={`$${data.strategyHealth.maxLoss.toFixed(2)}`} />
+          <StatCard label="Evidence trades" value={String(reportData.strategyHealth.evidenceTrades)} />
+          <StatCard label="Win rate" value={`${(reportData.strategyHealth.winRate * 100).toFixed(1)}%`} />
+          <StatCard label="Avg PnL" value={`$${reportData.strategyHealth.averagePnl.toFixed(2)}`} />
+          <StatCard label="Max loss" value={`$${reportData.strategyHealth.maxLoss.toFixed(2)}`} />
         </div>
-        <p className="text-sm text-[var(--muted)]">{data.strategyHealth.message}</p>
-        {data.strategyHealth.bestSetup ? (
+        <p className="text-sm text-[var(--muted)]">{reportData.strategyHealth.message}</p>
+        {reportData.strategyHealth.bestSetup ? (
           <p className="text-sm">
-            Best setup: {data.strategyHealth.bestSetup} · Worst:{" "}
-            {data.strategyHealth.worstSetup ?? "—"}
+            Best setup: {reportData.strategyHealth.bestSetup} · Worst:{" "}
+            {reportData.strategyHealth.worstSetup ?? "—"}
           </p>
         ) : null}
       </section>
 
-      {data.swarmReport ? (
+      {reportData.swarmReport ? (
         <section className="panel space-y-3">
           <h3 className="text-lg font-semibold">Analysis vs swarm</h3>
           <p className="text-sm">
-            Verdict: {data.analysisComparison.verdict ?? "—"} · Swarm:{" "}
-            {data.analysisComparison.swarmSignal ?? "—"} · Agreement:{" "}
-            {data.analysisComparison.swarmAgreement ?? "—"}
+            Verdict: {reportData.analysisComparison.verdict ?? "—"} · Swarm:{" "}
+            {reportData.analysisComparison.swarmSignal ?? "—"} · Agreement:{" "}
+            {reportData.analysisComparison.swarmAgreement ?? "—"}
           </p>
-          {data.analysisComparison.scenarioNote ? (
-            <p className="text-xs text-[var(--muted)]">{data.analysisComparison.scenarioNote}</p>
+          {reportData.analysisComparison.scenarioNote ? (
+            <p className="text-xs text-[var(--muted)]">{reportData.analysisComparison.scenarioNote}</p>
           ) : null}
         </section>
       ) : null}
 
-      {data.regimeMemory ? (
+      {reportData.regimeMemory ? (
         <section className="panel space-y-3">
           <h3 className="text-lg font-semibold">Regime memory</h3>
-          <Badge tone="wait">{data.regime?.regime ?? data.regimeMemory.currentRegime}</Badge>
-          {data.regimeMemory.lessons.length > 0 ? (
+          <Badge tone="wait">{reportData.regime?.regime ?? reportData.regimeMemory.currentRegime}</Badge>
+          {reportData.regimeMemory.lessons.length > 0 ? (
             <ul className="list-inside list-disc text-sm text-[var(--muted)]">
-              {data.regimeMemory.lessons.map((l) => (
+              {reportData.regimeMemory.lessons.map((l) => (
                 <li key={l}>{l}</li>
               ))}
             </ul>
@@ -501,19 +515,19 @@ export default function ReportsPage() {
         </section>
       ) : null}
 
-      {data.swarmReport ? (
+      {reportData.swarmReport ? (
         <section className="panel space-y-3">
           <h3 className="text-lg font-semibold">Scenario swarm (advisory)</h3>
           <div className="flex flex-wrap gap-2">
-            <Badge tone="wait">{data.swarmReport.advisorySignal}</Badge>
-            <Badge tone="safe">{data.swarmReport.recommendedAction}</Badge>
+            <Badge tone="wait">{reportData.swarmReport.advisorySignal}</Badge>
+            <Badge tone="safe">{reportData.swarmReport.recommendedAction}</Badge>
           </div>
-          <p className="text-sm">{data.swarmReport.likelyScenario}</p>
-          <p className="text-xs text-[var(--muted)]">{data.swarmReport.safetyNote}</p>
+          <p className="text-sm">{reportData.swarmReport.likelyScenario}</p>
+          <p className="text-xs text-[var(--muted)]">{reportData.swarmReport.safetyNote}</p>
           <details>
             <summary className="cursor-pointer text-sm text-[var(--muted)]">Agent votes</summary>
             <div className="mt-2 space-y-2">
-              {data.swarmReport.agentVotes.map((v) => (
+              {reportData.swarmReport.agentVotes.map((v) => (
                 <div key={v.agentId} className="rounded border border-[var(--border)] p-2 text-xs">
                   <span className="font-semibold">{v.role}</span> · {v.vote} · {v.confidence}%
                   <p className="text-[var(--muted)]">{v.reasoning}</p>
@@ -559,27 +573,27 @@ export default function ReportsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
             label="Open positions"
-            value={String(data.positionStats.openPositionsCount)}
+            value={String(reportData.positionStats.openPositionsCount)}
           />
           <StatCard
             label="Monitored"
-            value={String(data.positionStats.monitoredPositionsCount)}
+            value={String(reportData.positionStats.monitoredPositionsCount)}
           />
           <StatCard
             label="Close previews"
-            value={String(data.positionStats.closePreviewsCount)}
+            value={String(reportData.positionStats.closePreviewsCount)}
           />
           <StatCard
             label="Close safety"
-            value={data.positionStats.latestCloseSafetyStatus}
+            value={reportData.positionStats.latestCloseSafetyStatus}
           />
           <StatCard
             label="Closed positions"
-            value={String(data.positionStats.closedPositionsCount)}
+            value={String(reportData.positionStats.closedPositionsCount)}
           />
           <StatCard
             label="Reconciliation"
-            value={data.positionStats.reconciliationStatus}
+            value={reportData.positionStats.reconciliationStatus}
           />
         </div>
       </section>
@@ -655,7 +669,7 @@ export default function ReportsPage() {
         )}
       </section>
 
-      <BinanceTestnetDiagnosticsPanel data={data.binanceStatus} title="Binance testnet" />
+      <BinanceTestnetDiagnosticsPanel data={reportData.binanceStatus} title="Binance testnet" />
 
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Risk &amp; Readiness</h3>
@@ -663,7 +677,7 @@ export default function ReportsPage() {
           <Badge tone="safe">Live locked</Badge>
           <Badge tone="safe">Manual execute only</Badge>
           <Badge tone="wait">
-            Trust progress {data.evidenceProgress.valid}/{data.evidenceProgress.required}
+            Trust progress {reportData.evidenceProgress.valid}/{reportData.evidenceProgress.required}
           </Badge>
         </div>
         <p className="text-sm text-[var(--muted)]">

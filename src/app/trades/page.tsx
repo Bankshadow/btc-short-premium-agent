@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { Badge, StatCard, useApi } from "@/components/use-api";
+import { ProjectionWarningPanel } from "@/components/projection-warning";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
+import { getDefaultTradeProjection } from "@/lib/core/projection-defaults";
 
 interface TradesResponse {
   open: Array<{
@@ -58,14 +60,14 @@ interface TradesResponse {
 }
 
 export default function TradesPage() {
-  const { data, error, loading, reload } = useApi<TradesResponse>("/api/core/projections/trades");
+  const fallback = getDefaultTradeProjection();
+  const { data, error, reload } = useApi<TradesResponse>("/api/core/projections/trades", 0, {
+    fallback,
+  });
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
-  const pending = LoadingOrError({ loading, error, onRetry: reload });
-  if (pending) return pending;
-  if (!data) return <p className="empty-state">No trades data.</p>;
-
-  const closeTrade = data.open.find((t) => t.tradeId === closeTradeId);
+  const tradeData = data ?? fallback;
+  const closeTrade = tradeData.open.find((t) => t.tradeId === closeTradeId);
 
   return (
     <div className="space-y-6">
@@ -76,20 +78,25 @@ export default function TradesPage() {
         </button>
       </div>
 
+      <ProjectionWarningPanel
+        warnings={error ? [`trades projection: ${error}`] : []}
+        onRetry={reload}
+      />
+
       <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label="Executions" value={String(data.summary.executionCount)} />
-        <StatCard label="Open" value={String(data.summary.openCount)} />
-        <StatCard label="Closed" value={String(data.summary.closedCount)} />
-        <StatCard label="Realized PnL" value={`$${data.summary.realizedPnl.toFixed(2)}`} />
+        <StatCard label="Executions" value={String(tradeData.summary.executionCount)} />
+        <StatCard label="Open" value={String(tradeData.summary.openCount)} />
+        <StatCard label="Closed" value={String(tradeData.summary.closedCount)} />
+        <StatCard label="Realized PnL" value={`$${tradeData.summary.realizedPnl.toFixed(2)}`} />
       </div>
 
       <div className="panel">
         <h3 className="mb-3 font-semibold">Open testnet trades</h3>
-        {data.open.length === 0 ? (
+        {tradeData.open.length === 0 ? (
           <p className="empty-state">No open trades.</p>
         ) : (
           <div className="space-y-2">
-            {data.open.map((t) => (
+            {tradeData.open.map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-3 text-sm">
                 <div className="flex flex-wrap gap-2">
                   <Badge tone="safe">{t.environment}</Badge>
@@ -153,11 +160,11 @@ export default function TradesPage() {
 
       <div className="panel">
         <h3 className="mb-3 font-semibold">Closed trades</h3>
-        {data.closed.length === 0 ? (
+        {tradeData.closed.length === 0 ? (
           <p className="empty-state">No closed trades yet.</p>
         ) : (
           <div className="space-y-2">
-            {data.closed.map((t) => (
+            {tradeData.closed.map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-3 text-sm">
                 <div className="flex flex-wrap gap-2">
                   <Badge tone={t.result === "WIN" ? "safe" : t.result === "LOSS" ? "blocked" : "wait"}>

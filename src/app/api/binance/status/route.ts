@@ -1,23 +1,14 @@
-import { NextResponse } from "next/server";
-
 import { normalizeBinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
-
 import { getBinanceTestnetStatusBounded } from "@/lib/execution/binance-testnet-status";
-
 import { getKillSwitchState } from "@/lib/execution/kill-switch-state";
-
 import { hydrateOperatorGateState } from "@/lib/operator/operator-actions";
-
 import {
   allowedPreviewSymbols,
   maxPreviewNotionalUsd,
   RISK_POLICY,
 } from "@/lib/risk/risk-gate";
-
-import {
-  API_RESPONSE_BOUND_MS,
-  zeroBinanceStatusApiResponse,
-} from "@/lib/core/zero-state";
+import { API_RESPONSE_BOUND_MS, zeroBinanceStatusApiResponse } from "@/lib/core/zero-state";
+import { projectionApiFail, projectionApiOk } from "@/lib/core/projection-api-response";
 
 export async function GET() {
   try {
@@ -29,7 +20,7 @@ export async function GET() {
     await hydrateOperatorGateState();
     const killSwitch = getKillSwitchState();
 
-    return NextResponse.json({
+    return projectionApiOk({
       ...status,
       killSwitch,
       limits: {
@@ -38,7 +29,10 @@ export async function GET() {
       },
       riskPolicy: RISK_POLICY,
     });
-  } catch {
-    return NextResponse.json(zeroBinanceStatusApiResponse());
+  } catch (err) {
+    return projectionApiFail(
+      zeroBinanceStatusApiResponse(),
+      err instanceof Error ? err.message : "Binance status unavailable",
+    );
   }
 }

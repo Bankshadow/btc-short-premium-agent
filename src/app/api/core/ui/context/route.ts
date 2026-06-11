@@ -1,13 +1,15 @@
-import { NextResponse } from "next/server";
-import { buildDashboardUiContext } from "@/lib/core/ui-context";
+import { buildDashboardUiContextSafe } from "@/lib/core/ui-context";
+import { zeroDashboardUiContext } from "@/lib/core/ui-context-zero";
+import { projectionApiFail, projectionApiOk } from "@/lib/core/projection-api-response";
 
 export async function GET() {
   try {
-    return NextResponse.json(await buildDashboardUiContext());
+    const context = await buildDashboardUiContextSafe();
+    return projectionApiOk(context);
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "UI context failed" },
-      { status: 500 },
+    return projectionApiFail(
+      zeroDashboardUiContext(),
+      err instanceof Error ? err.message : "UI context failed",
     );
   }
 }
