@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { withLegacyApiHeaders } from "@/lib/core/legacy-api-headers";
 import { buildMissionSnapshotView } from "@/lib/mission/build-mission-snapshot-view";
 
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
@@ -14,7 +15,7 @@ export async function GET() {
 
     const view = await buildMissionSnapshotView();
 
-    return NextResponse.json(view);
+    return withLegacyApiHeaders(NextResponse.json(view));
 
   } catch {
 
@@ -28,7 +29,7 @@ export async function GET() {
 
     });
 
-    return NextResponse.json(zeroMissionSnapshotView(readiness));
+    return withLegacyApiHeaders(NextResponse.json(zeroMissionSnapshotView(readiness)));
 
   }
 

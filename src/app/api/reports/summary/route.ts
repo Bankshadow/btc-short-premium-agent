@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { withLegacyApiHeaders } from "@/lib/core/legacy-api-headers";
 import { buildReportsSummary } from "@/lib/reports/build-reports-summary";
 
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
@@ -14,7 +15,7 @@ export async function GET() {
 
     const summary = await buildReportsSummary();
 
-    return NextResponse.json(summary);
+    return withLegacyApiHeaders(NextResponse.json(summary));
 
   } catch {
 
@@ -28,7 +29,7 @@ export async function GET() {
 
     });
 
-    return NextResponse.json(zeroReportsSummary(readiness));
+    return withLegacyApiHeaders(NextResponse.json(zeroReportsSummary(readiness)));
 
   }
 

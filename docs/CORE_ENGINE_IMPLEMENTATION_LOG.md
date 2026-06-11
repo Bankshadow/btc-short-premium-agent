@@ -106,7 +106,8 @@ Legacy APIs retained for parity: `/api/mission/snapshot`, `/api/trades`, `/api/r
 - [x] Lifecycle strict-validation link fix (`decisionLogId`/`runId`)
 - [x] Wire trace UI on AI Status
 - [x] Resolve ESLint errors
-- [ ] Projection vs legacy parity CI gate (post-STABLE)
+- [x] Projection vs legacy parity CI gate (`projection-parity.test.ts`, `GET /api/core/projection-parity`)
+- [x] Legacy API deprecation headers (`/api/mission/snapshot`, `/api/trades`, `/api/reports/summary`)
 
 ## Phase 10 — Tests and audit ✅
 
@@ -133,3 +134,4 @@ Legacy APIs retained for parity: `/api/mission/snapshot`, `/api/trades`, `/api/r
 | 2026-06-06 | Slice 7: UI migration to projections (bundle, consistency, pages) |
 | 2026-06-06 | Slice 8: Full regression + STABLE report |
 | 2026-06-06 | STABLE follow-up: strict append, lifecycle fix, trace UI, lint, prod 10/10 |
+| 2026-06-06 | Post-STABLE: parity CI gate + legacy API deprecation headers |

@@ -209,9 +209,15 @@ export default function ReportsPage() {
         ) : null}
       </section>
 
+      <section className="panel space-y-2 border border-dashed border-[var(--border)]">
+        <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
+          Legacy reference only — supplemental sections below use /api/reports/summary
+        </p>
+      </section>
+
       <section className="panel space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-lg font-semibold">Portfolio risk</h3>
+          <h3 className="text-lg font-semibold">Portfolio risk (legacy reference only)</h3>
           <button
             type="button"
             className="btn"
