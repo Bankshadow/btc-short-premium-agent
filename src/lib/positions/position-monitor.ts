@@ -186,7 +186,7 @@ async function reconcileOrphanFlatTrades(
 
     const entryPrice = trade.entryPrice ?? 0;
     const qty = trade.qty;
-    const sideToClose = trade.side === "SHORT" ? "BUY" : "SELL";
+    const sideToClose = trade.side === "SELL" ? "BUY" : "SELL";
     const reconcileOrderId = `reconcile-${trade.tradeId}`;
 
     await appendEvent({
