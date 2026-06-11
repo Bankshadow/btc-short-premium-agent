@@ -36,6 +36,8 @@ export default function DashboardPage() {
     ready: bundleReady,
     loading: bundleLoading,
     isFallback,
+    debugSource,
+    debugSummary,
     mission,
     pnl,
     evidence,
@@ -140,6 +142,21 @@ export default function DashboardPage() {
       />
 
       <SafetyLabelsBar />
+
+      <section
+        className="rounded border border-[var(--border)] bg-[var(--panel)] px-3 py-2 font-mono text-xs text-[var(--muted)]"
+        aria-label="Projection source diagnostic"
+      >
+        Projection source: {debugSource}
+        {" · "}
+        totalTrades={debugSummary.totalTrades}
+        {" · "}
+        closedTrades={debugSummary.closedTrades}
+        {" · "}
+        evidence={debugSummary.evidenceValid}/{debugSummary.evidenceRequired}
+        {" · "}
+        health={debugSummary.healthStatus}
+      </section>
 
       <ProjectionWarning
         warnings={projectionWarnings}

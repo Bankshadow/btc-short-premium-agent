@@ -51,6 +51,7 @@ export default function ReportsPage() {
     health: projHealth,
     risk: projRisk,
     trades: projTrades,
+    binanceStatus: bundleBinance,
     warnings: bundleWarnings,
     loading: bundleLoading,
     isFallback,
@@ -699,7 +700,7 @@ export default function ReportsPage() {
         )}
       </section>
 
-      <BinanceTestnetDiagnosticsPanel data={reportData.binanceStatus} title="Binance testnet" />
+      <BinanceTestnetDiagnosticsPanel data={bundleBinance} title="Binance testnet" />
 
       <section className="panel space-y-3">
         <h3 className="text-lg font-semibold">Risk &amp; Readiness</h3>

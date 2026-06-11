@@ -14,6 +14,8 @@ import {
   getProjectionBundleForUI,
   type ProjectionBundleClientResult,
 } from "@/lib/core/projection-client";
+import type { NormalizedProjectionBundle } from "@/lib/core/normalize-projection-bundle";
+import { mapBundleToDashboardMetrics } from "@/lib/core/dashboard-projection-map";
 import { bundleProjectionReady } from "@/lib/core/ui-projection-bind";
 import type { ProjectionSectionError } from "@/lib/core/projection-defaults";
 import {
@@ -22,8 +24,19 @@ import {
   PROJECTION_UNAVAILABLE_MESSAGE,
 } from "@/lib/core/projection-defaults";
 
+export interface ProjectionBundleDebugSummary {
+  totalTrades: number;
+  closedTrades: number;
+  openTrades: number;
+  evidenceValid: number;
+  evidenceRequired: number;
+  healthStatus: string;
+  binanceStatus: string;
+}
+
 export interface ProjectionBundleContextValue {
   bundle: ProjectionBundleClientResult;
+  normalized: NormalizedProjectionBundle | null;
   mission: ProjectionBundleClientResult["mission"];
   trades: ProjectionBundleClientResult["trades"];
   positions: ProjectionBundleClientResult["positions"];
@@ -37,6 +50,8 @@ export interface ProjectionBundleContextValue {
   ok: boolean;
   ready: boolean;
   isFallback: boolean;
+  debugSource: "REAL_BUNDLE" | "FALLBACK";
+  debugSummary: ProjectionBundleDebugSummary;
   loadedAt: string;
   error: string | null;
   loading: boolean;
@@ -49,7 +64,9 @@ const ProjectionBundleContext = createContext<ProjectionBundleContextValue | nul
 export function ProjectionBundleProvider({ children }: { children: ReactNode }) {
   const initial = useMemo(() => getDefaultProjectionBundle(), []);
   const [state, setState] = useState<ProjectionBundleClientResult>(initial);
+  const [normalized, setNormalized] = useState<NormalizedProjectionBundle | null>(null);
   const [isFallback, setIsFallback] = useState(true);
+  const [debugSource, setDebugSource] = useState<"REAL_BUNDLE" | "FALLBACK">("FALLBACK");
   const [warnings, setWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,14 +81,18 @@ export function ProjectionBundleProvider({ children }: { children: ReactNode }) 
       const result = await getProjectionBundleForUI({ includeBinance: true });
       if (generation !== fetchGeneration.current) return;
       setState(result.bundle);
+      setNormalized(result.normalized);
       setIsFallback(result.isFallback);
+      setDebugSource(result.debugSource);
       setWarnings(result.warnings);
     } catch {
       if (generation !== fetchGeneration.current) return;
       const fallback = getDefaultProjectionBundle();
       fallback.ok = false;
       setState(fallback);
+      setNormalized(null);
       setIsFallback(true);
+      setDebugSource("FALLBACK");
       setWarnings([PROJECTION_FALLBACK_ACTIVE_MESSAGE, PROJECTION_UNAVAILABLE_MESSAGE]);
     } finally {
       if (generation === fetchGeneration.current) {
@@ -91,9 +112,31 @@ export function ProjectionBundleProvider({ children }: { children: ReactNode }) 
 
   const ready = bundleProjectionReady(state);
 
+  const debugSummary = useMemo((): ProjectionBundleDebugSummary => {
+    const metrics = mapBundleToDashboardMetrics({
+      ok: state.ok,
+      mission: state.mission,
+      trades: state.trades,
+      pnl: state.pnl,
+      evidence: state.evidence,
+      risk: state.risk,
+      health: state.health,
+    });
+    return {
+      totalTrades: metrics.totalTrades,
+      closedTrades: metrics.closedTrades,
+      openTrades: metrics.openTrades,
+      evidenceValid: metrics.evidenceValid,
+      evidenceRequired: metrics.evidenceRequired,
+      healthStatus: metrics.coreHealthStatus,
+      binanceStatus: state.binanceStatus?.status ?? "MISSING_ENV",
+    };
+  }, [state]);
+
   const value = useMemo(
     (): ProjectionBundleContextValue => ({
       bundle: state,
+      normalized,
       mission: state.mission,
       trades: state.trades,
       positions: state.positions,
@@ -107,13 +150,15 @@ export function ProjectionBundleProvider({ children }: { children: ReactNode }) 
       ok: state.ok,
       ready,
       isFallback,
+      debugSource,
+      debugSummary,
       loadedAt: state.loadedAt,
       error: state.errors[0]?.message ?? null,
       loading,
       refreshing,
       reload,
     }),
-    [isFallback, loading, ready, refreshing, reload, state, warnings],
+    [debugSource, debugSummary, isFallback, loading, normalized, ready, refreshing, reload, state, warnings],
   );
 
   return (

@@ -34,25 +34,29 @@ See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECT
 
 **Hotfix 5 (2026-06-06):** See [CORE_ENGINE_HOTFIX5_UI_SOURCE_EVIDENCE_STRICT.md](./CORE_ENGINE_HOTFIX5_UI_SOURCE_EVIDENCE_STRICT.md). `getProjectionBundleForUI`, shared `ProjectionBundleProvider`, strict evidence with closed-trade projection checks, ui-consistency DOM note.
 
+**Hotfix 6 (2026-06-06):** See [CORE_ENGINE_HOTFIX6_DEBUG_SHAPE_UI_BINDING.md](./CORE_ENGINE_HOTFIX6_DEBUG_SHAPE_UI_BINDING.md). `GET /api/core/projections/debug-shape`, `normalizeProjectionBundle`, dashboard projection-source banner, Reports Binance from bundle, fixed `getDefaultTradeProjection` runtime crash.
+
 | Criterion | Status |
 |-----------|--------|
 | `/` dashboard renders (no permanent Loading) | ✅ Hotfix 1 + 2 |
 | `/trades`, `/ai-status`, `/reports`, `/settings` render | ✅ Hotfix 2 — stable fallbacks + bundle-first |
-| Dashboard uses real bundle values when API OK | ✅ Hotfix 5 — shared provider + `getProjectionBundleForUI` |
-| Trades/Reports use bundle closed/evidence counts | ✅ Hotfix 5 — bundle-only binding |
+| Dashboard uses real bundle values when API OK | ✅ Hotfix 6 — `normalizeProjectionBundle` + provider debug |
+| Trades/Reports use bundle closed/evidence counts | ✅ Hotfix 6 — normalized bundle binding |
 | Navigate between pages without zero reset | ✅ Hotfix 5 — `ProjectionBundleProvider` in AppShell |
-| Binance status consistent when keys present | ✅ Hotfix 3 — `resolveBinanceStatusConsistency` |
+| Binance status consistent when keys present | ✅ Hotfix 6 — bundle Binance on Reports + consistency rules |
 | Stale trade manual repair (soft WARNING) | ✅ Hotfix 3 — `STALE_TRADE_MANUAL_REPAIR_REQUIRED` |
 | Core page health matches `/api/core/health` | ✅ Hotfix 4/5 — `resolveCoreHealthStatus` |
 | Evidence excludes PENDING_PNL / zero-fill trades | ✅ Hotfix 5 — strict validator + projection checks |
 | ui-consistency documents no DOM checks | ✅ Hotfix 5 — `browserDomChecksAvailable: false` |
+| Projection debug endpoint (no secrets) | ✅ Hotfix 6 — `/api/core/projections/debug-shape` |
+| Dashboard shows REAL_BUNDLE vs FALLBACK | ✅ Hotfix 6 — diagnostic banner |
 | Stale OPEN not counted as active open | ✅ reconciliation in projections |
-| `npm run build` passes | ✅ verify after Hotfix 5 |
+| `npm run build` passes | ✅ verify after Hotfix 6 (330 tests) |
 | Evidence 0/12 until real fills (8 rejected) | ✅ expected under strict rules |
 
-**Recommendation (after Hotfix 5): `CORE_ENGINE_PARTIAL`**
+**Recommendation (after Hotfix 6): `CORE_ENGINE_PARTIAL`**
 
-Deploy Hotfix 5 and verify production: Dashboard 8/8 trades, Trades 8 closed, Reports evidence 0/12, Core health WARNING. Assign **`CORE_ENGINE_STABLE`** only when all UI pages match bundle API and evidence strictness is confirmed in production.
+Deploy Hotfix 6 and verify production: Dashboard banner `REAL_BUNDLE`, totalTrades=8, Reports Binance not `MISSING_ENV` when keys present. Assign **`CORE_ENGINE_STABLE`** only when all UI pages match bundle API and evidence strictness is confirmed in production.
 
 Assign **`CORE_ENGINE_NOT_READY`** only if any core page remains permanently Loading.
 

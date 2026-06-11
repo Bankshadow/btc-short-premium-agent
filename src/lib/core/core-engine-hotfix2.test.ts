@@ -79,7 +79,17 @@ describe("Core Engine hotfix 2 — UI projection sync", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
       }
-      throw new Error("binance down");
+      if (url.includes("/api/binance/status")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: { status: "CONNECTED", apiKeyPresent: true, apiSecretPresent: true, zeroState: false },
+            error: null,
+          }),
+          { status: 200 },
+        );
+      }
+      throw new Error("unexpected fetch");
     };
 
     try {
