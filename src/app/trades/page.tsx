@@ -58,7 +58,7 @@ interface TradesResponse {
 }
 
 export default function TradesPage() {
-  const { data, error, loading, reload } = useApi<TradesResponse>("/api/trades");
+  const { data, error, loading, reload } = useApi<TradesResponse>("/api/core/projections/trades");
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
   const pending = LoadingOrError({ loading, error, onRetry: reload });

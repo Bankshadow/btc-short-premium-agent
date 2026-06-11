@@ -128,6 +128,29 @@ describe("Lifecycle state machine (Slice 2)", () => {
     assert.ok(snapB.issues.some((i) => i.code === "PNL_WITHOUT_CLOSE"));
   });
 
+  it("validateLifecycleTransition allows ORDER_EXECUTED when review linked by decisionLogId", () => {
+    const existing = [
+      evt({
+        type: "EXECUTION_REVIEWED",
+        decisionLogId: DL,
+        previewId: PREVIEW,
+        payload: { allowed: true },
+      }),
+    ];
+    const issues = validateLifecycleTransition(
+      {
+        type: "ORDER_EXECUTED",
+        tradeId: TRADE_A,
+        previewId: PREVIEW,
+        decisionLogId: DL,
+        runId: RUN,
+      },
+      existing,
+      { mode: "strict" },
+    );
+    assert.equal(issues.length, 0);
+  });
+
   it("validateLifecycleTransition strict flags LEARNING without PnL", () => {
     const existing = [
       evt({ type: "POSITION_CLOSED", tradeId: TRADE_A }),

@@ -420,6 +420,8 @@ export function validateBeforeAppend(
         tradeId: input.tradeId,
         previewId: input.previewId,
         closePreviewId: input.closePreviewId,
+        decisionLogId: input.decisionLogId,
+        runId: input.runId,
         timestamp: input.timestamp ?? new Date().toISOString(),
       },
       existingEvents,

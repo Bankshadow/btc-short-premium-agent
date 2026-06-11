@@ -374,7 +374,10 @@ export function deriveTradeLifecycleState(
 
 /** V-008–V-011: validate a single incoming event against existing journal (strict append). */
 export function validateLifecycleTransition(
-  event: Pick<JournalEvent, "type" | "tradeId" | "previewId" | "closePreviewId" | "timestamp">,
+  event: Pick<
+    JournalEvent,
+    "type" | "tradeId" | "previewId" | "closePreviewId" | "timestamp" | "decisionLogId" | "runId"
+  >,
   existingEvents: JournalEvent[],
   options: LifecycleValidationOptions = {},
 ): LifecycleTransitionIssue[] {
@@ -390,6 +393,8 @@ export function validateLifecycleTransition(
       tradeId: event.tradeId,
       previewId: event.previewId,
       closePreviewId: event.closePreviewId,
+      decisionLogId: event.decisionLogId,
+      runId: event.runId,
       payload: {},
     },
   ];

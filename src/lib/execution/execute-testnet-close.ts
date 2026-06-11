@@ -8,7 +8,8 @@ import type { BinanceTestnetStatus } from "@/lib/execution/binance-testnet-types
 import type { CloseBlocker } from "@/lib/execution/close-safety-gate";
 import { getClosePreviewById } from "@/lib/execution/close-preview-store";
 import { resolveClosePreviewStatus } from "@/lib/execution/close-preview-types";
-import { appendEvent, getEvents } from "@/lib/journal/journal-query";
+import { appendCoreEventStrict } from "@/lib/core/event-store";
+import { getEvents } from "@/lib/journal/journal-query";
 import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
 import {
   refreshOpenPositions,
@@ -128,7 +129,7 @@ export async function executeTestnetClose(
       updateTime: order.updateTime,
     };
 
-    await appendEvent({
+    await appendCoreEventStrict({
       type: "CLOSE_ORDER_EXECUTED",
       environment: "testnet",
       runId: preview.runId,
@@ -161,7 +162,7 @@ export async function executeTestnetClose(
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to verify position after close order.";
-      await appendEvent({
+      await appendCoreEventStrict({
         type: "ERROR_RECORDED",
         environment: "testnet",
         runId: preview.runId,
@@ -171,7 +172,7 @@ export async function executeTestnetClose(
         closePreviewId: preview.closePreviewId,
         payload: { phase: "POSITION_VERIFY_AFTER_CLOSE", message, symbol: preview.symbol },
       });
-      await appendEvent({
+      await appendCoreEventStrict({
         type: "STATE_RECONCILIATION_WARNING",
         environment: "testnet",
         runId: preview.runId,
@@ -188,7 +189,7 @@ export async function executeTestnetClose(
     }
 
     if (positionClosed) {
-      await appendEvent({
+      await appendCoreEventStrict({
         type: "POSITION_CLOSED",
         environment: "testnet",
         runId: preview.runId,
@@ -211,7 +212,7 @@ export async function executeTestnetClose(
 
     const events = await getEvents();
     const mission = buildMissionSnapshot(events);
-    await appendEvent({
+    await appendCoreEventStrict({
       type: "MISSION_SNAPSHOT_UPDATED",
       environment: "testnet",
       runId: preview.runId,
@@ -243,7 +244,7 @@ export async function executeTestnetClose(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Binance close order failed";
-    await appendEvent({
+    await appendCoreEventStrict({
       type: "ERROR_RECORDED",
       environment: "testnet",
       runId: preview.runId,
@@ -283,7 +284,7 @@ async function appendCloseBlocked(
   blockers: CloseBlocker[],
   preview?: OpenTrade | { runId?: string; decisionLogId?: string; tradeId?: string; positionId?: string } | null,
 ): Promise<void> {
-  await appendEvent({
+  await appendCoreEventStrict({
     type: "CLOSE_BLOCKED",
     environment: "testnet",
     runId: preview && "runId" in preview ? preview.runId : undefined,

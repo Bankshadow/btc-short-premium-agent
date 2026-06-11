@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { useProjectionBundle } from "@/components/use-projection-bundle";
 import type { OperatorStatus } from "@/lib/operator/operator-types";
 
 export default function OperatorPage() {
+  const { health, risk, reload: reloadBundle } = useProjectionBundle();
   const { data, error, loading, reload } = useApi<OperatorStatus>("/api/operator/status");
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +39,7 @@ export default function OperatorPage() {
           <h2 className="text-2xl font-bold">Operator Control Center</h2>
           <p className="text-sm text-[var(--muted)]">MVP 19 · Human governance · Live locked</p>
         </div>
-        <button type="button" className="btn" onClick={reload}>
+        <button type="button" className="btn" onClick={() => { reload(); reloadBundle(); }}>
           Refresh
         </button>
       </div>
@@ -53,6 +55,8 @@ export default function OperatorPage() {
         <StatCard label="Risk mode" value={data.riskMode} />
         <StatCard label="Engine" value={data.engineState} />
         <StatCard label="Max notional" value={`$${data.maxNotionalUsd}`} />
+        <StatCard label="Core health" value={health?.status ?? "OK"} />
+        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
       </div>
 
       <div className="panel space-y-3">

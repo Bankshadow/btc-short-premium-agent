@@ -3,16 +3,37 @@
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { ExecutionReviewModal } from "@/components/ExecutionReviewModal";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
-import type { MissionSnapshotView } from "@/types/mission";
+import type { DashboardUiContext } from "@/lib/core/ui-context";
 
 export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
-  const { data, error, loading, reload } = useApi<MissionSnapshotView>(
-    "/api/mission/snapshot",
-    refreshKey,
-  );
+  const {
+    mission,
+    pnl,
+    evidence,
+    trades,
+    positions,
+    risk,
+    health,
+    loading: bundleLoading,
+    error: bundleError,
+    reload: reloadBundle,
+  } = useProjectionBundle(refreshKey);
+  const {
+    data: ctx,
+    error: ctxError,
+    loading: ctxLoading,
+    reload: reloadCtx,
+  } = useApi<DashboardUiContext>("/api/core/ui/context", refreshKey);
+  const loading = bundleLoading || ctxLoading;
+  const error = bundleError ?? ctxError;
+  const reload = () => {
+    reloadBundle();
+    reloadCtx();
+  };
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [showExecutionReview, setShowExecutionReview] = useState(false);
@@ -49,8 +70,9 @@ export default function DashboardPage() {
 
   const pending = LoadingOrError({ loading, error, onRetry: refresh });
   if (pending) return pending;
-  if (!data) return <p className="empty-state">No snapshot data.</p>;
+  if (!ctx) return <p className="empty-state">No dashboard context.</p>;
 
+  const data = ctx;
   const preview = data.latestPreview;
   const safetyTone =
     data.executionSafetyStatus === "ready"
@@ -65,8 +87,8 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-2xl font-bold">Dashboard</h2>
           <p className="text-sm text-[var(--muted)]">
-            MVP 11 · Mission ${data.startCapital.toLocaleString()} → $
-            {data.targetCapital.toLocaleString()}
+            Core projections · Mission ${mission.startCapital.toLocaleString()} → $
+            {mission.targetCapital.toLocaleString()}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -88,29 +110,30 @@ export default function DashboardPage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Current equity" value={`$${data.currentEquity.toLocaleString()}`} />
-        <StatCard label="Progress" value={`${data.progressPct}%`} />
-        <StatCard label="Net PnL" value={`$${data.netPnl.toFixed(2)}`} />
+        <StatCard label="Current equity" value={`$${mission.currentEquity.toLocaleString()}`} />
+        <StatCard label="Progress" value={`${mission.progressPct}%`} />
+        <StatCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} />
         <StatCard
           label="Evidence"
-          value={`${data.evidenceProgress?.valid ?? data.totalTrades}/12`}
+          value={`${evidence.valid}/${evidence.required}`}
         />
-        <StatCard label="Open" value={String(data.openPositions)} />
-        <StatCard label="Trades closed" value={String(data.totalTrades)} />
-        <StatCard label="Win / Loss" value={`${data.win}/${data.loss}/${data.breakeven ?? 0}`} />
+        <StatCard label="Open" value={String(positions.openTradeCount)} />
+        <StatCard label="Trades closed" value={String(trades.closed.length)} />
+        <StatCard label="Win / Loss" value={`${mission.win}/${mission.loss}/${mission.breakeven ?? 0}`} />
         <StatCard label="Regime" value={data.latestRegime ?? "UNKNOWN"} />
         <StatCard label="Portfolio risk" value={data.portfolioRiskStatus ?? "OK"} />
         <StatCard label="Exec safety" value={data.executionSafetyStatus ?? "no_preview"} />
         <StatCard
-          label="Engine health"
-          value={data.engineHealth?.status ?? "OK"}
-          sub={data.engineHealth?.blocksExecution ? "execution blocked" : undefined}
+          label="Core health"
+          value={health?.status ?? "OK"}
+          sub={health?.blockingIssues?.length ? `${health.blockingIssues.length} blocker(s)` : undefined}
         />
         <StatCard
           label="Binance"
           value={data.binanceStatus?.status ?? "MISSING_ENV"}
           sub={data.binanceStatus?.baseUrl ?? "https://demo-fapi.binance.com"}
         />
+        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
       </div>
 
       {data.noTradeBlockReason ? (
@@ -134,11 +157,11 @@ export default function DashboardPage() {
       <div className="panel grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <p>
           <span className="text-[var(--muted)]">Latest run:</span>{" "}
-          {data.latestRunId ?? "—"}
+          {mission.latestRunId ?? "—"}
         </p>
         <p>
           <span className="text-[var(--muted)]">Decision log:</span>{" "}
-          {data.latestDecisionLogId ?? "—"}
+          {mission.latestDecisionLogId ?? "—"}
         </p>
         <p>
           <span className="text-[var(--muted)]">Latest preview:</span>{" "}
@@ -236,7 +259,7 @@ export default function DashboardPage() {
         </div>
       ) : null}
 
-      {!data.latestOpenTrade && data.openPositions === 0 && data.latestClosedTrade ? (
+      {!data.latestOpenTrade && positions.openTradeCount === 0 && data.latestClosedTrade ? (
         <div className="panel space-y-2 border border-[var(--success)]/30">
           <h3 className="font-semibold text-[var(--success)]">Latest closed trade</h3>
           <div className="flex flex-wrap gap-2">
@@ -313,17 +336,17 @@ export default function DashboardPage() {
         <div className="panel space-y-3">
           <h3 className="font-semibold">Latest decision</h3>
           <div className="flex flex-wrap gap-2">
-            {data.latestVerdict ? (
+            {mission.latestVerdict ? (
               <Badge
                 tone={
-                  data.latestVerdict === "BLOCKED"
+                  mission.latestVerdict === "BLOCKED"
                     ? "blocked"
-                    : data.latestVerdict === "TRADE"
+                    : mission.latestVerdict === "TRADE"
                       ? "safe"
                       : "wait"
                 }
               >
-                {data.latestVerdict}
+                {mission.latestVerdict}
               </Badge>
             ) : (
               <Badge tone="wait">IDLE</Badge>
@@ -332,13 +355,13 @@ export default function DashboardPage() {
             <Badge tone={safetyTone}>{data.executionSafetyStatus ?? "no_preview"}</Badge>
           </div>
           <p className="text-sm text-[var(--muted)]">{data.nextAction}</p>
-          {data.latestVerdictReasons?.some((r) => r.includes("Scenario")) ? (
+          {mission.latestVerdictReasons?.some((r) => r.includes("Scenario")) ? (
             <p className="text-xs text-[var(--muted)]">
-              {data.latestVerdictReasons.find((r) => r.includes("Scenario") || r.includes("swarm")) ??
-                data.latestVerdictReasons[data.latestVerdictReasons.length - 1]}
+              {mission.latestVerdictReasons.find((r) => r.includes("Scenario") || r.includes("swarm")) ??
+                mission.latestVerdictReasons[mission.latestVerdictReasons.length - 1]}
             </p>
           ) : null}
-          {data.latestVerdictReasons?.some((r) => r.includes("No-trade rule")) ? (
+          {mission.latestVerdictReasons?.some((r) => r.includes("No-trade rule")) ? (
             <Badge tone="blocked">No-trade rule active</Badge>
           ) : null}
         </div>

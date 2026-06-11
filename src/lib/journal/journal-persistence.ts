@@ -37,7 +37,7 @@ function parseEvents(raw: string): JournalEvent[] {
   }
 }
 
-function useBlobPersistence(): boolean {
+function isBlobJournalEnabled(): boolean {
   if (process.env.BLOB_READ_WRITE_TOKEN?.trim()) return true;
   // Linked Vercel Blob stores use OIDC + BLOB_STORE_ID at runtime (no RW token in env).
   if (process.env.VERCEL && process.env.BLOB_STORE_ID?.trim()) return true;
@@ -80,18 +80,18 @@ function writeToFile(events: JournalEvent[]): void {
 export type JournalBackend = "blob" | "file";
 
 export function resolveJournalBackend(): JournalBackend {
-  return useBlobPersistence() ? "blob" : "file";
+  return isBlobJournalEnabled() ? "blob" : "file";
 }
 
 export async function readJournalEvents(): Promise<JournalEvent[]> {
-  if (useBlobPersistence()) {
+  if (isBlobJournalEnabled()) {
     return readFromBlob();
   }
   return readFromFile();
 }
 
 export async function writeJournalEvents(events: JournalEvent[]): Promise<void> {
-  if (useBlobPersistence()) {
+  if (isBlobJournalEnabled()) {
     await writeToBlob(events);
     return;
   }
@@ -100,6 +100,6 @@ export async function writeJournalEvents(events: JournalEvent[]): Promise<void> 
 
 /** Sync read for file backend only (tests/local). */
 export function readJournalEventsSync(): JournalEvent[] {
-  if (useBlobPersistence()) return [];
+  if (isBlobJournalEnabled()) return [];
   return readFromFile();
 }

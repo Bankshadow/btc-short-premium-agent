@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Badge, LoadingOrError, useApi } from "@/components/use-api";
+import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
 import type { EngineHealthReport } from "@/lib/health/engine-health-types";
@@ -22,6 +23,13 @@ function healthTone(status: string): "safe" | "blocked" | "wait" {
 }
 
 export default function SettingsPage() {
+  const {
+    health: coreHealth,
+    risk,
+    loading: bundleLoading,
+    error: bundleError,
+    reload: reloadBundle,
+  } = useProjectionBundle();
   const { data, error, loading, reload } = useApi<BinanceStatusResponse>("/api/binance/status");
   const {
     data: health,
@@ -82,7 +90,14 @@ export default function SettingsPage() {
     }
   }
 
-  const pending = LoadingOrError({ loading, error, onRetry: reload });
+  const pending = LoadingOrError({
+    loading: loading || bundleLoading,
+    error: error ?? bundleError,
+    onRetry: () => {
+      reload();
+      reloadBundle();
+    },
+  });
   if (pending) return pending;
   if (!data) return <p className="empty-state">No settings data.</p>;
 
@@ -91,20 +106,27 @@ export default function SettingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold">Settings</h2>
-          <p className="text-sm text-[var(--muted)]">MVP 24 · Testnet config &amp; production hardening</p>
+          <p className="text-sm text-[var(--muted)]">Core projections · Testnet config &amp; production hardening</p>
         </div>
-        <button type="button" className="btn" onClick={() => { reload(); reloadSandbox(); }}>
+        <button type="button" className="btn" onClick={() => { reload(); reloadBundle(); reloadSandbox(); }}>
           Refresh
         </button>
       </div>
 
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Core health" value={coreHealth?.status ?? "OK"} />
+        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
+        <StatCard label="Kill switch" value={data.killSwitch.active ? "ACTIVE" : "OFF"} />
+        <StatCard label="Binance" value={data.status} sub={data.baseUrl} />
+      </div>
+
       <BinanceTestnetDiagnosticsPanel data={data} title="Binance testnet" />
 
       <div className="panel space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold">Engine health diagnostics</h3>
+          <h3 className="font-semibold">Engine health diagnostics (legacy reference only)</h3>
           <button
             type="button"
             className="btn"

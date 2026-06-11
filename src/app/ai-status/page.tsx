@@ -1,10 +1,12 @@
 "use client";
 
-import { Badge, LoadingOrError, useApi } from "@/components/use-api";
+import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { AnalysisVerdict } from "@/lib/analysis/analysis-types";
 import type { BinanceStatusDiagnostics } from "@/lib/execution/binance-status-diagnostics";
 import type { ExecutionSafetyResult } from "@/lib/execution/execution-safety-types";
+import type { TraceReport } from "@/lib/core/trace/trace-types";
 interface LatestAnalysis {
   runId: string | null;
   decisionLogId: string | null;
@@ -87,24 +89,44 @@ const SAFETY_EVENTS = new Set([
 ]);
 
 export default function AiStatusPage() {
+  const { mission, health, risk, loading: bundleLoading, error: bundleError, reload: reloadBundle } =
+    useProjectionBundle();
   const latest = useApi<LatestAnalysis>("/api/analysis/latest");
   const review = useApi<ReviewResponse>("/api/execution/review/latest");
   const binance = useApi<BinanceStatusDiagnostics>("/api/binance/status");
   const events = useApi<EventsResponse>("/api/journal/events?limit=30");
+  const traceTradeId =
+    events.data?.events.find(
+      (e) => e.type === "ORDER_EXECUTED" || e.type === "POSITION_OPENED",
+    )?.tradeId ?? null;
+  const trace = useApi<TraceReport>(
+    traceTradeId ? `/api/core/trace/${encodeURIComponent(traceTradeId)}` : "",
+    0,
+    { enabled: Boolean(traceTradeId) },
+  );
 
-  const loading = latest.loading || events.loading || review.loading || binance.loading;
-  const error = latest.error ?? events.error ?? review.error ?? binance.error;
+  const loading =
+    bundleLoading ||
+    latest.loading ||
+    events.loading ||
+    review.loading ||
+    binance.loading ||
+    trace.loading;
+  const error = bundleError ?? latest.error ?? events.error ?? review.error ?? binance.error;
 
   const pending = LoadingOrError({
     loading,
     error,
     onRetry: () => {
+      reloadBundle();
       void latest.reload();
       void events.reload();
       void review.reload();
       void binance.reload();
+      void trace.reload();
     },
-  });  if (pending) return pending;
+  });
+  if (pending) return pending;
 
   const d = latest.data;
   const r = review.data?.review;
@@ -137,20 +159,30 @@ export default function AiStatusPage() {
           type="button"
           className="btn"
           onClick={() => {
+            reloadBundle();
             void latest.reload();
             void events.reload();
             void review.reload();
             void binance.reload();
-          }}        >
+            void trace.reload();
+          }}
+        >
           Refresh
         </button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Core health" value={health?.status ?? "OK"} />
+        <StatCard label="Mission run" value={mission.latestRunId ?? "—"} />
+        <StatCard label="Decision log" value={mission.latestDecisionLogId ?? "—"} />
+        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="panel space-y-2">
           <h3 className="font-semibold">Latest analysis</h3>
-          <p className="text-sm">runId: {d?.runId ?? "—"}</p>
-          <p className="text-sm">decisionLogId: {d?.decisionLogId ?? "—"}</p>
+          <p className="text-sm">runId: {mission.latestRunId ?? d?.runId ?? "—"}</p>
+          <p className="text-sm">decisionLogId: {mission.latestDecisionLogId ?? d?.decisionLogId ?? "—"}</p>
           <p className="text-sm">previewId: {d?.previewId ?? "—"}</p>
           {d?.scenarioContext ? (
             <p className="text-sm text-[var(--muted)]">
@@ -198,6 +230,42 @@ export default function AiStatusPage() {
           </p>
         </div>
       ) : null}
+
+      <div className="panel space-y-3">
+        <h3 className="font-semibold">Lifecycle trace</h3>
+        {!traceTradeId ? (
+          <p className="empty-state">No tradeId yet — trace appears after first execution.</p>
+        ) : trace.loading ? (
+          <p className="text-sm text-[var(--muted)]">Loading trace…</p>
+        ) : trace.error ? (
+          <p className="text-sm text-[var(--danger)]">{trace.error}</p>
+        ) : trace.data ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Badge tone="safe">{trace.data.lifecycleState ?? "UNKNOWN"}</Badge>
+              <Badge tone="wait">{trace.data.steps.length} steps</Badge>
+            </div>
+            {trace.data.invalidTransitions.length > 0 ? (
+              <ul className="list-inside list-disc text-xs text-[var(--danger)]">
+                {trace.data.invalidTransitions.map((msg) => (
+                  <li key={msg}>{msg}</li>
+                ))}
+              </ul>
+            ) : null}
+            <div className="space-y-1 text-xs">
+              {trace.data.steps.slice(-8).map((step) => (
+                <div key={step.eventId} className="rounded border border-[var(--border)] p-2">
+                  <span className="font-mono text-[var(--accent)]">{step.type}</span>
+                  <span className="ml-2 text-[var(--muted)]">{step.phase}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--muted)]">{trace.data.recommendation}</p>
+          </>
+        ) : (
+          <p className="empty-state">No trace data.</p>
+        )}
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="panel space-y-2">

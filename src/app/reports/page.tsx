@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Badge, LoadingOrError, StatCard, useApi } from "@/components/use-api";
+import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
 import type { ReportsSummary } from "@/lib/reports/reports-types";
 import type { ReportsGateStatus } from "@/lib/reports/execution-safety-report";
@@ -29,6 +30,16 @@ function Field({ label, value }: { label: string; value: string }) {
 }
 
 export default function ReportsPage() {
+  const {
+    mission: projMission,
+    pnl: projPnl,
+    evidence: projEvidence,
+    health: projHealth,
+    risk: projRisk,
+    loading: bundleLoading,
+    error: bundleError,
+    reload: reloadBundle,
+  } = useProjectionBundle();
   const { data, error, loading, reload } = useApi<ReportsSummary>("/api/reports/summary");
   const [generatingAudit, setGeneratingAudit] = useState(false);
   const [auditError, setAuditError] = useState<string | null>(null);
@@ -92,11 +103,18 @@ export default function ReportsPage() {
     }
   }
 
-  const pending = LoadingOrError({ loading, error, onRetry: reload });
+  const pending = LoadingOrError({
+    loading: loading || bundleLoading,
+    error: error ?? bundleError,
+    onRetry: () => {
+      reload();
+      reloadBundle();
+    },
+  });
   if (pending) return pending;
   if (!data) return <p className="empty-state">No reports data.</p>;
 
-  const { mission, executionSafetyGate: gate, pnlSummary, learningSummary } = data;
+  const { executionSafetyGate: gate, pnlSummary, learningSummary } = data;
   const tone = gateTone(gate.status);
 
   return (
@@ -121,32 +139,34 @@ export default function ReportsPage() {
       ) : null}
 
       <section className="space-y-3">
-        <h3 className="text-lg font-semibold">Mission Snapshot</h3>
+        <h3 className="text-lg font-semibold">Mission Snapshot (core projection)</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Current equity"
-            value={`$${mission.currentEquity.toLocaleString()}`}
+            value={`$${projMission.currentEquity.toLocaleString()}`}
           />
-          <StatCard label="Progress" value={`${mission.progressPct}%`} />
-          <StatCard label="Net PnL" value={`$${mission.netPnl.toFixed(2)}`} />
+          <StatCard label="Progress" value={`${projMission.progressPct}%`} />
+          <StatCard label="Net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
           <StatCard
             label="Trades"
-            value={`${mission.totalTrades} (${mission.win}W/${mission.loss}L/${mission.breakeven ?? 0}BE)`}
+            value={`${projMission.totalTrades} (${projMission.win}W/${projMission.loss}L/${projMission.breakeven ?? 0}BE)`}
           />
+          <StatCard label="Core health" value={projHealth?.status ?? "OK"} />
+          <StatCard label="Live locked" value={projRisk.liveLocked ? "true" : "false"} />
         </div>
       </section>
 
       <section className="panel space-y-3">
-        <h3 className="text-lg font-semibold">Realized PnL</h3>
+        <h3 className="text-lg font-semibold">Realized PnL (core projection)</h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Closed with PnL" value={String(pnlSummary.count)} />
-          <StatCard label="Wins / Losses / BE" value={`${pnlSummary.wins}/${pnlSummary.losses}/${pnlSummary.breakeven}`} />
-          <StatCard label="Total net PnL" value={`$${pnlSummary.totalNetPnl.toFixed(2)}`} />
-          <StatCard label="Average PnL" value={`$${pnlSummary.averagePnl.toFixed(2)}`} />
+          <StatCard label="Realized count" value={String(projPnl.realizedCount)} />
+          <StatCard label="Total net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
+          <StatCard label="Legacy closed count" value={String(pnlSummary.count)} sub="Legacy reference only" />
+          <StatCard label="Legacy avg PnL" value={`$${pnlSummary.averagePnl.toFixed(2)}`} sub="Legacy reference only" />
         </div>
         {pnlSummary.bestTrade ? (
           <p className="text-sm text-[var(--muted)]">
-            Best: {pnlSummary.bestTrade.symbol} ${pnlSummary.bestTrade.netPnl.toFixed(2)} · Worst:{" "}
+            Legacy reference — Best: {pnlSummary.bestTrade.symbol} ${pnlSummary.bestTrade.netPnl.toFixed(2)} · Worst:{" "}
             {pnlSummary.worstTrade?.symbol ?? "—"} $
             {pnlSummary.worstTrade?.netPnl.toFixed(2) ?? "—"}
           </p>
@@ -159,24 +179,24 @@ export default function ReportsPage() {
       </section>
 
       <section className="panel space-y-3">
-        <h3 className="text-lg font-semibold">Evidence Progress</h3>
+        <h3 className="text-lg font-semibold">Evidence Progress (core projection)</h3>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="wait">
-            Trust {data.evidenceProgress.valid}/{data.evidenceProgress.required}
+            Trust {projEvidence.valid}/{projEvidence.required}
           </Badge>
-          <Badge tone={data.evidenceProgress.readinessStatus === "READY" ? "safe" : "wait"}>
-            {data.evidenceProgress.readinessStatus ?? "COLLECTING"}
+          <Badge tone={projEvidence.readinessStatus === "COMPLETE" ? "safe" : "wait"}>
+            {projEvidence.readinessStatus ?? "COLLECTING"}
           </Badge>
           <Badge tone="safe">Live locked</Badge>
         </div>
         <p className="text-sm text-[var(--muted)]">
-          {data.evidenceProgress.valid} valid evidence trades · {data.evidenceProgress.invalid}{" "}
-          rejected · {data.evidenceProgress.required - data.evidenceProgress.valid} remaining to
+          {projEvidence.valid} valid evidence trades · {projEvidence.rejected}{" "}
+          rejected · {projEvidence.required - projEvidence.valid} remaining to
           target.
         </p>
-        {(data.evidenceProgress.trades?.length ?? 0) > 0 ? (
+        {(projEvidence.trades?.length ?? 0) > 0 ? (
           <div className="space-y-2">
-            {data.evidenceProgress.trades!.slice(0, 8).map((t) => (
+            {projEvidence.trades!.slice(0, 8).map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-2 text-xs">
                 <Badge tone={t.status === "VALID" ? "safe" : "blocked"}>{t.status}</Badge>
                 <span className="ml-2 font-mono">{t.tradeId}</span>

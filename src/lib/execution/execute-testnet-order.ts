@@ -1,4 +1,5 @@
-import { appendEvent, getEvents } from "@/lib/journal/journal-query";
+import { appendCoreEventStrict } from "@/lib/core/event-store";
+import { getEvents } from "@/lib/journal/journal-query";
 import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
 import { runExecuteGuardChain } from "@/lib/core/guard-chain";
 import { newTradeId } from "@/lib/trades/trade-types";
@@ -44,7 +45,7 @@ async function appendExecuteBlocked(input: {
   codes: string[];
   reasons: string[];
 }): Promise<void> {
-  await appendEvent({
+  await appendCoreEventStrict({
     type: "EXECUTE_BLOCKED",
     environment: "testnet",
     runId: input.runId ?? undefined,
@@ -190,7 +191,7 @@ export async function executeTestnetOrder(
 
     const strategyVersionId = await getActiveStrategyVersionId();
 
-    await appendEvent({
+    await appendCoreEventStrict({
       type: "ORDER_EXECUTED",
       environment: "testnet",
       runId: preview.runId,
@@ -208,7 +209,7 @@ export async function executeTestnetOrder(
 
     const accepted = ["NEW", "PARTIALLY_FILLED", "FILLED"].includes(order.status);
     if (accepted) {
-      await appendEvent({
+      await appendCoreEventStrict({
         type: "POSITION_OPENED",
         environment: "testnet",
         runId: preview.runId,
@@ -234,7 +235,7 @@ export async function executeTestnetOrder(
 
     const events = await getEvents();
     const snapshot = buildMissionSnapshot(events);
-    await appendEvent({
+    await appendCoreEventStrict({
       type: "MISSION_SNAPSHOT_UPDATED",
       environment: "testnet",
       runId: preview.runId,
@@ -265,7 +266,7 @@ export async function executeTestnetOrder(
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Binance order failed";
-    await appendEvent({
+    await appendCoreEventStrict({
       type: "ERROR_RECORDED",
       environment: "testnet",
       runId: preview.runId,

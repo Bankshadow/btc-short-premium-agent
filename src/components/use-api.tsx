@@ -3,12 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 
-export function useApi<T>(url: string, refreshKey = 0) {
+export function useApi<T>(url: string, refreshKey = 0, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled !== false && Boolean(url);
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   const reload = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      setData(null);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -20,11 +27,29 @@ export function useApi<T>(url: string, refreshKey = 0) {
     } finally {
       setLoading(false);
     }
-  }, [url]);
+  }, [enabled, url]);
 
   useEffect(() => {
-    void reload();
-  }, [reload, refreshKey]);
+    if (!enabled) return;
+    let active = true;
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const json = await fetchJson<T>(url);
+        if (active) setData(json);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Load failed");
+        setData(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [enabled, url, refreshKey]);
 
   return { data, error, loading, reload };
 }

@@ -67,25 +67,61 @@ APIs:
 
 Guards facade: `src/lib/core/guards/*` (wraps existing gates)
 
-## Phase 7 — Integration cleanup ⏳ Partial
+## Phase 7 — UI projection migration (Slice 7) ✅
 
-- [ ] Wire `appendCoreEventStrict` in execute/close hot paths
-- [ ] Block execute when `evaluateCoreHealth().status === BLOCKED`
-- [ ] Dashboard reads `/api/core/projections/mission` (optional fallback)
+| File | Status |
+|------|--------|
+| `src/lib/core/projection-client.ts` | ✅ Typed fetch helpers + zero-state |
+| `src/lib/core/projection-bundle.ts` | ✅ Server bundle builder |
+| `src/lib/core/ui-consistency-check.ts` | ✅ Cross-page parity |
+| `src/lib/core/ui-context.ts` | ✅ Supplemental dashboard context |
+| `src/components/use-projection-bundle.tsx` | ✅ Client hook |
 
-## Phase 8 — Tests and audit ✅ Partial
+APIs:
+- `GET /api/core/projections/pnl`
+- `GET /api/core/projections/risk`
+- `GET /api/core/projections/bundle`
+- `GET /api/core/ui-consistency`
+- `GET /api/core/ui/context`
 
-- `src/lib/core-engine.test.ts` — 16 tests
-- Full suite: **164/164 pass**
-- `npm run build` — pending verification each release
+Pages migrated: `/`, `/trades`, `/ai-status`, `/reports`, `/settings`, `/operator`
+
+Docs:
+- [CORE_ENGINE_SLICE7_UI_PROJECTION_AUDIT.md](./CORE_ENGINE_SLICE7_UI_PROJECTION_AUDIT.md)
+- [CORE_ENGINE_SLICE7_UI_PROJECTIONS.md](./CORE_ENGINE_SLICE7_UI_PROJECTIONS.md)
+
+Legacy APIs retained for parity: `/api/mission/snapshot`, `/api/trades`, `/api/reports/summary`
+
+## Phase 8 — Regression + STABLE documentation (Slice 8) ✅
+
+- [CORE_ENGINE_STABLE_REPORT.md](./CORE_ENGINE_STABLE_REPORT.md) — full regression report
+- [CORE_ENGINE_REGRESSION_FIX_LOG.md](./CORE_ENGINE_REGRESSION_FIX_LOG.md) — fix log
+- `src/lib/core/api-regression.test.ts` — 12 API/core regression tests
+- **Recommendation: `CORE_ENGINE_STABLE`**
+
+## Phase 9 — Hot-path integration ✅
+
+- [x] Wire `appendCoreEventStrict` in execute/close hot paths
+- [x] Block execute when `evaluateCoreHealth().status === BLOCKED` (via guard chain)
+- [x] Lifecycle strict-validation link fix (`decisionLogId`/`runId`)
+- [x] Wire trace UI on AI Status
+- [x] Resolve ESLint errors
+- [ ] Projection vs legacy parity CI gate (post-STABLE)
+
+## Phase 10 — Tests and audit ✅
+
+- Full suite: **219/219 pass**
+- `npm run build` — passes
+- `npm run lint` — passes (0 errors)
+- Production checklist: **10/10** @ Vercel
 
 ---
 
 ## Recommendation
 
-**CORE_ENGINE_PARTIAL**
+**CORE_ENGINE_STABLE** (Slice 8 + integration follow-up)
 
-Core modules, validator, projection engine, lifecycle FSM, health/trace/replay APIs exist and tests pass. MVP 1–24 flows unchanged. Remaining work for **CORE_ENGINE_STABLE**: hot-path validated append, health gate on execute, UI trace section, deduplicated guard calls.
+219/219 tests pass, build/lint pass, production 10/10. UI reads projections; execute/close use strict core append; trace UI on AI Status. Post-STABLE: legacy API sunset, Reports briefing migration, parity CI gate.
 
 ---
 
@@ -94,3 +130,6 @@ Core modules, validator, projection engine, lifecycle FSM, health/trace/replay A
 | Date | Change |
 |------|--------|
 | 2026-06-06 | Initial core engine layer (Phases 3–6) |
+| 2026-06-06 | Slice 7: UI migration to projections (bundle, consistency, pages) |
+| 2026-06-06 | Slice 8: Full regression + STABLE report |
+| 2026-06-06 | STABLE follow-up: strict append, lifecycle fix, trace UI, lint, prod 10/10 |
