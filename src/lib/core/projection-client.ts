@@ -15,8 +15,13 @@ import {
   getDefaultRiskProjectionView,
   getDefaultTradeProjection,
   PROJECTION_FETCH_TIMEOUT_MS,
+  PROJECTION_UNAVAILABLE_MESSAGE,
+  type DefaultEvidenceProjection,
+  type DefaultMissionProjection,
+  type DefaultPnlProjection,
   type DefaultPositionProjection,
   type DefaultProjectionBundle,
+  type DefaultTradeProjection,
   type ProjectionSectionError,
 } from "./projection-defaults";
 import {
@@ -29,6 +34,8 @@ import {
   unwrapProjectionData,
 } from "./projection-api-response";
 import type { PnlProjection } from "./projections/pnl-projection";
+import type { TradeProjection } from "./projections/trade-projection";
+import type { PositionProjection } from "./projections/position-projection";
 
 export type { ProjectionBundleResponse };
 export type ProjectionBundleClientResult = DefaultProjectionBundle;
@@ -153,55 +160,173 @@ export type ProjectionBundleWithBinance = ProjectionBundleResponse & {
   binanceStatus?: BinanceStatusDiagnostics | null;
 };
 
+function normalizeMissionFromBundle(
+  mission: MissionSnapshot,
+  trades?: TradeProjection,
+): DefaultMissionProjection {
+  const base = getDefaultMissionProjection();
+  const openCount = trades?.open?.length ?? mission.openPositions ?? 0;
+  const closedCount = trades?.closed?.length ?? Math.max(0, mission.totalTrades - openCount);
+  return {
+    ...base,
+    ...mission,
+    targetEquity: mission.targetCapital,
+    openTrades: openCount,
+    closedTrades: closedCount,
+    winCount: mission.win,
+    lossCount: mission.loss,
+    breakevenCount: mission.breakeven,
+    zeroState: "zeroState" in mission && Boolean((mission as { zeroState?: boolean }).zeroState),
+  };
+}
+
+function normalizeTradesFromBundle(trades: TradeProjection): DefaultTradeProjection {
+  const open = (trades.open ?? []) as DefaultTradeProjection["open"];
+  const closed = (trades.closed ?? []) as DefaultTradeProjection["closed"];
+  const base = getDefaultTradeProjection();
+  return {
+    ...base,
+    ...trades,
+    open,
+    closed,
+    trades: open,
+    openTrades: open,
+    closedTrades: closed,
+    totalTrades: open.length + closed.length,
+    openCount: open.length,
+    closedCount: closed.length,
+    zeroState: "zeroState" in trades && Boolean((trades as { zeroState?: boolean }).zeroState),
+  };
+}
+
+function normalizePositionsFromBundle(positions: PositionProjection): DefaultPositionProjection {
+  const base = getDefaultPositionProjection();
+  return {
+    ...base,
+    ...positions,
+    positions: positions.snapshots ?? base.positions,
+    openPositionCount: positions.openTradeCount ?? base.openPositionCount,
+    reconciliationStatus: base.reconciliationStatus,
+    message: base.message,
+    zeroState: "zeroState" in positions && Boolean((positions as { zeroState?: boolean }).zeroState),
+  };
+}
+
+function normalizePnlFromBundle(pnl: PnlProjection): DefaultPnlProjection {
+  const base = getDefaultPnlProjection();
+  return {
+    ...base,
+    ...pnl,
+    realizedPnl: pnl.totalNetPnl ?? base.realizedPnl,
+    unrealizedPnl: base.unrealizedPnl,
+    netPnl: pnl.totalNetPnl ?? base.netPnl,
+    zeroState: "zeroState" in pnl && Boolean((pnl as { zeroState?: boolean }).zeroState),
+  };
+}
+
+function normalizeEvidenceFromBundle(evidence: EvidenceProgress): DefaultEvidenceProjection {
+  const base = getDefaultEvidenceProjection();
+  return {
+    ...base,
+    ...evidence,
+    validTrades: evidence.valid ?? base.validTrades,
+    requiredTrades: evidence.required ?? base.requiredTrades,
+    progressPct: base.progressPct,
+    rejectedTrades: base.rejectedTrades,
+    readiness: evidence.readinessStatus ?? base.readiness,
+    zeroState: "zeroState" in evidence && Boolean((evidence as { zeroState?: boolean }).zeroState),
+  };
+}
+
+interface BundleApiPayload {
+  mission?: MissionSnapshot;
+  trades?: TradeProjection;
+  positions?: PositionProjection;
+  pnl?: PnlProjection;
+  evidence?: EvidenceProgress;
+  risk?: RiskProjectionView;
+  health?: CoreHealthReport | null;
+}
+
+function mapBundlePayloadToClient(
+  payload: BundleApiPayload,
+  binanceStatus: DefaultProjectionBundle["binanceStatus"],
+  errors: ProjectionSectionError[],
+): ProjectionBundleClientResult {
+  const base = getDefaultProjectionBundle();
+  const warnings: string[] = [];
+
+  for (const err of errors) {
+    warnings.push(`${err.section}: ${err.message}`);
+  }
+
+  return {
+    mission: payload.mission
+      ? normalizeMissionFromBundle(payload.mission, payload.trades)
+      : base.mission,
+    trades: payload.trades ? normalizeTradesFromBundle(payload.trades) : base.trades,
+    positions: payload.positions ? normalizePositionsFromBundle(payload.positions) : base.positions,
+    pnl: payload.pnl ? normalizePnlFromBundle(payload.pnl) : base.pnl,
+    evidence: payload.evidence ? normalizeEvidenceFromBundle(payload.evidence) : base.evidence,
+    risk: payload.risk ? { ...base.risk, ...payload.risk, liveLocked: true } : base.risk,
+    health: payload.health ?? base.health,
+    binanceStatus,
+    errors,
+    warnings:
+      errors.length > 0 ? [PROJECTION_UNAVAILABLE_MESSAGE, ...warnings] : warnings,
+    loadedAt: new Date().toISOString(),
+    ok: errors.length === 0,
+  };
+}
+
+function fallbackProjectionBundle(
+  errors: ProjectionSectionError[],
+): ProjectionBundleClientResult {
+  const bundle = getDefaultProjectionBundle();
+  bundle.ok = false;
+  bundle.errors = errors;
+  bundle.warnings = [
+    PROJECTION_UNAVAILABLE_MESSAGE,
+    ...errors.map((e) => `${e.section}: ${e.message}`),
+  ];
+  bundle.loadedAt = new Date().toISOString();
+  return bundle;
+}
+
 export async function getProjectionBundle(
   options?: { timeoutMs?: number; includeBinance?: boolean },
 ): Promise<ProjectionBundleClientResult> {
   const timeoutMs = options?.timeoutMs ?? PROJECTION_FETCH_TIMEOUT_MS;
   const base = getDefaultProjectionBundle();
   const errors: ProjectionSectionError[] = [];
-  const warnings: string[] = [];
 
-  const fetches = [
-    fetchWithTimeout("/api/core/projections/mission", base.mission, timeoutMs),
-    fetchWithTimeout("/api/core/projections/trades", base.trades, timeoutMs),
-    fetchWithTimeout("/api/core/projections/positions", base.positions, timeoutMs),
-    fetchWithTimeout("/api/core/projections/pnl", base.pnl, timeoutMs),
-    fetchWithTimeout("/api/core/projections/evidence", base.evidence, timeoutMs),
-    fetchWithTimeout("/api/core/projections/risk", base.risk, timeoutMs),
-    fetchWithTimeout("/api/core/health", base.health, timeoutMs),
+  const [bundleR, binanceR] = await Promise.all([
+    fetchWithTimeout<BundleApiPayload>(
+      "/api/core/projections/bundle",
+      {
+        mission: base.mission,
+        trades: base.trades,
+        positions: base.positions,
+        pnl: base.pnl,
+        evidence: base.evidence,
+        risk: base.risk,
+        health: base.health,
+      },
+      timeoutMs,
+    ),
     options?.includeBinance !== false
       ? fetchWithTimeout("/api/binance/status", base.binanceStatus, timeoutMs)
       : Promise.resolve({ data: base.binanceStatus, usedFallback: false, error: null }),
-  ] as const;
+  ]);
 
-  const results = await Promise.all(fetches);
+  if (bundleR.error) errors.push(bundleR.error);
+  if (binanceR.error) errors.push(binanceR.error);
 
-  for (const r of results) {
-    if (r.error) {
-      errors.push(r.error);
-      warnings.push(`${r.error.section}: ${r.error.message}`);
-    }
+  if (bundleR.error?.code === "FETCH_FAILED" && bundleR.error.section === "bundle") {
+    return fallbackProjectionBundle([bundleR.error, ...errors.filter((e) => e.section !== "bundle")]);
   }
 
-  const [missionR, tradesR, positionsR, pnlR, evidenceR, riskR, healthR, binanceR] = results;
-
-  return {
-    mission: missionR.data,
-    trades: tradesR.data,
-    positions: positionsR.data,
-    pnl: pnlR.data,
-    evidence: evidenceR.data,
-    risk: riskR.data,
-    health: healthR.data,
-    binanceStatus: binanceR.data,
-    errors,
-    warnings:
-      errors.length > 0
-        ? ["Projection unavailable. Showing safe zero-state.", ...warnings]
-        : warnings,
-    loadedAt: new Date().toISOString(),
-    ok: errors.length === 0,
-  };
+  return mapBundlePayloadToClient(bundleR.data, binanceR.data, errors);
 }
 
 export async function getProjectionBundleLegacy(

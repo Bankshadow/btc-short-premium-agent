@@ -156,13 +156,13 @@ describe("Production loading fix", () => {
     }
   });
 
-  it("projection bundle returns partial data when one API fails", async () => {
+  it("projection bundle returns partial data when bundle API fails", async () => {
     const prev = global.fetch;
     let calls = 0;
     global.fetch = async (input) => {
       calls += 1;
       const url = String(input);
-      if (url.includes("/mission")) {
+      if (url.includes("/api/core/projections/bundle")) {
         return new Response(JSON.stringify({ ok: false, data: null, error: { code: "X" } }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -177,7 +177,7 @@ describe("Production loading fix", () => {
       const bundle = await getProjectionBundle({ timeoutMs: 200, includeBinance: false });
       assert.equal(bundle.mission.zeroState, true);
       assert.ok(bundle.warnings.length > 0);
-      assert.ok(calls >= 2);
+      assert.ok(calls >= 1);
     } finally {
       global.fetch = prev;
     }

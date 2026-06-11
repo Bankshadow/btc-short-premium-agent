@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { useApi } from "@/components/use-api";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
@@ -36,16 +36,18 @@ export default function DashboardPage() {
     positions,
     risk,
     health,
+    binanceStatus: bundleBinance,
     warnings: bundleWarnings,
     reload: reloadBundle,
     loadedAt,
   } = useProjectionBundle(refreshKey);
+  const ctxFallback = useMemo(() => zeroDashboardUiContext(), []);
   const {
     data: ctx,
     error: ctxError,
     reload: reloadCtx,
   } = useApi<DashboardUiContext>("/api/core/ui/context", refreshKey, {
-    fallback: zeroDashboardUiContext(),
+    fallback: ctxFallback,
   });
 
   const [running, setRunning] = useState(false);
@@ -54,9 +56,10 @@ export default function DashboardPage() {
   const [showCloseReview, setShowCloseReview] = useState(false);
   const [refreshingPosition, setRefreshingPosition] = useState(false);
 
-  const data = ctx ?? zeroDashboardUiContext();
+  const data = ctx ?? ctxFallback;
   const preview = data.latestPreview;
   const lifecycle = deriveLifecycleDisplay(mission, data, evidence.valid);
+  const binance = data.binanceStatus ?? bundleBinance;
   const projectionWarnings = [
     ...bundleWarnings,
     ...(ctxError ? [`ui/context: ${ctxError}`] : []),
@@ -159,9 +162,9 @@ export default function DashboardPage() {
           },
           {
             title: "Binance",
-            value: data.binanceStatus?.status ?? "MISSING_ENV",
-            detail: data.binanceStatus?.baseUrl,
-            tone: statusFromHealth(data.binanceStatus?.status),
+            value: binance?.status ?? "MISSING_ENV",
+            detail: binance?.baseUrl,
+            tone: statusFromHealth(binance?.status),
           },
           {
             title: "Risk mode",

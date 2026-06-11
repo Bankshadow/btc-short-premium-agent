@@ -14,7 +14,7 @@ export function ProjectionWarning({
 
   return (
     <div className="ui-risk-banner ui-risk-banner-warning" role="alert">
-      <p className="font-semibold">Projection unavailable — showing safe zero-state</p>
+      <p className="font-semibold">Projection unavailable. Showing safe zero-state.</p>
       <ul className="mt-2 list-inside list-disc text-sm text-[var(--muted)]">
         {items.map((item) => (
           <li key={item}>{item}</li>

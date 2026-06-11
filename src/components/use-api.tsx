@@ -17,15 +17,18 @@ export function useApi<T>(
   options?: { enabled?: boolean; fallback?: T; timeoutMs?: number },
 ) {
   const enabled = options?.enabled !== false && Boolean(url);
-  const fallback = options?.fallback;
+  const hasFallback = options?.fallback !== undefined;
+  const fallbackRef = useRef(options?.fallback);
+  fallbackRef.current = options?.fallback;
   const timeoutMs = options?.timeoutMs ?? PROJECTION_FETCH_TIMEOUT_MS;
-  const [data, setData] = useState<T | null>(fallback ?? null);
+  const [data, setData] = useState<T | null>(options?.fallback ?? null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(enabled);
+  const [refreshing, setRefreshing] = useState(enabled && !hasFallback);
   const requestId = useRef(0);
 
   const reload = useCallback(async () => {
+    const fallback = fallbackRef.current;
     if (!enabled) {
       setLoading(false);
       setRefreshing(false);
@@ -35,7 +38,7 @@ export function useApi<T>(
     }
     const id = ++requestId.current;
     setRefreshing(true);
-    setLoading(!fallback);
+    setLoading(!hasFallback);
     setError(null);
     try {
       const json = normalizeApiPayload(await fetchJson<T>(url, { timeoutMs }), fallback);
@@ -53,9 +56,10 @@ export function useApi<T>(
         setRefreshing(false);
       }
     }
-  }, [enabled, fallback, timeoutMs, url]);
+  }, [enabled, hasFallback, timeoutMs, url]);
 
   useEffect(() => {
+    const fallback = fallbackRef.current;
     if (!enabled) {
       setLoading(false);
       setRefreshing(false);
@@ -66,13 +70,14 @@ export function useApi<T>(
 
     const id = ++requestId.current;
     setRefreshing(true);
-    setLoading(!fallback);
+    setLoading(!hasFallback);
     setError(null);
 
     const hardStop = setTimeout(() => {
       if (id === requestId.current) {
         setLoading(false);
         setRefreshing(false);
+        if (fallback !== undefined) setData(fallback);
       }
     }, timeoutMs + 250);
 
@@ -96,9 +101,10 @@ export function useApi<T>(
     })();
 
     return () => {
+      requestId.current += 1;
       clearTimeout(hardStop);
     };
-  }, [enabled, fallback, timeoutMs, url, refreshKey]);
+  }, [enabled, hasFallback, timeoutMs, url, refreshKey]);
 
   return { data, error, loading, refreshing, reload };
 }
