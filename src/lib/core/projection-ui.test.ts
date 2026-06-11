@@ -91,6 +91,7 @@ describe("Slice 7 — projection UI", () => {
       "reports/page.tsx",
       "settings/page.tsx",
       "operator/page.tsx",
+      "core/page.tsx",
     ];
     const forbidden = [
       "buildMissionSnapshot",
@@ -118,6 +119,7 @@ describe("Slice 7 — projection UI", () => {
       "reports/page.tsx",
       "settings/page.tsx",
       "operator/page.tsx",
+      "core/page.tsx",
     ];
     const forbidden = ["BINANCE_API_SECRET", "process.env.BINANCE", "API_SECRET"];
     for (const rel of pages) {

@@ -3,8 +3,16 @@
 import { useState } from "react";
 import Link from "next/link";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Badge, StatCard, useApi } from "@/components/use-api";
-import { ProjectionWarningPanel } from "@/components/projection-warning";
+import { Badge, useApi } from "@/components/use-api";
+import {
+  MetricCard,
+  PageHeader,
+  ProjectionWarning,
+  SafetyLabelsBar,
+  SectionCard,
+  StatusBadge,
+  statusFromHealth,
+} from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { zeroBinanceStatusApiResponse } from "@/lib/core/zero-state";
 import { BinanceTestnetDiagnosticsPanel } from "@/components/BinanceTestnetDiagnosticsPanel";
@@ -35,12 +43,21 @@ export default function SettingsPage() {
   const { data, error, reload } = useApi<BinanceStatusResponse>("/api/binance/status", 0, {
     fallback: binanceFallback,
   });
+  const healthFallback: EngineHealthReport = {
+    status: "OK",
+    message: "No health report yet.",
+    blocksExecution: false,
+    checkedAt: new Date().toISOString(),
+    issues: [],
+    orphanTrades: [],
+    missingPnlTrades: [],
+    stalePositionTrades: [],
+  };
   const {
     data: health,
     error: healthError,
-    loading: healthLoading,
     reload: reloadHealth,
-  } = useApi<EngineHealthReport>("/api/health/engine");
+  } = useApi<EngineHealthReport>("/api/health/engine", 0, { fallback: healthFallback });
   const { data: sandbox, reload: reloadSandbox } = useApi<LiveSandboxStatus>(
     "/api/live-sandbox/status",
   );
@@ -101,18 +118,18 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Settings</h2>
-          <p className="text-sm text-[var(--muted)]">Core projections · Testnet config &amp; production hardening</p>
-        </div>
-        <button type="button" className="btn" onClick={() => { reload(); reloadBundle(); reloadSandbox(); }}>
-          Refresh
-        </button>
-      </div>
-
-      <ProjectionWarningPanel
+    <div className="ui-dashboard-grid">
+      <PageHeader
+        title="Settings"
+        description="Binance testnet config, environment safety, operator state"
+        actions={
+          <button type="button" className="btn" onClick={() => { reload(); reloadBundle(); reloadSandbox(); }}>
+            Refresh
+          </button>
+        }
+      />
+      <SafetyLabelsBar />
+      <ProjectionWarning
         warnings={projectionWarnings}
         onRetry={() => {
           reload();
@@ -122,12 +139,33 @@ export default function SettingsPage() {
 
       {actionError ? <div className="error-box">{actionError}</div> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Core health" value={coreHealth?.status ?? "OK"} />
-        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
-        <StatCard label="Kill switch" value={settingsData.killSwitch.active ? "ACTIVE" : "OFF"} />
-        <StatCard label="Binance" value={settingsData.status} sub={settingsData.baseUrl} />
+      <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Core health" value={coreHealth?.status ?? "OK"} />
+        <MetricCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
+        <MetricCard label="Kill switch" value={settingsData.killSwitch.active ? "ACTIVE" : "OFF"} />
+        <MetricCard label="Binance" value={settingsData.status} description={settingsData.baseUrl} />
       </div>
+
+      <SectionCard title="Environment status" addon={settingsData.status} tone={statusFromHealth(settingsData.status)}>
+        <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+          <div>
+            <dt className="text-xs text-[var(--muted)]">API key</dt>
+            <dd>{settingsData.apiKeyPresent ? "present" : "missing"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[var(--muted)]">API secret</dt>
+            <dd>{settingsData.apiSecretPresent ? "present" : "missing"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[var(--muted)]">Proxy</dt>
+            <dd>{settingsData.proxyEnabled ? "enabled" : "disabled"}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-[var(--muted)]">Base URL</dt>
+            <dd className="font-mono text-xs break-all">{settingsData.baseUrl}</dd>
+          </div>
+        </dl>
+      </SectionCard>
 
       <BinanceTestnetDiagnosticsPanel data={settingsData} title="Binance testnet" />
 
@@ -143,9 +181,7 @@ export default function SettingsPage() {
             {checkingHealth ? "Checking…" : "Run health check"}
           </button>
         </div>
-        {healthLoading ? (
-          <p className="text-sm text-[var(--muted)]">Loading health report…</p>
-        ) : healthError ? (
+        {healthError ? (
           <p className="text-sm text-[var(--danger)]">{healthError}</p>
         ) : health ? (
           <>

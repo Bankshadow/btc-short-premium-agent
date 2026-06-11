@@ -1,7 +1,14 @@
 "use client";
 
-import { Badge, StatCard, useApi } from "@/components/use-api";
-import { ProjectionWarningPanel } from "@/components/projection-warning";
+import { Badge, useApi } from "@/components/use-api";
+import {
+  EventFeed,
+  MetricCard,
+  PageHeader,
+  ProjectionWarning,
+  SafetyLabelsBar,
+  SectionCard,
+} from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { getDefaultBinanceStatus } from "@/lib/core/projection-defaults";
 import {
@@ -166,21 +173,24 @@ export default function AiStatusPage() {
   const binanceData = binance.data ?? getDefaultBinanceStatus();
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">AI Status</h2>
-        <button type="button" className="btn" onClick={refreshAll}>
-          Refresh
-        </button>
-      </div>
+    <div className="ui-dashboard-grid">
+      <PageHeader
+        title="AI Status"
+        description="Latest run, event feed, lifecycle trace, advisory intelligence"
+        actions={
+          <button type="button" className="btn" onClick={refreshAll}>
+            Refresh
+          </button>
+        }
+      />
+      <SafetyLabelsBar />
+      <ProjectionWarning warnings={projectionWarnings} onRetry={refreshAll} />
 
-      <ProjectionWarningPanel warnings={projectionWarnings} onRetry={refreshAll} />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Core health" value={health?.status ?? "OK"} />
-        <StatCard label="Mission run" value={mission.latestRunId ?? "—"} />
-        <StatCard label="Decision log" value={mission.latestDecisionLogId ?? "—"} />
-        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
+      <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Core health" value={health?.status ?? "OK"} />
+        <MetricCard label="Mission run" value={mission.latestRunId ?? "—"} />
+        <MetricCard label="Decision log" value={mission.latestDecisionLogId ?? "—"} />
+        <MetricCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -304,28 +314,18 @@ export default function AiStatusPage() {
         </div>
       </div>
 
-      <div className="panel">        <h3 className="mb-3 font-semibold">Recent safety events</h3>
-        {safetyEvents.length === 0 ? (
-          <p className="empty-state">No safety events yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {safetyEvents.map((e) => (
-              <div key={e.eventId} className="rounded border border-[var(--border)] p-2 text-xs">
-                <span className="font-mono text-[var(--accent)]">{e.type}</span>
-                <span className="ml-2 text-[var(--muted)]">
-                  {new Date(e.timestamp).toLocaleString()}
-                </span>
-                {e.tradeId ? (
-                  <p className="mt-1 text-[var(--muted)]">trade: {e.tradeId}</p>
-                ) : null}
-                {e.previewId ? (
-                  <p className="mt-1 text-[var(--muted)]">preview: {e.previewId}</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <EventFeed
+        title="Recent safety events"
+        events={safetyEvents.map((e) => ({
+          id: e.eventId,
+          type: e.type,
+          timestamp: e.timestamp,
+          meta: [e.tradeId ? `trade: ${e.tradeId}` : null, e.previewId ? `preview: ${e.previewId}` : null]
+            .filter(Boolean)
+            .join(" · "),
+        }))}
+        emptyMessage="No safety events yet."
+      />
     </div>
   );
 }

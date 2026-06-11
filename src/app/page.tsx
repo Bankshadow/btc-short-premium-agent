@@ -2,15 +2,29 @@
 
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
-import { Badge, StatCard, useApi } from "@/components/use-api";
-import { ProjectionWarningPanel } from "@/components/projection-warning";
+import { useApi } from "@/components/use-api";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { ExecutionReviewModal } from "@/components/ExecutionReviewModal";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
 import {
+  EventFeed,
+  LifecycleTimeline,
+  MetricCard,
+  PageHeader,
+  ProgressCard,
+  ProjectionWarning,
+  RiskBanner,
+  SafetyLabelsBar,
+  SafetyPanel,
+  SectionCard,
+  StatusBadge,
+  statusFromHealth,
+} from "@/components/ui";
+import {
   zeroDashboardUiContext,
   type DashboardUiContext,
 } from "@/lib/core/ui-context-zero";
+import { deriveLifecycleDisplay } from "@/lib/ui/lifecycle-display";
 
 export default function DashboardPage() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -23,8 +37,8 @@ export default function DashboardPage() {
     risk,
     health,
     warnings: bundleWarnings,
-    errors: bundleErrors,
     reload: reloadBundle,
+    loadedAt,
   } = useProjectionBundle(refreshKey);
   const {
     data: ctx,
@@ -33,15 +47,26 @@ export default function DashboardPage() {
   } = useApi<DashboardUiContext>("/api/core/ui/context", refreshKey, {
     fallback: zeroDashboardUiContext(),
   });
-  const reload = () => {
-    reloadBundle();
-    reloadCtx();
-  };
+
   const [running, setRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const [showExecutionReview, setShowExecutionReview] = useState(false);
   const [showCloseReview, setShowCloseReview] = useState(false);
   const [refreshingPosition, setRefreshingPosition] = useState(false);
+
+  const data = ctx ?? zeroDashboardUiContext();
+  const preview = data.latestPreview;
+  const lifecycle = deriveLifecycleDisplay(mission, data, evidence.valid);
+  const projectionWarnings = [
+    ...bundleWarnings,
+    ...(ctxError ? [`ui/context: ${ctxError}`] : []),
+  ];
+
+  function refresh() {
+    setRefreshKey((k) => k + 1);
+    reloadBundle();
+    reloadCtx();
+  }
 
   async function startAi() {
     setRunning(true);
@@ -56,11 +81,6 @@ export default function DashboardPage() {
     }
   }
 
-  function refresh() {
-    setRefreshKey((k) => k + 1);
-    void reload();
-  }
-
   async function refreshPosition() {
     setRefreshingPosition(true);
     try {
@@ -71,345 +91,248 @@ export default function DashboardPage() {
     }
   }
 
-  const data = ctx ?? zeroDashboardUiContext();
-  const projectionWarnings = [
-    ...bundleWarnings,
-    ...(ctxError ? [`ui/context: ${ctxError}`] : []),
-  ];
-  const preview = data.latestPreview;
-  const safetyTone =
-    data.executionSafetyStatus === "ready"
-      ? "safe"
-      : data.executionSafetyStatus === "no_preview"
-        ? "wait"
-        : "blocked";
+  const pnlIntent =
+    pnl.totalNetPnl > 0 ? "positive" : pnl.totalNetPnl < 0 ? "negative" : "neutral";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Dashboard</h2>
-          <p className="text-sm text-[var(--muted)]">
-            Core projections · Mission ${mission.startCapital.toLocaleString()} → $
-            {mission.targetCapital.toLocaleString()}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="btn btn-primary" disabled={running} onClick={startAi}>
-            {running ? "Running…" : "Start AI"}
-          </button>
-          <button type="button" className="btn" onClick={refresh}>
-            Refresh
-          </button>
-        </div>
-      </div>
+    <div className="ui-dashboard-grid">
+      <PageHeader
+        title="Mission Overview"
+        description={`Testnet mission $${mission.startCapital.toLocaleString()} → $${mission.targetCapital.toLocaleString()}`}
+        updatedAt={loadedAt ? new Date(loadedAt).toLocaleTimeString() : undefined}
+        actions={
+          <>
+            <button type="button" className="btn btn-primary" disabled={running} onClick={startAi}>
+              {running ? "Running…" : "Start AI"}
+            </button>
+            <button type="button" className="btn" onClick={refresh}>
+              Refresh
+            </button>
+          </>
+        }
+      />
 
-      <ProjectionWarningPanel warnings={projectionWarnings} onRetry={refresh} />
+      <SafetyLabelsBar />
+
+      <ProjectionWarning warnings={projectionWarnings} onRetry={refresh} />
 
       {runError ? <div className="error-box">{runError}</div> : null}
 
       {data.readyForMvp5 === false && data.readyForMvp5Message ? (
-        <div className="panel border border-[var(--border)] text-sm text-[var(--muted)]">
+        <RiskBanner variant="info" title="MVP5 readiness">
           {data.readyForMvp5Message}
-        </div>
+        </RiskBanner>
       ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Current equity" value={`$${mission.currentEquity.toLocaleString()}`} />
-        <StatCard label="Progress" value={`${mission.progressPct}%`} />
-        <StatCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} />
-        <StatCard
-          label="Evidence"
-          value={`${evidence.valid}/${evidence.required}`}
-        />
-        <StatCard label="Open" value={String(positions.openTradeCount)} />
-        <StatCard label="Trades closed" value={String(trades.closed.length)} />
-        <StatCard label="Win / Loss" value={`${mission.win}/${mission.loss}/${mission.breakeven ?? 0}`} />
-        <StatCard label="Regime" value={data.latestRegime ?? "UNKNOWN"} />
-        <StatCard label="Portfolio risk" value={data.portfolioRiskStatus ?? "OK"} />
-        <StatCard label="Exec safety" value={data.executionSafetyStatus ?? "no_preview"} />
-        <StatCard
-          label="Core health"
-          value={health?.status ?? "OK"}
-          sub={health?.blockingIssues?.length ? `${health.blockingIssues.length} blocker(s)` : undefined}
-        />
-        <StatCard
-          label="Binance"
-          value={data.binanceStatus?.status ?? "MISSING_ENV"}
-          sub={data.binanceStatus?.baseUrl ?? "https://demo-fapi.binance.com"}
-        />
-        <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
-      </div>
 
       {data.noTradeBlockReason ? (
-        <div className="panel text-sm text-[var(--danger)]">
-          No-trade rule: {data.noTradeBlockReason}
-        </div>
+        <RiskBanner variant="blocked" title="No-trade rule active">
+          {data.noTradeBlockReason}
+        </RiskBanner>
       ) : null}
 
-      {data.swarmReport ? (
-        <div className="panel text-sm">
-          <p>
-            <span className="text-[var(--muted)]">Scenario swarm:</span>{" "}
-            {data.swarmReport.likelyScenario} · signal{" "}
-            <strong>{data.swarmReport.advisorySignal}</strong> ·{" "}
-            {data.swarmReport.recommendedAction}
-          </p>
-          <p className="text-xs text-[var(--muted)]">{data.swarmReport.safetyNote}</p>
-        </div>
-      ) : null}
-
-      <div className="panel grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <p>
-          <span className="text-[var(--muted)]">Latest run:</span>{" "}
-          {mission.latestRunId ?? "—"}
-        </p>
-        <p>
-          <span className="text-[var(--muted)]">Decision log:</span>{" "}
-          {mission.latestDecisionLogId ?? "—"}
-        </p>
-        <p>
-          <span className="text-[var(--muted)]">Latest preview:</span>{" "}
-          {preview?.previewId ?? "—"}
-        </p>
-        <p>
-          <span className="text-[var(--muted)]">Next action:</span> {data.nextAction ?? "—"}
-        </p>
+      <div className="ui-dashboard-metrics">
+        <MetricCard label="Current equity" value={`$${mission.currentEquity.toLocaleString()}`} />
+        <MetricCard label="Target equity" value={`$${mission.targetCapital.toLocaleString()}`} />
+        <MetricCard label="Progress" value={`${mission.progressPct}%`} tag="mission" />
+        <MetricCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} intent={pnlIntent} />
+        <MetricCard label="Total trades" value={String(mission.totalTrades)} />
+        <MetricCard label="Open trades" value={String(trades.open.length)} />
+        <MetricCard label="Closed trades" value={String(trades.closed.length)} />
       </div>
 
-      {data.binanceStatus ? (
-        <div className="panel space-y-2 text-sm">
-          <p>
-            Testnet: <strong>{data.binanceStatus.status}</strong> · Proxy{" "}
-            {data.binanceStatus.proxyEnabled ? "on" : "off"} · Keys{" "}
-            {data.binanceStatus.apiKeyPresent && data.binanceStatus.apiSecretPresent
-              ? "present"
-              : "missing"}
-          </p>
-          <p className="text-[var(--muted)]">{data.binanceStatus.reason}</p>
-        </div>
+      <SafetyPanel
+        headerAddon={health?.status ?? "OK"}
+        items={[
+          {
+            title: "Core health",
+            value: health?.status ?? "OK",
+            detail:
+              health?.blockingIssues?.length
+                ? `${health.blockingIssues.length} blocker(s)`
+                : `${health?.warnings?.length ?? 0} warning group(s)`,
+            tone: statusFromHealth(health?.status),
+          },
+          {
+            title: "Live locked",
+            value: risk.liveLocked ? "true" : "false",
+            tone: risk.liveLocked ? "ok" : "blocked",
+          },
+          {
+            title: "Binance",
+            value: data.binanceStatus?.status ?? "MISSING_ENV",
+            detail: data.binanceStatus?.baseUrl,
+            tone: statusFromHealth(data.binanceStatus?.status),
+          },
+          {
+            title: "Risk mode",
+            value: (risk as { mode?: string }).mode ?? "DEFENSIVE",
+            detail: (risk as { status?: string }).status ?? "SAFE",
+            tone: statusFromHealth((risk as { status?: string }).status),
+          },
+        ]}
+      />
+
+      {(health?.blockingIssues?.length ?? 0) > 0 ? (
+        <RiskBanner variant="blocked" title="Execution blockers">
+          <ul className="list-inside list-disc">
+            {health!.blockingIssues.map((b) => (
+              <li key={b.code}>
+                {b.code}: {b.message}
+              </li>
+            ))}
+          </ul>
+        </RiskBanner>
       ) : null}
 
-      {data.latestOpenTrade ? (
-        <div className="panel space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-semibold">Open position</h3>
-            {data.reconciliation ? (
-              <Badge
-                tone={
-                  data.reconciliation.status === "OK"
-                    ? "safe"
-                    : data.reconciliation.status === "WARNING"
-                      ? "wait"
-                      : "blocked"
-                }
-              >
-                Reconciliation: {data.reconciliation.status}
-              </Badge>
-            ) : null}
-          </div>
-          {data.latestPosition ? (
-            <>
-              <p className="text-sm font-medium">
-                {data.latestPosition.symbol} {data.latestPosition.side} · qty{" "}
-                {data.latestPosition.qty}
+      <LifecycleTimeline
+        activePhase={lifecycle.activePhase}
+        completedPhases={lifecycle.completedPhases}
+        fields={lifecycle.fields}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard
+          title="Trade / Position"
+          addon={data.reconciliation?.status ?? "OK"}
+          tone={statusFromHealth(data.reconciliation?.status)}
+        >
+          {data.latestOpenTrade ? (
+            <div className="space-y-3 text-sm">
+              <p className="font-medium">
+                {data.latestOpenTrade.symbol} {data.latestOpenTrade.side} · qty {data.latestOpenTrade.qty}
               </p>
-              <div className="grid gap-2 text-sm sm:grid-cols-2">
-                <p>
-                  Entry:{" "}
-                  {data.latestPosition.entryPrice != null
-                    ? data.latestPosition.entryPrice
-                    : "—"}
-                </p>
-                <p>
-                  Mark:{" "}
-                  {data.latestPosition.markPrice != null ? data.latestPosition.markPrice : "—"}
-                </p>
-                <p>
-                  Unrealized PnL:{" "}
-                  {data.latestPosition.unrealizedPnl != null
-                    ? `$${data.latestPosition.unrealizedPnl.toFixed(4)}`
-                    : "—"}
-                </p>
-                <p className="text-[var(--muted)]">
-                  Refreshed:{" "}
-                  {new Date(data.latestPosition.refreshedAt).toLocaleString()} ·{" "}
-                  {data.latestPosition.status}
-                </p>
+              {data.latestPosition ? (
+                <dl className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Entry</dt>
+                    <dd>{data.latestPosition.entryPrice ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Mark</dt>
+                    <dd>{data.latestPosition.markPrice ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Unrealized PnL</dt>
+                    <dd>
+                      {data.latestPosition.unrealizedPnl != null
+                        ? `$${data.latestPosition.unrealizedPnl.toFixed(4)}`
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-[var(--muted)]">Status</dt>
+                    <dd>{data.latestPosition.status}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="text-[var(--muted)]">Refresh position to sync with exchange.</p>
+              )}
+              <p className="text-xs text-[var(--muted)]">
+                Reconciliation: {data.reconciliation?.status ?? "—"} · open count{" "}
+                {positions.openTradeCount}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="btn" disabled={refreshingPosition} onClick={refreshPosition}>
+                  {refreshingPosition ? "Refreshing…" : "Refresh position"}
+                </button>
+                <button type="button" className="btn btn-primary" onClick={() => setShowCloseReview(true)}>
+                  Review close
+                </button>
               </div>
-            </>
+            </div>
+          ) : !data.latestOpenTrade && positions.openTradeCount === 0 && data.latestClosedTrade ? (
+            <div className="space-y-2 text-sm">
+              <StatusBadge
+                label={data.latestClosedTrade.result}
+                tone={
+                  data.latestClosedTrade.result === "WIN"
+                    ? "ok"
+                    : data.latestClosedTrade.result === "LOSS"
+                      ? "blocked"
+                      : "warning"
+                }
+              />
+              <p>
+                Latest closed: {data.latestClosedTrade.symbol} ·{" "}
+                {data.latestClosedTrade.status === "CLOSED_PENDING_PNL"
+                  ? "PnL pending data"
+                  : `$${data.latestClosedTrade.netPnl.toFixed(2)}`}
+              </p>
+            </div>
           ) : (
-            <p className="text-sm text-[var(--muted)]">
-              {data.latestOpenTrade.symbol} {data.latestOpenTrade.side} · qty{" "}
-              {data.latestOpenTrade.qty} — refresh to sync with Binance.
-            </p>
+            <p className="empty-state">No open position — projection shows {positions.openTradeCount} active.</p>
           )}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn"
-              disabled={refreshingPosition}
-              onClick={refreshPosition}
-            >
-              {refreshingPosition ? "Refreshing…" : "Refresh position"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setShowCloseReview(true)}
-            >
-              Review close
-            </button>
-          </div>
-        </div>
-      ) : null}
+        </SectionCard>
 
-      {!data.latestOpenTrade && positions.openTradeCount === 0 && data.latestClosedTrade ? (
-        <div className="panel space-y-2 border border-[var(--success)]/30">
-          <h3 className="font-semibold text-[var(--success)]">Latest closed trade</h3>
-          <div className="flex flex-wrap gap-2">
-            <Badge
-              tone={
-                data.latestClosedTrade.result === "WIN"
-                  ? "safe"
-                  : data.latestClosedTrade.result === "LOSS"
-                    ? "blocked"
-                    : "wait"
-              }
-            >
-              {data.latestClosedTrade.result}
-            </Badge>
-          </div>
-          <p className="text-sm">
-            {data.latestClosedTrade.symbol} {data.latestClosedTrade.side} ·{" "}
-            {data.latestClosedTrade.status === "CLOSED_PENDING_PNL"
-              ? "realized PnL pending data"
-              : `$${data.latestClosedTrade.netPnl.toFixed(2)} net`}
-          </p>
-          {data.latestClosedTrade.closeOrderId ? (
-            <p className="text-xs text-[var(--muted)]">
-              close orderId: {data.latestClosedTrade.closeOrderId} · closed{" "}
-              {new Date(data.latestClosedTrade.closedAt).toLocaleString()}
+        <ProgressCard
+          title="Evidence & Learning"
+          current={evidence.valid}
+          required={evidence.required}
+          statusLabel={evidence.readinessStatus ?? "COLLECTING"}
+          tone={evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
+          message={evidence.message}
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard title="AI Intelligence" addon="ADVISORY">
+          <div className="space-y-2 text-sm">
+            <p>
+              Verdict:{" "}
+              <StatusBadge
+                label={mission.latestVerdict ?? "IDLE"}
+                tone={
+                  mission.latestVerdict === "TRADE"
+                    ? "ok"
+                    : mission.latestVerdict === "BLOCKED"
+                      ? "blocked"
+                      : "warning"
+                }
+              />
             </p>
-          ) : null}
-        </div>
-      ) : null}
+            <p className="text-[var(--muted)]">{data.nextAction}</p>
+            {data.swarmReport ? (
+              <p>
+                MiroFish: {data.swarmReport.likelyScenario} · {data.swarmReport.advisorySignal} ·{" "}
+                {data.swarmReport.recommendedAction}
+              </p>
+            ) : (
+              <p className="text-[var(--muted)]">No swarm advisory report.</p>
+            )}
+            <p className="text-xs text-[var(--muted)]">{data.scenarioNote ?? data.swarmReport?.safetyNote}</p>
+          </div>
+        </SectionCard>
+
+        <SectionCard title="Latest preview" addon={preview?.status ?? "NONE"}>
+          {preview ? (
+            <div className="space-y-2 text-sm">
+              <p>
+                {preview.symbol} {preview.side} · ${preview.notionalUsd} · qty {preview.estimatedQty}
+              </p>
+              <p className="text-xs text-[var(--muted)]">
+                Expires {new Date(preview.expiresAt).toLocaleString()}
+              </p>
+              <button type="button" className="btn btn-primary" onClick={() => setShowExecutionReview(true)}>
+                Review preview
+              </button>
+            </div>
+          ) : (
+            <p className="empty-state">No active preview.</p>
+          )}
+        </SectionCard>
+      </div>
 
       {data.latestClosePreview ? (
-        <div className="panel space-y-3">
-          <h3 className="font-semibold">Close preview</h3>
+        <SectionCard title="Close preview" addon={data.latestClosePreview.status}>
           <p className="text-sm">
             {data.latestClosePreview.symbol} · close {data.latestClosePreview.sideToClose} · qty{" "}
             {data.latestClosePreview.qty}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Badge tone={data.latestClosePreview.status === "ACTIVE" ? "safe" : "blocked"}>
-              {data.latestClosePreview.status}
-            </Badge>
-            <Badge tone="safe">reduceOnly</Badge>
-          </div>
           <p className="text-xs text-[var(--muted)]">
-            Expires {new Date(data.latestClosePreview.expiresAt).toLocaleString()}
+            reduceOnly · expires {new Date(data.latestClosePreview.expiresAt).toLocaleString()}
           </p>
-          {data.latestClosePreview.blockReasons.length > 0 ? (
-            <ul className="list-inside list-disc text-sm text-[var(--danger)]">
-              {data.latestClosePreview.blockReasons.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          ) : null}
-          {data.latestCloseReview ? (
-            <p className="text-sm text-[var(--muted)]">
-              Safety review: {data.latestCloseReview.allowed ? "allowed" : "blocked"} ·{" "}
-              {new Date(data.latestCloseReview.reviewedAt).toLocaleString()}
-            </p>
-          ) : null}
-          {data.latestCloseReview?.blockers && data.latestCloseReview.blockers.length > 0 ? (
-            <ul className="list-inside list-disc text-sm text-[var(--danger)]">
-              {data.latestCloseReview.blockers.map((b) => (
-                <li key={b.code}>{b.code}</li>
-              ))}
-            </ul>
-          ) : null}
-          <p className="text-xs text-[var(--muted)]">
-            Run safety review, then execute reduce-only close (MVP 5C).
-          </p>
-        </div>
+        </SectionCard>
       ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="panel space-y-3">
-          <h3 className="font-semibold">Latest decision</h3>
-          <div className="flex flex-wrap gap-2">
-            {mission.latestVerdict ? (
-              <Badge
-                tone={
-                  mission.latestVerdict === "BLOCKED"
-                    ? "blocked"
-                    : mission.latestVerdict === "TRADE"
-                      ? "safe"
-                      : "wait"
-                }
-              >
-                {mission.latestVerdict}
-              </Badge>
-            ) : (
-              <Badge tone="wait">IDLE</Badge>
-            )}
-            <Badge tone="safe">Live locked</Badge>
-            <Badge tone={safetyTone}>{data.executionSafetyStatus ?? "no_preview"}</Badge>
-          </div>
-          <p className="text-sm text-[var(--muted)]">{data.nextAction}</p>
-          {mission.latestVerdictReasons?.some((r) => r.includes("Scenario")) ? (
-            <p className="text-xs text-[var(--muted)]">
-              {mission.latestVerdictReasons.find((r) => r.includes("Scenario") || r.includes("swarm")) ??
-                mission.latestVerdictReasons[mission.latestVerdictReasons.length - 1]}
-            </p>
-          ) : null}
-          {mission.latestVerdictReasons?.some((r) => r.includes("No-trade rule")) ? (
-            <Badge tone="blocked">No-trade rule active</Badge>
-          ) : null}
-        </div>
-
-        <div className="panel space-y-3">
-          <h3 className="font-semibold">Latest preview</h3>
-          {preview ? (
-            <>
-              <p className="text-sm">
-                {preview.symbol} {preview.side} · ${preview.notionalUsd} · qty{" "}
-                {preview.estimatedQty}
-              </p>
-              <p className="text-xs text-[var(--muted)]">
-                {preview.status} · expires {new Date(preview.expiresAt).toLocaleString()}
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => setShowExecutionReview(true)}
-                >
-                  Review preview
-                </button>
-              </div>
-              {data.latestOpenTrade ? (
-                <div className="rounded border border-[var(--success)]/30 p-2 text-xs">
-                  <p className="font-medium text-[var(--success)]">Open testnet trade</p>
-                  <p>
-                    {data.latestOpenTrade.symbol} {data.latestOpenTrade.side} · qty{" "}
-                    {data.latestOpenTrade.qty}
-                  </p>
-                  <p className="text-[var(--muted)]">
-                    orderId {data.latestOpenTrade.orderId} ·{" "}
-                    {new Date(data.latestOpenTrade.openedAt).toLocaleString()}
-                  </p>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="empty-state">No active preview.</p>
-          )}
-        </div>
-      </div>
 
       {showExecutionReview && preview ? (
         <ExecutionReviewModal

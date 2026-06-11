@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { fetchJson } from "@/lib/api/fetch-json";
 import { Badge, StatCard, useApi } from "@/components/use-api";
-import { ProjectionWarningPanel } from "@/components/projection-warning";
+import {
+  MetricCard,
+  PageHeader,
+  ProgressCard,
+  ProjectionWarning,
+  SafetyLabelsBar,
+  SectionCard,
+} from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
@@ -124,20 +131,18 @@ export default function ReportsPage() {
   const tone = gateTone(gate.status);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Reports</h2>
-          <p className="text-sm text-[var(--muted)]">
-            MVP 24 · Generated {new Date(reportData.generatedAt).toLocaleString()}
-          </p>
-        </div>
-        <button type="button" className="btn" onClick={reload}>
-          Refresh
-        </button>
-      </div>
-
-      <ProjectionWarningPanel
+    <div className="ui-dashboard-grid">
+      <PageHeader
+        title="Reports"
+        description={`MVP 24 · Generated ${new Date(reportData.generatedAt).toLocaleString()}`}
+        actions={
+          <button type="button" className="btn" onClick={reload}>
+            Refresh
+          </button>
+        }
+      />
+      <SafetyLabelsBar />
+      <ProjectionWarning
         warnings={projectionWarnings}
         onRetry={() => {
           reload();
@@ -152,31 +157,26 @@ export default function ReportsPage() {
         <section className="panel text-sm text-[var(--muted)]">{reportData.readyForMvp5Message}</section>
       ) : null}
 
-      <section className="space-y-3">
-        <h3 className="text-lg font-semibold">Mission Snapshot (core projection)</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Current equity"
-            value={`$${projMission.currentEquity.toLocaleString()}`}
-          />
-          <StatCard label="Progress" value={`${projMission.progressPct}%`} />
-          <StatCard label="Net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
-          <StatCard
+      <SectionCard title="Mission summary (projection)">
+        <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-3">
+          <MetricCard label="Current equity" value={`$${projMission.currentEquity.toLocaleString()}`} />
+          <MetricCard label="Progress" value={`${projMission.progressPct}%`} />
+          <MetricCard label="Net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
+          <MetricCard
             label="Trades"
-            value={`${projMission.totalTrades} (${projMission.win}W/${projMission.loss}L/${projMission.breakeven ?? 0}BE)`}
+            value={`${projMission.totalTrades} (${projMission.win}W/${projMission.loss}L)`}
           />
-          <StatCard label="Core health" value={projHealth?.status ?? "OK"} />
-          <StatCard label="Live locked" value={projRisk.liveLocked ? "true" : "false"} />
+          <MetricCard label="Core health" value={projHealth?.status ?? "OK"} />
+          <MetricCard label="Live locked" value={projRisk.liveLocked ? "true" : "false"} />
         </div>
-      </section>
+      </SectionCard>
 
-      <section className="panel space-y-3">
-        <h3 className="text-lg font-semibold">Realized PnL (core projection)</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Realized count" value={String(projPnl.realizedCount)} />
-          <StatCard label="Total net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
-          <StatCard label="Legacy closed count" value={String(pnlSummary.count)} sub="Legacy reference only" />
-          <StatCard label="Legacy avg PnL" value={`$${pnlSummary.averagePnl.toFixed(2)}`} sub="Legacy reference only" />
+      <SectionCard title="Realized PnL (projection)">
+        <div className="ui-dashboard-metrics sm:grid-cols-2">
+          <MetricCard label="Realized count" value={String(projPnl.realizedCount)} />
+          <MetricCard label="Total net PnL" value={`$${projPnl.totalNetPnl.toFixed(2)}`} />
+          <MetricCard label="Legacy closed count" value={String(pnlSummary.count)} description="Legacy reference only" />
+          <MetricCard label="Legacy avg PnL" value={`$${pnlSummary.averagePnl.toFixed(2)}`} description="Legacy reference only" />
         </div>
         {pnlSummary.bestTrade ? (
           <p className="text-sm text-[var(--muted)]">
@@ -190,23 +190,20 @@ export default function ReportsPage() {
         {reportData.positionStats.realizedPnlPending ? (
           <Badge tone="wait">Some closed positions pending PnL calculation</Badge>
         ) : null}
-      </section>
+      </SectionCard>
 
-      <section className="panel space-y-3">
-        <h3 className="text-lg font-semibold">Evidence Progress (core projection)</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="wait">
-            Trust {projEvidence.valid}/{projEvidence.required}
-          </Badge>
-          <Badge tone={projEvidence.readinessStatus === "COMPLETE" ? "safe" : "wait"}>
-            {projEvidence.readinessStatus ?? "COLLECTING"}
-          </Badge>
-          <Badge tone="safe">Live locked</Badge>
-        </div>
-        <p className="text-sm text-[var(--muted)]">
-          {projEvidence.valid} valid evidence trades · {projEvidence.rejected}{" "}
-          rejected · {projEvidence.required - projEvidence.valid} remaining to
-          target.
+      <ProgressCard
+        title="Evidence progress (projection)"
+        current={projEvidence.valid}
+        required={projEvidence.required}
+        statusLabel={projEvidence.readinessStatus ?? "COLLECTING"}
+        tone={projEvidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
+        message={projEvidence.message}
+      />
+
+      <SectionCard title="Evidence trade details">
+        <p className="text-sm text-[var(--muted)] mb-3">
+          {projEvidence.rejected} rejected · {projEvidence.required - projEvidence.valid} remaining
         </p>
         {(projEvidence.trades?.length ?? 0) > 0 ? (
           <div className="space-y-2">
@@ -221,7 +218,7 @@ export default function ReportsPage() {
             ))}
           </div>
         ) : null}
-      </section>
+      </SectionCard>
 
       <section className="panel space-y-2 border border-dashed border-[var(--border)]">
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">

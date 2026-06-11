@@ -18,11 +18,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-[var(--border)] bg-[var(--panel)]">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+      <header className="border-b-2 border-[var(--ring-pop)] bg-[var(--panel)]">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4">
           <div>
-            <p className="text-xs uppercase tracking-wider text-[var(--muted)]">v2 core</p>
-            <h1 className="text-lg font-bold">BTC Short Premium Agent</h1>
+            <p className="text-xs uppercase tracking-wider text-[var(--muted)]">v2 · testnet only</p>
+            <h1 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
+              BTC Short Premium Agent
+            </h1>
           </div>
           <nav className="flex flex-wrap gap-2">
             {NAV.map((item) => {
@@ -44,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
     </div>
   );
 }

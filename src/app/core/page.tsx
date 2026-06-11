@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Badge, StatCard, useApi } from "@/components/use-api";
+import { Badge, useApi } from "@/components/use-api";
+import { MetricCard, PageHeader, SafetyLabelsBar, SectionCard } from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
 import type { AggregatedCoreHealthWarning } from "@/lib/core/health-warning-aggregate";
 import type { CoreHealthReport } from "@/lib/core/core-health";
@@ -193,51 +194,42 @@ export default function CoreMonitorPage() {
       : "Fix pending PnL and lifecycle gaps before CORE_ENGINE_STABLE.";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold">Core Monitor</h2>
-          <p className="text-sm text-[var(--muted)]">
-            Projection health · consistency · parity · quick navigation
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            reloadBundle();
-            void consistency.reload();
-            void parity.reload();
-            void coreHealth.reload();
-          }}
-        >
-          Refresh
-        </button>
-      </div>
+    <div className="ui-dashboard-grid">
+      <PageHeader
+        title="Core Monitor"
+        description="Technical diagnostics — health, consistency, parity, APIs"
+        actions={
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              reloadBundle();
+              void consistency.reload();
+              void parity.reload();
+              void coreHealth.reload();
+            }}
+          >
+            Refresh
+          </button>
+        }
+      />
+      <SafetyLabelsBar />
 
-      <div className="panel border-[var(--accent)]">
-        <p className="text-sm font-semibold">Next action</p>
-        <p className="mt-1 text-sm text-[var(--muted)]">{nextAction}</p>
-      </div>
+      <SectionCard title="Next action" tone="warning">
+        <p className="text-sm text-[var(--muted)]">{nextAction}</p>
+      </SectionCard>
 
-      <section className="space-y-3">
-        <h3 className="text-lg font-semibold">System status</h3>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Core health" value={healthData?.status ?? "—"} />
-          <StatCard label="UI consistency" value={consistencyLabel(consistency.data)} />
-          <StatCard label="Projection parity" value={parity.data?.status ?? "—"} />
-          <StatCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
-          <StatCard label="Equity" value={`$${mission.currentEquity.toLocaleString()}`} />
-          <StatCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} />
-          <StatCard
-            label="Evidence"
-            value={`${evidence.valid}/${evidence.required}`}
-          />
-          <StatCard
-            label="Trades"
-            value={`${trades.open.length} open / ${trades.closed.length} closed`}
-          />
-          <StatCard
+      <SectionCard title="System status">
+        <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-3">
+          <MetricCard label="Core health" value={healthData?.status ?? "—"} />
+          <MetricCard label="UI consistency" value={consistencyLabel(consistency.data)} />
+          <MetricCard label="Projection parity" value={parity.data?.status ?? "—"} />
+          <MetricCard label="Live locked" value={risk.liveLocked ? "true" : "false"} />
+          <MetricCard label="Equity" value={`$${mission.currentEquity.toLocaleString()}`} />
+          <MetricCard label="Net PnL" value={`$${pnl.totalNetPnl.toFixed(2)}`} />
+          <MetricCard label="Evidence" value={`${evidence.valid}/${evidence.required}`} />
+          <MetricCard label="Trades" value={`${trades.open.length} open / ${trades.closed.length} closed`} />
+          <MetricCard
             label="Health warnings"
             value={String(healthData?.rawWarningCount ?? healthData?.warnings.length ?? 0)}
           />
@@ -259,7 +251,7 @@ export default function CoreMonitorPage() {
             data.
           </p>
         )}
-      </section>
+      </SectionCard>
 
       {staleWarnings.length > 0 ? (
         <div className="panel space-y-2 border-[var(--danger)]">

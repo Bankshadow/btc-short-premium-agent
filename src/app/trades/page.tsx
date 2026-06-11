@@ -1,9 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Badge, StatCard, useApi } from "@/components/use-api";
-import { ProjectionWarningPanel } from "@/components/projection-warning";
+import { useApi } from "@/components/use-api";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
+import { useProjectionBundle } from "@/components/use-projection-bundle";
+import {
+  MetricCard,
+  PageHeader,
+  ProjectionWarning,
+  SafetyLabelsBar,
+  SectionCard,
+  StatusBadge,
+} from "@/components/ui";
 import { getDefaultTradeProjection } from "@/lib/core/projection-defaults";
 
 interface TradesResponse {
@@ -47,6 +55,7 @@ interface TradesResponse {
     result: string;
     learningId: string | null;
     status: string;
+    pnlStatus?: string;
     closeOrderId: string | null;
     decisionLogId: string | null;
     closedAt: string;
@@ -57,10 +66,26 @@ interface TradesResponse {
     realizedPnl: number;
     executionCount: number;
   };
+  staleOpenWarnings?: Array<{ tradeId: string; projectedStatus: string }>;
+}
+
+function pnlStatusLabel(trade: TradesResponse["closed"][number]): string {
+  if (trade.status === "CLOSED_PENDING_PNL" || trade.result === "PENDING_PNL") {
+    return "PENDING_PNL";
+  }
+  if (trade.pnlStatus === "PENDING_DATA") return "PENDING_PNL";
+  return "PNL_REALIZED";
+}
+
+function lifecycleLabel(open: boolean, hasClosePreview: boolean): string {
+  if (open && hasClosePreview) return "Close preview";
+  if (open) return "Monitor";
+  return "Closed";
 }
 
 export default function TradesPage() {
   const fallback = getDefaultTradeProjection();
+  const { evidence, warnings: bundleWarnings } = useProjectionBundle();
   const { data, error, reload } = useApi<TradesResponse>("/api/core/projections/trades", 0, {
     fallback,
   });
@@ -68,47 +93,68 @@ export default function TradesPage() {
 
   const tradeData = data ?? fallback;
   const closeTrade = tradeData.open.find((t) => t.tradeId === closeTradeId);
+  const evidenceByTrade = new Map(
+    (evidence.trades ?? []).map((t) => [t.tradeId, t.status]),
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Trades</h2>
-        <button type="button" className="btn" onClick={reload}>
-          Refresh
-        </button>
-      </div>
-
-      <ProjectionWarningPanel
-        warnings={error ? [`trades projection: ${error}`] : []}
+    <div className="ui-dashboard-grid">
+      <PageHeader
+        title="Trades"
+        description="Trade projection — journal-derived open/closed state"
+        actions={
+          <button type="button" className="btn" onClick={reload}>
+            Refresh
+          </button>
+        }
+      />
+      <SafetyLabelsBar />
+      <ProjectionWarning
+        warnings={[...bundleWarnings, ...(error ? [`trades: ${error}`] : [])]}
         onRetry={reload}
       />
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label="Executions" value={String(tradeData.summary.executionCount)} />
-        <StatCard label="Open" value={String(tradeData.summary.openCount)} />
-        <StatCard label="Closed" value={String(tradeData.summary.closedCount)} />
-        <StatCard label="Realized PnL" value={`$${tradeData.summary.realizedPnl.toFixed(2)}`} />
+      <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Executions" value={String(tradeData.summary.executionCount)} />
+        <MetricCard label="Open" value={String(tradeData.summary.openCount)} />
+        <MetricCard label="Closed" value={String(tradeData.summary.closedCount)} />
+        <MetricCard label="Realized PnL" value={`$${tradeData.summary.realizedPnl.toFixed(2)}`} />
       </div>
 
-      <div className="panel">
-        <h3 className="mb-3 font-semibold">Open testnet trades</h3>
+      {(tradeData.staleOpenWarnings?.length ?? 0) > 0 ? (
+        <SectionCard title="Stale reconciliation" addon="WARNING" tone="warning">
+          <ul className="space-y-1 text-sm">
+            {tradeData.staleOpenWarnings!.map((w) => (
+              <li key={w.tradeId}>
+                {w.tradeId} → {w.projectedStatus}
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
+      ) : null}
+
+      <SectionCard title="Open testnet trades">
         {tradeData.open.length === 0 ? (
           <p className="empty-state">No open trades.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {tradeData.open.map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-3 text-sm">
                 <div className="flex flex-wrap gap-2">
-                  <Badge tone="safe">{t.environment}</Badge>
-                  <Badge tone="wait">{t.source}</Badge>
+                  <StatusBadge label={lifecycleLabel(true, Boolean(t.closePreview))} tone="warning" />
+                  <StatusBadge
+                    label={evidenceByTrade.get(t.tradeId) ?? "PENDING"}
+                    tone={evidenceByTrade.get(t.tradeId) === "VALID" ? "ok" : "neutral"}
+                  />
                   {t.position ? (
-                    <Badge tone={t.position.status === "OPEN" ? "safe" : "wait"}>
-                      {t.position.status}
-                    </Badge>
+                    <StatusBadge
+                      label={t.position.status}
+                      tone={t.position.status === "OPEN" ? "ok" : "warning"}
+                    />
                   ) : null}
                 </div>
                 <p className="mt-2 font-medium">
-                  {t.symbol} {t.side} · qty {t.qty} · ${t.notionalUsd}
+                  {t.symbol} {t.side} · qty {t.qty}
                 </p>
                 <p className="text-[var(--muted)]">
                   orderId {t.orderId}
@@ -116,81 +162,58 @@ export default function TradesPage() {
                 </p>
                 {t.position ? (
                   <p className="text-[var(--muted)]">
-                    mark {t.position.markPrice ?? "—"} · unrealized PnL{" "}
-                    {t.position.unrealizedPnl != null
-                      ? `$${t.position.unrealizedPnl.toFixed(4)}`
-                      : "—"}{" "}
-                    · refreshed {new Date(t.position.refreshedAt).toLocaleString()}
+                    mark {t.position.markPrice ?? "—"} · uPnL{" "}
+                    {t.position.unrealizedPnl != null ? `$${t.position.unrealizedPnl.toFixed(4)}` : "—"}
                   </p>
-                ) : (
-                  <p className="text-[var(--muted)]">Position not monitored — refresh from Dashboard.</p>
-                )}
-                <p className="text-[var(--muted)]">
-                  opened {new Date(t.openedAt).toLocaleString()}
-                </p>
-                <p className="text-xs text-[var(--muted)]">
-                  tradeId: {t.tradeId} · decisionLogId: {t.decisionLogId}
-                </p>
-                {t.closePreview ? (
-                  <div className="mt-2 rounded border border-[var(--border)] p-2 text-xs">
-                    <p className="font-medium">Close preview: {t.closePreview.status}</p>
-                    <p>
-                      Close {t.closePreview.sideToClose} · qty {t.closePreview.qty} · reduceOnly{" "}
-                      {String(t.closePreview.reduceOnly)}
-                    </p>
-                    {t.closePreview.blocked ? (
-                      <p className="text-[var(--danger)]">
-                        Blocked: {t.closePreview.blockReasons.join(", ")}
-                      </p>
-                    ) : null}
-                  </div>
                 ) : null}
-                <button
-                  type="button"
-                  className="btn btn-primary mt-2"
-                  onClick={() => setCloseTradeId(t.tradeId)}
-                >
+                <button type="button" className="btn btn-primary mt-2" onClick={() => setCloseTradeId(t.tradeId)}>
                   Review close
                 </button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
 
-      <div className="panel">
-        <h3 className="mb-3 font-semibold">Closed trades</h3>
+      <SectionCard title="Closed trades">
         {tradeData.closed.length === 0 ? (
           <p className="empty-state">No closed trades yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {tradeData.closed.map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-3 text-sm">
                 <div className="flex flex-wrap gap-2">
-                  <Badge tone={t.result === "WIN" ? "safe" : t.result === "LOSS" ? "blocked" : "wait"}>
-                    {t.result}
-                  </Badge>
-                  {t.learningId ? (
-                    <Badge tone="safe">Learning recorded</Badge>
-                  ) : t.status === "CLOSED" ? (
-                    <Badge tone="wait">Learning pending</Badge>
-                  ) : null}
+                  <StatusBadge
+                    label={pnlStatusLabel(t)}
+                    tone={pnlStatusLabel(t) === "PNL_REALIZED" ? "ok" : "warning"}
+                  />
+                  <StatusBadge
+                    label={evidenceByTrade.get(t.tradeId) ?? "PENDING"}
+                    tone={
+                      evidenceByTrade.get(t.tradeId) === "VALID"
+                        ? "ok"
+                        : evidenceByTrade.get(t.tradeId) === "REJECTED"
+                          ? "blocked"
+                          : "neutral"
+                    }
+                  />
+                  <StatusBadge
+                    label={t.result}
+                    tone={t.result === "WIN" ? "ok" : t.result === "LOSS" ? "blocked" : "warning"}
+                  />
                 </div>
                 <p className="mt-2 font-medium">
                   {t.symbol} {t.side}
                   {t.status === "CLOSED_PENDING_PNL"
-                    ? " · PnL pending data"
+                    ? " · PnL pending: missing entry/exit price or fill data."
                     : ` · $${t.netPnl.toFixed(2)} net`}
                 </p>
-                {t.closeOrderId ? (
-                  <p className="text-[var(--muted)]">close orderId {t.closeOrderId}</p>
-                ) : null}
-                <p className="text-[var(--muted)]">{new Date(t.closedAt).toLocaleString()}</p>
+                <p className="text-xs text-[var(--muted)]">{t.tradeId}</p>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {closeTrade ? (
         <CloseReviewModal

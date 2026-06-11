@@ -215,7 +215,10 @@ describe("Production loading fix", () => {
         !src.includes("if (pending) return pending"),
         `${rel} must not block entire page on LoadingOrError`,
       );
-      assert.ok(src.includes("ProjectionWarningPanel"), `${rel} must show warning panel`);
+      assert.ok(
+        src.includes("ProjectionWarning") || src.includes("ProjectionWarningPanel"),
+        `${rel} must show projection warning`,
+      );
     }
   });
 
