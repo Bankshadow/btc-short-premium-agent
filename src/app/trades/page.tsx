@@ -14,6 +14,11 @@ import {
 } from "@/components/ui";
 import { getDefaultTradeProjection } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
+import {
+  bundleProjectionReady,
+  pickClosedTradeCount,
+  pickOpenTradeCount,
+} from "@/lib/core/ui-projection-bind";
 
 interface TradesResponse {
   open: Array<{
@@ -86,33 +91,41 @@ function lifecycleLabel(open: boolean, hasClosePreview: boolean): string {
 
 export default function TradesPage() {
   const fallback = useMemo(() => getDefaultTradeProjection(), []);
-  const { trades: bundleTrades, evidence, warnings: bundleWarnings, reload: reloadBundle } =
-    useProjectionBundle();
+  const {
+    ok: bundleOk,
+    mission: bundleMission,
+    trades: bundleTrades,
+    evidence,
+    warnings: bundleWarnings,
+    reload: reloadBundle,
+  } = useProjectionBundle();
   const { data, error, reload } = useApi<TradesResponse>("/api/core/projections/trades", 0, {
     fallback,
   });
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
 
   const tradeData = useMemo((): TradesResponse => {
-    if (data?.summary) return data;
-    if (!bundleTrades.zeroState) {
+    if (
+      bundleProjectionReady({ ok: bundleOk, mission: bundleMission, trades: bundleTrades })
+    ) {
       return {
         open: bundleTrades.open as TradesResponse["open"],
         closed: bundleTrades.closed as TradesResponse["closed"],
         summary: {
-          openCount: bundleTrades.openCount,
-          closedCount: bundleTrades.closedCount,
+          openCount: pickOpenTradeCount({ trades: bundleTrades, mission: bundleMission }),
+          closedCount: pickClosedTradeCount({ trades: bundleTrades, mission: bundleMission }),
           realizedPnl:
             "summary" in bundleTrades && bundleTrades.summary
               ? bundleTrades.summary.realizedPnl
               : 0,
-          executionCount: bundleTrades.totalTrades,
+          executionCount: bundleMission.totalTrades ?? bundleTrades.totalTrades,
         },
         staleOpenWarnings: bundleTrades.staleOpenWarnings,
       };
     }
-    return data ?? fallback;
-  }, [bundleTrades, data, fallback]);
+    if (data?.summary) return data;
+    return fallback;
+  }, [bundleOk, bundleMission, bundleTrades, data, fallback]);
   const closeTrade = tradeData.open.find((t) => t.tradeId === closeTradeId);
   const evidenceByTrade = new Map(
     (evidence.trades ?? []).map((t) => [t.tradeId, t.status]),

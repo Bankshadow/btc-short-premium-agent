@@ -61,7 +61,9 @@ function evidenceProgressMessage(
     return "Evidence target reached — live remains locked.";
   }
   const pendingPnl = rejectedTrades.some((t) =>
-    t.rejectionReasons.includes("MISSING_PNL_REALIZED"),
+    t.rejectionReasons.some((r) =>
+      ["MISSING_REALIZED_PNL", "PNL_PENDING_DATA", "MISSING_ENTRY_PRICE", "MISSING_EXIT_PRICE", "ZERO_QTY"].includes(r),
+    ),
   );
   const base = `${valid}/${EVIDENCE_TARGET} valid evidence trades collected.`;
   return pendingPnl ? `${base} ${PNL_PENDING_MESSAGE}` : base;

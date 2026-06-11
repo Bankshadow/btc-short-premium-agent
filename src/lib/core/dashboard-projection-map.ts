@@ -13,6 +13,7 @@ export interface DashboardProjectionMetrics {
   latestVerdict: string | null;
   evidenceValid: number;
   evidenceRequired: number;
+  coreHealthStatus: string;
   liveLocked: boolean;
   usingFallback: boolean;
 }
@@ -23,9 +24,7 @@ export function mapBundleToDashboardMetrics(
     "ok" | "mission" | "trades" | "pnl" | "evidence" | "risk" | "health"
   >,
 ): DashboardProjectionMetrics {
-  const missionZero = bundle.mission.zeroState === true;
-  const tradesZero = bundle.trades.zeroState === true;
-  const usingFallback = !bundle.ok || (missionZero && tradesZero);
+  const usingFallback = !bundle.ok;
 
   const openTrades =
     bundle.trades.effectiveOpenCount ??
@@ -36,7 +35,7 @@ export function mapBundleToDashboardMetrics(
 
   return {
     currentEquity: bundle.mission.currentEquity,
-    targetEquity: bundle.mission.targetCapital,
+    targetEquity: bundle.mission.targetEquity ?? bundle.mission.targetCapital,
     progressPct: bundle.mission.progressPct,
     totalTrades: bundle.mission.totalTrades,
     openTrades,
@@ -47,6 +46,7 @@ export function mapBundleToDashboardMetrics(
     latestVerdict: bundle.mission.latestVerdict,
     evidenceValid: bundle.evidence.valid,
     evidenceRequired: bundle.evidence.required,
+    coreHealthStatus: bundle.health?.status ?? "OK",
     liveLocked: bundle.risk.liveLocked ?? bundle.health?.liveLocked ?? true,
     usingFallback,
   };

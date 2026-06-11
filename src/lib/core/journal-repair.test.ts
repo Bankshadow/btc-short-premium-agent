@@ -155,7 +155,10 @@ describe("journal repair", () => {
     assert.ok(events.some((e) => e.type === "LEARNING_RECORD_CREATED" && e.tradeId === TRADE_ID));
 
     const evidence = validateTradeEvidence(TRADE_ID, events);
-    assert.equal(evidence.status, "VALID", evidence.rejectionReasons.join(", "));
+    assert.equal(evidence.status, "REJECTED");
+    assert.ok(evidence.rejectionReasons.includes("ZERO_QTY"));
+    assert.ok(evidence.rejectionReasons.includes("PNL_PENDING_DATA"));
+    assert.ok(evidence.rejectionReasons.includes("MISSING_ENTRY_PRICE"));
   });
 
   it("pending priced trade without fill data stays PNL_PENDING", async () => {

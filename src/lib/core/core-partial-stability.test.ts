@@ -219,7 +219,7 @@ describe("Core partial stability fix", () => {
     });
     const events = await (await import("@/lib/journal/journal-query")).getEvents();
     const result = validateTradeEvidence("ev-trade", events);
-    const pnlReasons = result.rejectionReasons.filter((r) => r === "MISSING_PNL_REALIZED");
+    const pnlReasons = result.rejectionReasons.filter((r) => r === "MISSING_REALIZED_PNL");
     assert.equal(pnlReasons.length, 1);
     assert.equal(result.status, "REJECTED");
   });

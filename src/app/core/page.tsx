@@ -13,6 +13,7 @@ import {
   staleTradeBannerText,
   staleTradeRequiredAction,
 } from "@/lib/core/stale-trade-display";
+import { resolveCoreHealthStatus } from "@/lib/core/ui-projection-bind";
 
 function statusTone(status: string): "safe" | "blocked" | "wait" {
   if (status === "OK") return "safe";
@@ -183,7 +184,11 @@ export default function CoreMonitorPage() {
     fallback: getDefaultCoreHealth(),
   });
 
-  const healthData = health ?? coreHealth.data;
+  const healthData = {
+    ...(health ?? getDefaultCoreHealth()),
+    ...(coreHealth.data ?? {}),
+    status: resolveCoreHealthStatus(coreHealth.data, health),
+  };
   const staleWarnings = trades.staleOpenWarnings ?? [];
   const latestTradeId =
     trades.open[0]?.tradeId ?? trades.closed[0]?.tradeId ?? null;

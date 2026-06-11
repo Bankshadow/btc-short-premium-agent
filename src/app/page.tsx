@@ -174,16 +174,16 @@ export default function DashboardPage() {
       </div>
 
       <SafetyPanel
-        headerAddon={health?.status ?? "OK"}
+        headerAddon={metrics.coreHealthStatus}
         items={[
           {
             title: "Core health",
-            value: health?.status ?? "OK",
+            value: metrics.coreHealthStatus,
             detail:
               health?.blockingIssues?.length
                 ? `${health.blockingIssues.length} blocker(s)`
                 : `${health?.warnings?.length ?? 0} warning group(s)`,
-            tone: statusFromHealth(health?.status),
+            tone: statusFromHealth(metrics.coreHealthStatus),
           },
           {
             title: "Live locked",

@@ -30,23 +30,34 @@ See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECT
 
 **Hotfix 3 (2026-06-11):** See [CORE_ENGINE_HOTFIX3_PROJECTION_MAPPING_STATUS.md](./CORE_ENGINE_HOTFIX3_PROJECTION_MAPPING_STATUS.md). Dashboard bundle mapping, Binance status consistency, stale trade soft warning, PnL pending labels.
 
+**Hotfix 4 (2026-06-06):** See [CORE_ENGINE_HOTFIX4_UI_BINDING_EVIDENCE_STRICTNESS.md](./CORE_ENGINE_HOTFIX4_UI_BINDING_EVIDENCE_STRICTNESS.md). Projection bundle unwrap, UI page binding, strict evidence validator, API-first core health.
+
 | Criterion | Status |
 |-----------|--------|
 | `/` dashboard renders (no permanent Loading) | ✅ Hotfix 1 + 2 |
 | `/trades`, `/ai-status`, `/reports`, `/settings` render | ✅ Hotfix 2 — stable fallbacks + bundle-first |
-| Dashboard uses real bundle values when API OK | ✅ Hotfix 3 — `mapBundleToDashboardMetrics` + default `ok:false` |
+| Dashboard uses real bundle values when API OK | ✅ Hotfix 4 — `unwrapProjectionBundle` + `ok:true` when valid |
+| Trades/Reports use bundle closed/evidence counts | ✅ Hotfix 4 — `bundleProjectionReady` |
 | Binance status consistent when keys present | ✅ Hotfix 3 — `resolveBinanceStatusConsistency` |
 | Stale trade manual repair (soft WARNING) | ✅ Hotfix 3 — `STALE_TRADE_MANUAL_REPAIR_REQUIRED` |
 | `GET /api/core/ui-consistency` < 5s | ✅ `buildProjectionBundleFast()` — verify post-deploy |
 | `GET /api/core/projection-parity` < 5s | ✅ bundle-only parity — verify post-deploy |
-| No P0/P1 lifecycle gaps in journal | ✅ journal repair applied (8 closed, 8/12 evidence valid) |
+| Core page health matches `/api/core/health` | ✅ Hotfix 4 — `resolveCoreHealthStatus` |
+| Evidence excludes PENDING_PNL / zero-fill trades | ✅ Hotfix 4 — strict validator |
 | Stale OPEN not counted as active open | ✅ reconciliation in projections |
-| `npm run build` passes | ✅ 299/299 tests |
-| Evidence 8/12 (zero-fill reconciliation trades valid) | ✅ post-repair — collecting toward 12 |
+| `npm run build` passes | ✅ verify after Hotfix 4 |
+| Evidence 0/12 until real fills (8 rejected) | ✅ expected under strict rules |
 
-**Recommendation (after journal repair — 2026-06-11): `CORE_ENGINE_STABLE`**
+**Recommendation (after Hotfix 4): `CORE_ENGINE_PARTIAL`**
 
-Production: ui-consistency 0 mismatches, evidence 8/12 valid (0 rejected), all core pages render, APIs < 5s. Remaining health `WARNING` is `SKIPPED_LIFECYCLE_STEP` from repair backfill only — non-blocking.
+UI binding and evidence strictness are fixed in code; production must redeploy and verify pages show bundle values (8 trades, 0/12 evidence, health WARNING). Assign **`CORE_ENGINE_STABLE`** only when:
+
+- All UI pages display projection values correctly in production
+- Evidence does not count pending PnL trades
+- Health status is consistent across Dashboard, Core, and health API
+- No P0/P1 safety issue remains
+
+Previous recommendation (journal repair — 2026-06-11) superseded by strict evidence: zero-fill trades no longer count as valid evidence.
 
 Assign **`CORE_ENGINE_NOT_READY`** only if any core page remains permanently Loading.
 

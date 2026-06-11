@@ -12,6 +12,9 @@ import {
   SectionCard,
 } from "@/components/ui";
 import { useProjectionBundle } from "@/components/use-projection-bundle";
+import type { CoreHealthReport } from "@/lib/core/core-health";
+import { getDefaultCoreHealth } from "@/lib/core/projection-defaults";
+import { resolveCoreHealthStatus } from "@/lib/core/ui-projection-bind";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
@@ -51,6 +54,10 @@ export default function ReportsPage() {
     warnings: bundleWarnings,
     reload: reloadBundle,
   } = useProjectionBundle();
+  const coreHealthApi = useApi<CoreHealthReport>("/api/core/health", 0, {
+    fallback: getDefaultCoreHealth(),
+  });
+  const coreHealthStatus = resolveCoreHealthStatus(coreHealthApi.data, projHealth);
   const reportsFallback = useMemo(
     () =>
       zeroReportsSummary(
@@ -181,7 +188,7 @@ export default function ReportsPage() {
             label="Trades"
             value={`${projMission.totalTrades} (${projMission.win}W/${projMission.loss}L)`}
           />
-          <MetricCard label="Core health" value={projHealth?.status ?? "OK"} />
+          <MetricCard label="Core health" value={coreHealthStatus} />
           <MetricCard label="Live locked" value={projRisk.liveLocked ? "true" : "false"} />
         </div>
       </SectionCard>
