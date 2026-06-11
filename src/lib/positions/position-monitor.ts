@@ -7,6 +7,7 @@ import { appendEvent, getEvents } from "@/lib/journal/journal-query";
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import { newPositionId } from "@/lib/journal/journal-types";
 import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
+import { calculatePnlForTrade } from "@/lib/pnl/calculate-pnl";
 import { buildOpenTradesFromEvents } from "@/lib/trades/trade-store";
 import type { OpenTrade } from "@/lib/trades/trade-types";
 import {
@@ -117,7 +118,7 @@ function buildSnapshotFromSources(input: {
   } else if (input.binancePos && Math.abs(Number.parseFloat(input.binancePos.positionAmt)) > 1e-8) {
     status = "OPEN";
   } else if (input.connected && !input.binancePos) {
-    status = "UNKNOWN";
+    status = "FLAT";
   } else {
     status = "FLAT";
   }
@@ -164,6 +165,71 @@ function resolvePositionId(
   existing: Map<string, PositionSnapshot>,
 ): string {
   return existing.get(tradeId)?.positionId ?? newPositionId();
+}
+
+async function reconcileOrphanFlatTrades(
+  openTrades: OpenTrade[],
+  snapshots: PositionSnapshot[],
+  binancePositions: BinancePosition[],
+): Promise<void> {
+  const nonZero = filterNonZeroBinancePositions(binancePositions);
+  const events = await getEvents();
+  const closedIds = new Set(
+    events.filter((e) => e.type === "POSITION_CLOSED").map((e) => e.tradeId).filter(Boolean),
+  );
+
+  for (const trade of openTrades) {
+    if (closedIds.has(trade.tradeId)) continue;
+    if (findBinanceForTrade(trade, nonZero)) continue;
+    const snapshot = snapshots.find((s) => s.tradeId === trade.tradeId);
+    if (snapshot?.status !== "FLAT") continue;
+
+    const entryPrice = trade.entryPrice ?? 0;
+    const qty = trade.qty;
+    const sideToClose = trade.side === "SHORT" ? "BUY" : "SELL";
+    const reconcileOrderId = `reconcile-${trade.tradeId}`;
+
+    await appendEvent({
+      type: "CLOSE_ORDER_EXECUTED",
+      environment: "testnet",
+      runId: trade.runId,
+      decisionLogId: trade.decisionLogId,
+      tradeId: trade.tradeId,
+      previewId: trade.previewId,
+      positionId: snapshot.positionId,
+      payload: {
+        symbol: trade.symbol,
+        side: sideToClose,
+        qty,
+        avgPrice: entryPrice,
+        executedQty: qty,
+        orderId: reconcileOrderId,
+        source: "RECONCILIATION_BACKFILL",
+        reason: "LOCAL_OPEN_TRADE_BINANCE_FLAT",
+      },
+    });
+
+    await appendEvent({
+      type: "POSITION_CLOSED",
+      environment: "testnet",
+      runId: trade.runId,
+      decisionLogId: trade.decisionLogId,
+      tradeId: trade.tradeId,
+      previewId: trade.previewId,
+      positionId: snapshot.positionId,
+      payload: {
+        symbol: trade.symbol,
+        sideToClose,
+        qty,
+        closeOrderId: reconcileOrderId,
+        source: "RECONCILIATION_BACKFILL",
+        reason: "LOCAL_OPEN_TRADE_BINANCE_FLAT",
+        realizedPnlPending: true,
+      },
+    });
+
+    await calculatePnlForTrade(trade.tradeId);
+  }
 }
 
 export async function getOpenPositionsView(): Promise<OpenPositionsResponse> {
@@ -298,17 +364,29 @@ export async function refreshOpenPositions(
     });
   }
 
+  if (connected) {
+    await reconcileOrphanFlatTrades(openTrades, snapshots, binancePositions);
+  }
+
+  const eventsAfterReconcile = await getEvents();
+  const openTradesAfter = buildOpenTradesFromEvents(eventsAfterReconcile);
+  const snapshotsAfter = openTradesAfter.map(
+    (t) =>
+      getLatestMonitoredSnapshots(eventsAfterReconcile).get(t.tradeId) ??
+      buildUnknownSnapshot(t, getLatestMonitoredSnapshots(eventsAfterReconcile)),
+  );
+
   const reconciliation = reconcilePositions({
-    openTrades,
+    openTrades: openTradesAfter,
     binancePositions,
-    snapshots,
+    snapshots: snapshotsAfter,
     lastMonitoredAt: refreshedAt,
     maxOpenPositions: getMaxOpenPositions(),
     binanceConnected: connected,
   });
 
   if (reconciliation.issues.length > 0) {
-    const primary = openTrades[0];
+    const primary = openTradesAfter[0] ?? openTrades[0];
     await appendEvent({
       type: "POSITION_RECONCILIATION_WARNING",
       environment: "testnet",
@@ -326,7 +404,7 @@ export async function refreshOpenPositions(
 
   const updatedEvents = await getEvents();
   const mission = buildMissionSnapshot(updatedEvents);
-  const primary = openTrades[0];
+  const primary = openTradesAfter[0] ?? openTrades[0];
   await appendEvent({
     type: "MISSION_SNAPSHOT_UPDATED",
     environment: "testnet",
@@ -344,7 +422,7 @@ export async function refreshOpenPositions(
 
   return {
     ok: true,
-    snapshots,
+    snapshots: snapshotsAfter,
     reconciliation,
     message: connected
       ? "Positions refreshed from Binance testnet."
