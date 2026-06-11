@@ -94,6 +94,10 @@ export function getEngineRunState(): EngineRunState {
   return engineState;
 }
 
+export function getRiskMode(): RiskMode {
+  return riskMode;
+}
+
 export function isEnginePaused(): boolean {
   return engineState === "PAUSED";
 }

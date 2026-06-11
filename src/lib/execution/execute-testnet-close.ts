@@ -5,7 +5,7 @@ import {
   isBinanceConnected,
 } from "@/lib/execution/binance-testnet-status";
 import type { BinanceTestnetStatus } from "@/lib/execution/binance-testnet-types";
-import { validateCloseExecution, type CloseBlocker } from "@/lib/execution/close-safety-gate";
+import type { CloseBlocker } from "@/lib/execution/close-safety-gate";
 import { getClosePreviewById } from "@/lib/execution/close-preview-store";
 import { resolveClosePreviewStatus } from "@/lib/execution/close-preview-types";
 import { appendEvent, getEvents } from "@/lib/journal/journal-query";
@@ -14,8 +14,7 @@ import {
   refreshOpenPositions,
 } from "@/lib/positions/position-monitor";
 import { filterNonZeroBinancePositions } from "@/lib/positions/position-reconcile";
-import { isLiveEnabled } from "@/lib/risk/risk-gate";
-import { isEngineExecutionBlocked } from "@/lib/health/engine-health-check";
+import { runCloseGuardChain } from "@/lib/core/guard-chain";
 import { calculatePnlForTrade } from "@/lib/pnl/calculate-pnl";
 import type { OpenTrade } from "@/lib/trades/trade-types";
 
@@ -45,20 +44,6 @@ export async function executeTestnetClose(
   input: ExecuteTestnetCloseInput,
 ): Promise<ExecuteTestnetCloseResult> {
   const blockers: CloseBlocker[] = [];
-
-  if (isLiveEnabled()) {
-    blockers.push(blocker("LIVE_ENVIRONMENT_BLOCKED", "Live trading is locked.", "Use testnet only."));
-    await appendCloseBlocked(null, blockers);
-    return fail(blockers, "Live trading is locked.");
-  }
-
-  if (await isEngineExecutionBlocked()) {
-    blockers.push(
-      blocker("ENGINE_HEALTH_BLOCKED", "Engine health blocked.", "Resolve engine health issues."),
-    );
-    await appendCloseBlocked(input.closePreviewId, blockers);
-    return fail(blockers, "Engine health blocked — close disabled.");
-  }
 
   if (!input.closePreviewId) {
     blockers.push(blocker("MISSING_CLOSE_PREVIEW_ID", "closePreviewId is required.", "Create close preview."));
@@ -92,36 +77,20 @@ export async function executeTestnetClose(
     return fail(blockers, "Live trading is locked.", preview);
   }
 
-  const safety = await validateCloseExecution({
+  const guard = await runCloseGuardChain({
     closePreviewId: input.closePreviewId,
     doubleConfirm: input.doubleConfirm,
+    reduceOnly: preview.reduceOnly,
+    runId: preview.runId,
+    decisionLogId: preview.decisionLogId,
   });
 
-  if (!safety.allowed) {
-    return {
-      ok: false,
-      blocked: true,
-      message: safety.message,
-      blockers: safety.blockers,
-      orderId: null,
-      tradeId: preview.tradeId,
-      closePreviewId: preview.closePreviewId,
-      positionClosed: false,
-    };
-  }
-
-  if (!input.doubleConfirm) {
-    blockers.push(
-      blocker("DOUBLE_CONFIRM_REQUIRED", "Double confirmation required.", "Check confirmation box."),
+  if (!guard.allowed) {
+    const guardBlockers = guard.blockers.map((g) =>
+      blocker(g.code, g.message, g.requiredAction ?? "Resolve guard failure."),
     );
-    await appendCloseBlocked(preview.closePreviewId, blockers, preview);
-    return fail(blockers, "Double confirmation required.", preview);
-  }
-
-  if (preview.reduceOnly !== true) {
-    blockers.push(blocker("REDUCE_ONLY_REQUIRED", "Close must be reduce-only.", "Recreate close preview."));
-    await appendCloseBlocked(preview.closePreviewId, blockers, preview);
-    return fail(blockers, "Close must be reduce-only.", preview);
+    await appendCloseBlocked(preview.closePreviewId, guardBlockers, preview);
+    return fail(guardBlockers, guard.blockers[0]?.message ?? "Close blocked by guard chain.", preview);
   }
 
   const binanceStatus = input.getBinanceStatus

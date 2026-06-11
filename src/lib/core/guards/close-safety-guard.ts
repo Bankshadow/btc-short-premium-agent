@@ -1,3 +1,3 @@
-import { reviewCloseSafety } from "@/lib/execution/close-safety-gate";
+import { validateCloseExecution } from "@/lib/execution/close-safety-gate";
 
-export { reviewCloseSafety as checkCloseSafetyGuard };
+export { validateCloseExecution as checkCloseSafetyGuard };

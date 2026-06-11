@@ -28,7 +28,7 @@ let cache: { key: string; value: CoreProjections } | null = null;
 
 function cacheKey(events: JournalEvent[]): string {
   if (events.length === 0) return "0:none";
-  const last = events[0];
+  const last = [...events].sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
   return `${events.length}:${last.eventId}`;
 }
 

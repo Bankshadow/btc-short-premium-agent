@@ -1,0 +1,102 @@
+import fs from "node:fs";
+import path from "node:path";
+import type { JournalEvent } from "./journal-types";
+
+const BLOB_PATHNAME = process.env.JOURNAL_BLOB_PATHNAME?.trim() || "v2-core/event-journal.json";
+
+function ensureDir(dir: string): string {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function fileJournalDir(): string {
+  if (process.env.VERCEL) {
+    return ensureDir(path.join("/tmp", "v2-journal"));
+  }
+  const custom = process.env.JOURNAL_DATA_DIR?.trim();
+  if (custom) {
+    try {
+      return ensureDir(custom);
+    } catch {
+      return ensureDir(path.join("/tmp", "v2-journal"));
+    }
+  }
+  return ensureDir(path.join(process.cwd(), "data"));
+}
+
+function fileJournalPath(): string {
+  return path.join(fileJournalDir(), "event-journal.json");
+}
+
+function parseEvents(raw: string): JournalEvent[] {
+  try {
+    const parsed = JSON.parse(raw) as JournalEvent[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function useBlobPersistence(): boolean {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+}
+
+async function readFromBlob(): Promise<JournalEvent[]> {
+  const { head } = await import("@vercel/blob");
+  try {
+    const meta = await head(BLOB_PATHNAME);
+    const res = await fetch(meta.url);
+    if (!res.ok) return [];
+    return parseEvents(await res.text());
+  } catch {
+    return [];
+  }
+}
+
+async function writeToBlob(events: JournalEvent[]): Promise<void> {
+  const { put } = await import("@vercel/blob");
+  await put(BLOB_PATHNAME, JSON.stringify(events, null, 2), {
+    access: "private",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+  });
+}
+
+function readFromFile(): JournalEvent[] {
+  const file = fileJournalPath();
+  if (!fs.existsSync(file)) return [];
+  return parseEvents(fs.readFileSync(file, "utf8"));
+}
+
+function writeToFile(events: JournalEvent[]): void {
+  const file = fileJournalPath();
+  fs.writeFileSync(file, JSON.stringify(events, null, 2), "utf8");
+}
+
+export type JournalBackend = "blob" | "file";
+
+export function resolveJournalBackend(): JournalBackend {
+  return useBlobPersistence() ? "blob" : "file";
+}
+
+export async function readJournalEvents(): Promise<JournalEvent[]> {
+  if (useBlobPersistence()) {
+    return readFromBlob();
+  }
+  return readFromFile();
+}
+
+export async function writeJournalEvents(events: JournalEvent[]): Promise<void> {
+  if (useBlobPersistence()) {
+    await writeToBlob(events);
+    return;
+  }
+  writeToFile(events);
+}
+
+/** Sync read for file backend only (tests/local). */
+export function readJournalEventsSync(): JournalEvent[] {
+  if (useBlobPersistence()) return [];
+  return readFromFile();
+}

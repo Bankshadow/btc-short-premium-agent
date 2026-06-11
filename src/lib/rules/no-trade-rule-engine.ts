@@ -65,7 +65,9 @@ export async function evaluateNoTradeRules(input: {
   const mockTradeExplicit =
     process.env.V2_MVP2_MOCK_TRADE?.trim().toLowerCase() === "true" ||
     process.env.V2_MVP2_MOCK_TRADE?.trim() === "1";
-  if (!isBinanceConnected(binanceStatus) && !mockTradeExplicit) {
+  const mockConnected =
+    process.env.BINANCE_TESTNET_MOCK_CONNECTED?.trim().toLowerCase() === "true";
+  if (!isBinanceConnected(binanceStatus) && !mockTradeExplicit && !mockConnected) {
     triggered.push({
       code: "BINANCE_DISCONNECTED",
       message: "Binance testnet is not connected.",

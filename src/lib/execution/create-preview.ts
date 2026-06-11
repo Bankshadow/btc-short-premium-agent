@@ -1,5 +1,6 @@
 import { appendEvent } from "@/lib/journal/journal-query";
 import { isOperatorBlocked } from "@/lib/operator/operator-actions";
+import { checkRiskModeGuard } from "@/lib/core/guards/risk-mode-guard";
 import { evaluatePreviewCreationGate } from "@/lib/risk/risk-gate";
 import {
   DEFAULT_PREVIEW_NOTIONAL_USD,
@@ -23,6 +24,7 @@ export async function createTestnetPreview(
   const environment = input.environment ?? "TESTNET";
 
   const operatorBlock = await isOperatorBlocked();
+  const riskModeBlock = await checkRiskModeGuard("preview");
   const gate = evaluatePreviewCreationGate({
     runId: input.runId,
     decisionLogId: input.decisionLogId,
@@ -36,8 +38,11 @@ export async function createTestnetPreview(
   if (operatorBlock.blocked) {
     blockReasons.push(operatorBlock.reason ?? "Operator blocked.");
   }
+  if (riskModeBlock.blocked) {
+    blockReasons.push(riskModeBlock.reason ?? "Risk mode blocks preview.");
+  }
 
-  if (!gate.allowed || operatorBlock.blocked) {
+  if (!gate.allowed || operatorBlock.blocked || riskModeBlock.blocked) {
     await appendEvent({
       type: "PREVIEW_BLOCKED",
       environment: "testnet",

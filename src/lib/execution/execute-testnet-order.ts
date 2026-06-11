@@ -1,9 +1,6 @@
 import { appendEvent, getEvents } from "@/lib/journal/journal-query";
 import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
-import { isLiveEnabled } from "@/lib/risk/risk-gate";
-import { isEngineExecutionBlocked } from "@/lib/health/engine-health-check";
-import { isPortfolioRiskBlocking } from "@/lib/portfolio-risk/portfolio-risk-manager";
-import { getOperatorStatus } from "@/lib/operator/operator-actions";
+import { runExecuteGuardChain } from "@/lib/core/guard-chain";
 import { newTradeId } from "@/lib/trades/trade-types";
 import { buildOpenTradesFromEvents } from "@/lib/trades/trade-store";
 import type { BinanceTestnetClient } from "./binance-testnet-client";
@@ -13,7 +10,6 @@ import {
   isBinanceConnected,
 } from "./binance-testnet-status";
 import type { BinanceTestnetStatus } from "./binance-testnet-types";
-import { reviewExecutionSafety } from "./execution-safety-gate";
 import type { ExecutionBlocker, ExecutionSafetyResult } from "./execution-safety-types";
 import { getActiveStrategyVersionId } from "@/lib/versioning/strategy-version-store";
 import { getPreviewById } from "./preview-store";
@@ -63,78 +59,6 @@ export async function executeTestnetOrder(
 ): Promise<ExecuteTestnetResult> {
   const blockers: ExecutionBlocker[] = [];
 
-  if (isLiveEnabled()) {
-    blockers.push(
-      blocker(
-        "LIVE_ENVIRONMENT_BLOCKED",
-        "Live trading is locked.",
-        "Set BINANCE_LIVE_ENABLED=false.",
-      ),
-    );
-    await appendExecuteBlocked({
-      previewId: input.previewId,
-      codes: ["LIVE_ENVIRONMENT_BLOCKED"],
-      reasons: ["Live trading is locked."],
-    });
-    return {
-      ok: false,
-      blocked: true,
-      message: "Live trading is locked.",
-      safety: null,
-      binanceStatus: null,
-      trade: null,
-      blockers,
-      orderId: null,
-      tradeId: null,
-    };
-  }
-
-  await getOperatorStatus();
-
-  if (await isEngineExecutionBlocked()) {
-    blockers.push(
-      blocker("ENGINE_HEALTH_BLOCKED", "Engine health blocked.", "Resolve engine health issues."),
-    );
-    await appendExecuteBlocked({
-      previewId: input.previewId,
-      codes: ["ENGINE_HEALTH_BLOCKED"],
-      reasons: ["Engine health blocked."],
-    });
-    return {
-      ok: false,
-      blocked: true,
-      message: "Engine health blocked — execution disabled.",
-      safety: null,
-      binanceStatus: null,
-      trade: null,
-      blockers,
-      orderId: null,
-      tradeId: null,
-    };
-  }
-
-  if (await isPortfolioRiskBlocking()) {
-    blockers.push(
-      blocker("PORTFOLIO_RISK_BLOCKED", "Portfolio risk blocks execution.", "Wait for cooldown or resolve risk limits."),
-    );
-    await appendExecuteBlocked({
-      previewId: input.previewId,
-      codes: ["PORTFOLIO_RISK_BLOCKED"],
-      reasons: ["Portfolio risk blocked."],
-    });
-    return {
-      ok: false,
-      blocked: true,
-      message: "Portfolio risk blocked — execution disabled.",
-      safety: null,
-      binanceStatus: null,
-      trade: null,
-      blockers,
-      orderId: null,
-      tradeId: null,
-    };
-  }
-
   const preview = await getPreviewById(input.previewId);
   if (!preview) {
     blockers.push(
@@ -158,24 +82,52 @@ export async function executeTestnetOrder(
     };
   }
 
-  const safety = await reviewExecutionSafety({
+  const guard = await runExecuteGuardChain({
     previewId: input.previewId,
     doubleConfirm: input.doubleConfirm,
+    runId: preview.runId,
+    decisionLogId: preview.decisionLogId,
   });
 
-  if (!safety.allowed) {
+  if (!guard.allowed) {
+    const guardBlockers = guard.blockers.map((g) =>
+      blocker(g.code, g.message, g.requiredAction ?? "Resolve guard failure."),
+    );
+    await appendExecuteBlocked({
+      runId: preview.runId,
+      decisionLogId: preview.decisionLogId,
+      previewId: preview.previewId,
+      codes: guard.blockers.map((g) => g.code),
+      reasons: guard.blockers.map((g) => g.message),
+    });
     return {
       ok: false,
       blocked: true,
-      message: safety.message,
-      safety,
+      message: guard.blockers[0]?.message ?? "Execution blocked by guard chain.",
+      safety: null,
       binanceStatus: null,
       trade: null,
-      blockers: safety.blockers,
+      blockers: guardBlockers,
       orderId: null,
       tradeId: null,
     };
   }
+
+  const safety: ExecutionSafetyResult = {
+    allowed: true,
+    blocked: false,
+    requiresDoubleConfirm: true,
+    doubleConfirmProvided: input.doubleConfirm,
+    blockers: [],
+    warnings: [],
+    previewId: preview.previewId,
+    decisionLogId: preview.decisionLogId,
+    runId: preview.runId,
+    environment: "TESTNET",
+    reviewedAt: new Date().toISOString(),
+    executionEnabled: true,
+    message: "Guard chain passed.",
+  };
 
   const binanceStatus = input.getBinanceStatus
     ? await input.getBinanceStatus()

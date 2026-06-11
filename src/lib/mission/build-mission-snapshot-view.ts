@@ -18,7 +18,7 @@ import {
   zeroMissionSnapshotView,
 } from "@/lib/core/zero-state";
 import { getEvents } from "@/lib/journal/journal-query";
-import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
+import { buildMissionProjection } from "@/lib/core/projections/mission-projection";
 import { getReconciliationStatus } from "@/lib/positions/position-monitor";
 import { isTestnetConfigured, RISK_POLICY } from "@/lib/risk/risk-gate";
 import { getLatestAnalysis } from "@/lib/analysis/analysis-runner";
@@ -64,7 +64,7 @@ function resolveNextAction(input: {
 export async function buildMissionSnapshotView(): Promise<MissionSnapshotView> {
   try {
     const events = await getEvents();
-    const snapshot = buildMissionSnapshot(events);
+    const snapshot = buildMissionProjection(events);
     const testnetConfigured = isTestnetConfigured();
     const binanceStatus = normalizeBinanceStatusDiagnostics(
       await getBinanceTestnetStatusBounded(API_RESPONSE_BOUND_MS),

@@ -7,6 +7,7 @@ export { buildAllProjections, buildProjectionById, clearProjectionCache } from "
 export type { CoreProjections, ProjectionId } from "./projection-engine";
 export { validateEventEnvelope, validateEventBatch, validateBeforeAppend, validateCoreEvent, validateRawCoreEvent } from "./event-validator";
 export { deriveTradeLifecycleState, deriveLifecycleState, validateAllTradeLifecycles, validateLifecycleTransition } from "./lifecycle-state-machine";
+export { runExecuteGuardChain, runCloseGuardChain } from "./guard-chain";
 export { buildTraceReport, detectTraceLinkKind } from "./trace/trace-builder";
 export type { TraceReport, TraceLinkKind } from "./trace/trace-types";
 export { LOOP_CONTRACTS, getLoopContract } from "./loop-contracts";
