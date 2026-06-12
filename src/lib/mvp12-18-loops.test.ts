@@ -104,6 +104,47 @@ describe("MVP 12-18 loops", () => {
     assert.ok(rules.triggered.some((t) => t.code === "CONSECUTIVE_LOSSES"));
   });
 
+  it("REPEATED_SETUP_FAILURE is advisory during evidence collection", async () => {
+    for (let i = 0; i < 2; i++) {
+      await appendEvent({
+        type: "PNL_REALIZED",
+        environment: "testnet",
+        tradeId: `loss-${i}`,
+        payload: { result: "LOSS", netPnl: -1, qty: "0.001", entryPrice: 100000, exitPrice: 99000 },
+      });
+    }
+    const rules = await evaluateNoTradeRules({
+      proposedVerdict: "TRADE",
+      swarmAgreement: "AGREE",
+      regime: "UNKNOWN",
+    });
+    assert.equal(rules.blocked, false);
+    const repeated = rules.triggered.find((t) => t.code === "REPEATED_SETUP_FAILURE");
+    assert.ok(repeated);
+    assert.equal(repeated?.severity, "WARN");
+  });
+
+  it("REPEATED_SETUP_FAILURE counts consecutive losses only", async () => {
+    await appendEvent({
+      type: "PNL_REALIZED",
+      environment: "testnet",
+      tradeId: "win-1",
+      payload: { result: "WIN", netPnl: 1 },
+    });
+    await appendEvent({
+      type: "PNL_REALIZED",
+      environment: "testnet",
+      tradeId: "loss-1",
+      payload: { result: "LOSS", netPnl: -1 },
+    });
+    const rules = await evaluateNoTradeRules({
+      proposedVerdict: "TRADE",
+      swarmAgreement: "AGREE",
+      regime: "UNKNOWN",
+    });
+    assert.ok(!rules.triggered.some((t) => t.code === "REPEATED_SETUP_FAILURE"));
+  });
+
   it("classify regime", () => {
     const mission = buildMissionSnapshot([]);
     const r = classifyRegime({ mission, swarmReport: null });

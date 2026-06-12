@@ -9,6 +9,8 @@ import { getReconciliationStatus } from "@/lib/positions/position-monitor";
 import { buildOpenTradesFromEvents } from "@/lib/trades/trade-store";
 import type { SwarmAgreement } from "@/lib/analysis/scenario-context";
 import type { RegimeTag } from "@/lib/regime/regime-types";
+import { buildEvidenceProgressFromEvents } from "@/lib/evidence/evidence-progress-engine";
+import { EVIDENCE_REQUIRED_TRADES } from "@/lib/evidence/evidence-types";
 import type { NoTradeRuleTrigger, RuleEvaluationResult } from "./no-trade-rule-types";
 
 const DAILY_LOSS_LIMIT_USD = 25;
@@ -27,10 +29,15 @@ function countConsecutiveLosses(events: Awaited<ReturnType<typeof getEvents>>): 
 }
 
 function countRepeatedSetupFailures(events: Awaited<ReturnType<typeof getEvents>>): number {
-  const losses = events.filter(
-    (e) => e.type === "PNL_REALIZED" && (e.payload as { result?: string }).result === "LOSS",
-  );
-  return losses.length >= 2 ? losses.length : 0;
+  const pnls = events
+    .filter((e) => e.type === "PNL_REALIZED")
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  let streak = 0;
+  for (const e of pnls) {
+    if ((e.payload as { result?: string }).result === "LOSS") streak += 1;
+    else break;
+  }
+  return streak >= 2 ? streak : 0;
 }
 
 export async function evaluateNoTradeRules(input: {
@@ -110,11 +117,14 @@ export async function evaluateNoTradeRules(input: {
   }
 
   const setupFailures = countRepeatedSetupFailures(events);
+  const evidenceProgress = buildEvidenceProgressFromEvents(events);
+  const evidenceCollectionActive =
+    evidenceProgress.validTrades < EVIDENCE_REQUIRED_TRADES;
   if (setupFailures >= 2 && input.proposedVerdict === "TRADE") {
     triggered.push({
       code: "REPEATED_SETUP_FAILURE",
-      message: `${setupFailures} recent losses on similar setups.`,
-      severity: "BLOCK",
+      message: `${setupFailures} recent consecutive losses on similar setups.`,
+      severity: evidenceCollectionActive ? "WARN" : "BLOCK",
     });
   }
 
