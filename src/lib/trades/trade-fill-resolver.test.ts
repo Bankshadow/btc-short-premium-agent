@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { buildPnlProjection } from "@/lib/core/projections/pnl-projection";
 import { listPendingPnlTrades } from "@/lib/pnl/pnl-pending";
 import { isValidRealizedPnlEvent } from "@/lib/pnl/pnl-store";
-import { buildOpenTradesFromEvents } from "@/lib/trades/trade-store";
+import { buildOpenTradesFromEvents, buildClosedTradesFromEvents } from "@/lib/trades/trade-store";
 import type { JournalEvent } from "@/lib/journal/journal-types";
 
 function evt(partial: Partial<JournalEvent> & Pick<JournalEvent, "type">): JournalEvent {
@@ -87,5 +87,41 @@ describe("trade fill resolver + pnl pending alignment", () => {
     const pending = listPendingPnlTrades(events);
     assert.equal(pending.length, 1);
     assert.equal(pending[0].tradeId, tradeId);
+  });
+
+  it("uses monitored markPrice as exit fallback when close avgPrice missing", () => {
+    const tradeId = "trade-exit-fallback";
+    const events: JournalEvent[] = [
+      evt({
+        type: "ORDER_EXECUTED",
+        tradeId,
+        payload: { symbol: "BTCUSDT", side: "SELL", qty: "0.001", avgPrice: 100 },
+      }),
+      evt({
+        type: "POSITION_OPENED",
+        tradeId,
+        payload: { qty: "0.001", entryPrice: 100 },
+      }),
+      evt({
+        type: "POSITION_MONITORED",
+        tradeId,
+        timestamp: "2026-06-12T00:00:01.000Z",
+        payload: { qty: "0.001", entryPrice: 100, markPrice: 99.5 },
+      }),
+      evt({
+        type: "CLOSE_ORDER_EXECUTED",
+        tradeId,
+        payload: { executedQty: "0.001", avgPrice: "0" },
+      }),
+      evt({
+        type: "POSITION_CLOSED",
+        tradeId,
+        timestamp: "2026-06-12T00:00:02.000Z",
+        payload: { source: "BINANCE_TESTNET" },
+      }),
+    ];
+
+    const closed = buildClosedTradesFromEvents(events);
+    assert.equal(closed[0].exitPrice, 99.5);
   });
 });

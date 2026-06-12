@@ -68,7 +68,7 @@ export function resolveClosedTradeFill(
     )
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
   const monitored = monitoredBeforeClose?.payload as
-    | { qty?: string; entryPrice?: number | null }
+    | { qty?: string; entryPrice?: number | null; markPrice?: number | null }
     | undefined;
 
   return {
@@ -88,6 +88,7 @@ export function resolveClosedTradeFill(
     ),
     exitPrice: pickPositivePrice(
       closePayload.avgPrice != null ? Number(closePayload.avgPrice) : null,
+      monitored?.markPrice != null ? Number(monitored.markPrice) : null,
     ),
   };
 }

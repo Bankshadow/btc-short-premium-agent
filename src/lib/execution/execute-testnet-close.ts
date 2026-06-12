@@ -17,6 +17,7 @@ import {
 import { filterNonZeroBinancePositions } from "@/lib/positions/position-reconcile";
 import { runCloseGuardChain } from "@/lib/core/guard-chain";
 import { calculatePnlForTrade } from "@/lib/pnl/calculate-pnl";
+import { orderSummaryFromResult, resolveMarketOrderFill } from "@/lib/execution/order-fill-resolver";
 import type { OpenTrade } from "@/lib/trades/trade-types";
 
 export interface ExecuteTestnetCloseInput {
@@ -117,16 +118,10 @@ export async function executeTestnetClose(
       reduceOnly: true,
     });
 
+    const filledOrder = await resolveMarketOrderFill(client, preview.symbol, order);
     const orderSummary = {
-      symbol: order.symbol,
-      side: order.side,
-      qty: order.executedQty || order.origQty,
-      orderId: String(order.orderId),
-      clientOrderId: order.clientOrderId,
-      status: order.status,
-      avgPrice: order.avgPrice,
+      ...orderSummaryFromResult(filledOrder),
       reduceOnly: true,
-      updateTime: order.updateTime,
     };
 
     await appendCoreEventStrict({
