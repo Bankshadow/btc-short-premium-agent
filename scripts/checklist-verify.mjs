@@ -26,15 +26,16 @@ async function main() {
   console.log(`\nChecklist verify @ ${BASE}\n`);
 
   const status = await req("/api/binance/status");
+  const binance = status.json?.data ?? status.json;
   mark(
     "Binance status = CONNECTED",
-    status.json?.status === "CONNECTED",
-    `status=${status.json?.status ?? "?"}`,
+    binance?.status === "CONNECTED",
+    `status=${binance?.status ?? "?"}`,
   );
   mark(
     "Base URL แสดงถูกต้อง",
-    status.json?.baseUrl === "https://demo-fapi.binance.com",
-    `baseUrl=${status.json?.baseUrl ?? "—"}`,
+    binance?.baseUrl === "https://demo-fapi.binance.com",
+    `baseUrl=${binance?.baseUrl ?? "—"}`,
   );
 
   const run = await req("/api/analysis/run", { method: "POST" });

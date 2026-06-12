@@ -1,5 +1,6 @@
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import { buildPnlInputFromEvents, resolveTradeIdFromPosition } from "./pnl-engine";
+import { hasValidPnlRealized } from "./pnl-store";
 import { validatePnlInput } from "./pnl-calculator";
 import type { PendingPnlTrade, PnlPendingDataReason } from "./pnl-types";
 
@@ -23,15 +24,11 @@ function latestPendingReasons(
 }
 
 export function listPendingPnlTrades(events: JournalEvent[]): PendingPnlTrade[] {
-  const realizedIds = new Set(
-    events.filter((e) => e.type === "PNL_REALIZED").map((e) => e.tradeId).filter(Boolean),
-  );
-
   const pending: PendingPnlTrade[] = [];
 
   for (const closedEvt of events.filter((e) => e.type === "POSITION_CLOSED")) {
     const tradeId = closedEvt.tradeId;
-    if (!tradeId || realizedIds.has(tradeId)) continue;
+    if (!tradeId || hasValidPnlRealized(tradeId, events)) continue;
 
     const input = buildPnlInputFromEvents(tradeId, events);
     const validation = input

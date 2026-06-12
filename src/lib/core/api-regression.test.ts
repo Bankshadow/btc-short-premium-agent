@@ -57,7 +57,15 @@ describe("Slice 8 — core API regression", () => {
       type: "PNL_REALIZED",
       environment: "testnet",
       tradeId: "t1",
-      payload: { netPnl: 2.5, result: "WIN" },
+      payload: {
+        netPnl: 2.5,
+        result: "WIN",
+        qty: "0.001",
+        entryPrice: 100000,
+        exitPrice: 99000,
+        side: "SHORT",
+        grossPnl: 2.5,
+      },
     });
     const events = (await import("@/lib/core/event-store")).readCoreEvents;
     const list = await events();

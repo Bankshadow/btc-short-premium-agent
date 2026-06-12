@@ -48,7 +48,15 @@ describe("Projection parity CI gate", () => {
       type: "PNL_REALIZED",
       environment: "testnet",
       tradeId: "parity-trade",
-      payload: { netPnl: 3.5, result: "WIN" },
+      payload: {
+        netPnl: 3.5,
+        result: "WIN",
+        qty: "0.001",
+        entryPrice: 100000,
+        exitPrice: 99000,
+        side: "SHORT",
+        grossPnl: 3.5,
+      },
     });
 
     const report = await runProjectionParityCheck();

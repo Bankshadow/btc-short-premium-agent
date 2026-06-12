@@ -1,5 +1,6 @@
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import type { ClosedTrade, OpenTrade } from "./trade-types";
+import { resolveClosedTradeFill, resolveOpenTradeFill, parseQty } from "./trade-fill-resolver";
 
 function orderPayload(evt: JournalEvent) {
   return evt.payload as {
@@ -64,6 +65,7 @@ export function buildOpenTradesFromEvents(events: JournalEvent[]): OpenTrade[] {
       (e) => e.type === "POSITION_OPENED" && e.tradeId === evt.tradeId,
     );
     const pos = positionEvt ? positionPayload(positionEvt) : {};
+    const fill = resolveOpenTradeFill(evt.tradeId, events, p, pos);
 
     open.push({
       tradeId: evt.tradeId,
@@ -73,14 +75,11 @@ export function buildOpenTradesFromEvents(events: JournalEvent[]): OpenTrade[] {
       environment: "TESTNET",
       symbol: String(p.symbol ?? ""),
       side: p.side ?? "SELL",
-      qty: String(p.qty ?? p.quantity ?? pos.qty ?? ""),
+      qty: fill.qty,
       notionalUsd: Number(p.notionalUsd ?? 0),
       orderId: String(p.orderId ?? pos.orderId ?? ""),
       clientOrderId: String(p.clientOrderId ?? ""),
-      entryPrice:
-        pos.entryPrice ??
-        p.entryPrice ??
-        (p.avgPrice != null ? Number(p.avgPrice) : null),
+      entryPrice: fill.entryPrice,
       status: "OPEN",
       openedAt: positionEvt?.timestamp ?? evt.timestamp,
       source: "BINANCE_TESTNET",
@@ -112,22 +111,31 @@ export function buildClosedTradesFromEvents(events: JournalEvent[]): ClosedTrade
       (e) => e.type === "CLOSE_ORDER_EXECUTED" && e.tradeId === evt.tradeId,
     );
     const closeOrder = closeOrderEvt
-      ? (closeOrderEvt.payload as { avgPrice?: number | string; orderId?: string })
+      ? (closeOrderEvt.payload as { avgPrice?: number | string; orderId?: string; executedQty?: string; qty?: string })
       : {};
+    const positionEvt = events.find(
+      (e) => e.type === "POSITION_OPENED" && e.tradeId === evt.tradeId,
+    );
+    const openPayload = positionEvt ? positionPayload(positionEvt) : {};
+    const fill = resolveClosedTradeFill(
+      evt.tradeId,
+      events,
+      evt.timestamp,
+      order,
+      openPayload,
+      closeOrder,
+    );
     const pendingEvt = [...events]
       .filter((e) => e.type === "PNL_PENDING_DATA" && e.tradeId === evt.tradeId)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
     const pendingPayload = pendingEvt?.payload as { reasons?: string[] } | undefined;
     const pnl = pnlEvt ? pnlPayload(pnlEvt) : {};
     const closedMeta = closedPayload(evt);
-    const entryPrice =
-      order.entryPrice ?? (order.avgPrice != null ? Number(order.avgPrice) : null);
-    const exitPrice =
-      pnl.exitPrice ??
-      (closeOrder.avgPrice != null ? Number(closeOrder.avgPrice) : null);
-    const hasPnlEvent = Boolean(pnlEvt);
+    const entryPrice = fill.entryPrice;
+    const exitPrice = pnl.exitPrice ?? fill.exitPrice;
+    const hasValidPnlEvent = Boolean(pnlEvt && entryPrice != null && exitPrice != null && parseQty(fill.qty) > 0);
     const missingFillData =
-      entryPrice == null || exitPrice == null || !hasPnlEvent || closedMeta.realizedPnlPending;
+      entryPrice == null || exitPrice == null || !hasValidPnlEvent || closedMeta.realizedPnlPending;
     const pendingPnl = missingFillData;
 
     closedTrades.push({
@@ -138,7 +146,7 @@ export function buildClosedTradesFromEvents(events: JournalEvent[]): ClosedTrade
       environment: "TESTNET",
       symbol: String(order.symbol ?? ""),
       side: order.side ?? "SELL",
-      qty: String(order.qty ?? order.quantity ?? ""),
+      qty: fill.qty,
       entryPrice,
       exitPrice,
       netPnl: pendingPnl ? 0 : Number(pnl.netPnl ?? 0),

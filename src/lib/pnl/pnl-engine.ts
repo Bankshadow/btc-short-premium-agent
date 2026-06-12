@@ -2,8 +2,9 @@ import { appendEvent, getEvents } from "@/lib/journal/journal-query";
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import { buildMissionSnapshot } from "@/lib/mission/mission-snapshot";
 import { isLiveEnabled } from "@/lib/risk/risk-gate";
+import { resolveClosedTradeFill } from "@/lib/trades/trade-fill-resolver";
 import { calculatePnlFromInput, validatePnlInput, buySellToPositionSide } from "./pnl-calculator";
-import { hasPnlRealized } from "./pnl-store";
+import { isValidRealizedPnlEvent } from "./pnl-store";
 import type {
   PnlInput,
   PnlPendingDataReason,
@@ -61,31 +62,25 @@ export function buildPnlInputFromEvents(tradeId: string, events: JournalEvent[])
   const openPayload = openEvt?.payload as { entryPrice?: number; qty?: string; side?: "BUY" | "SELL"; positionId?: string } | undefined;
   const closePayload = closeOrderEvt ? closeOrderPayload(closeOrderEvt) : {};
   const closedPayload = closedEvt.payload as { symbol?: string; qty?: string; source?: string };
+  const fill = resolveClosedTradeFill(
+    tradeId,
+    events,
+    closedEvt.timestamp,
+    order,
+    openPayload ?? {},
+    closePayload,
+  );
 
   const sideRaw = (order.side ?? openPayload?.side ?? "SELL") as "BUY" | "SELL";
-  const entryPrice =
-    openPayload?.entryPrice ??
-    (order.entryPrice != null ? Number(order.entryPrice) : null) ??
-    (order.avgPrice != null ? Number(order.avgPrice) : null);
-  const exitPrice = closePayload.avgPrice != null ? Number(closePayload.avgPrice) : null;
-  const qty = String(
-    order.qty ??
-      order.quantity ??
-      openPayload?.qty ??
-      closePayload.executedQty ??
-      closePayload.qty ??
-      closedPayload.qty ??
-      "0",
-  );
 
   return {
     tradeId,
     positionId: openEvt?.positionId ?? closedEvt.positionId ?? openPayload?.positionId ?? tradeId,
     symbol: String(order.symbol ?? closedPayload.symbol ?? ""),
     side: buySellToPositionSide(sideRaw),
-    qty,
-    entryPrice,
-    exitPrice,
+    qty: fill.qty,
+    entryPrice: fill.entryPrice,
+    exitPrice: fill.exitPrice,
     entryFee: Number(order.fee ?? order.commission ?? 0),
     exitFee: Number(closePayload.fee ?? closePayload.commission ?? 0),
     openedAt: openEvt?.timestamp ?? orderEvt?.timestamp ?? null,
@@ -194,15 +189,15 @@ export async function processPnlCalculation(input: {
     };
   }
 
-  if (await hasPnlRealized(tradeId)) {
-    const existing = events.find((e) => e.type === "PNL_REALIZED" && e.tradeId === tradeId);
+  const existingPnl = events.find((e) => e.type === "PNL_REALIZED" && e.tradeId === tradeId);
+  if (existingPnl && isValidRealizedPnlEvent(existingPnl)) {
     return {
       ok: true,
       alreadyRealized: true,
       status: "REALIZED",
       tradeId,
-      positionId: existing?.positionId ?? positionId,
-      pnl: existing ? recordFromExistingEvent(tradeId, existing) : null,
+      positionId: existingPnl.positionId ?? positionId,
+      pnl: recordFromExistingEvent(tradeId, existingPnl),
       reasons: [],
       warnings: [],
       message: "PnL already realized.",

@@ -1,5 +1,6 @@
 import { getEvents } from "@/lib/journal/journal-query";
 import type { JournalEvent } from "@/lib/journal/journal-types";
+import { parseQty } from "@/lib/trades/trade-fill-resolver";
 import type { RealizedPnlRecord } from "./pnl-types";
 import { buySellToPositionSide } from "./pnl-calculator";
 
@@ -35,10 +36,27 @@ function recordFromEvent(evt: JournalEvent): RealizedPnlRecord | null {
   };
 }
 
+export function isValidRealizedPnlEvent(evt: JournalEvent): boolean {
+  if (evt.type !== "PNL_REALIZED" || !evt.tradeId) return false;
+  const record = recordFromEvent(evt);
+  if (!record) return false;
+  if (parseQty(record.qty) <= 0) return false;
+  if (record.entryPrice <= 0 || record.exitPrice <= 0) return false;
+  return true;
+}
+
+export function hasValidPnlRealized(tradeId: string, events: JournalEvent[]): boolean {
+  const evt = events.find((e) => e.type === "PNL_REALIZED" && e.tradeId === tradeId);
+  return evt ? isValidRealizedPnlEvent(evt) : false;
+}
+
+export function listValidRealizedPnlEvents(events: JournalEvent[]): JournalEvent[] {
+  return events.filter((e) => e.type === "PNL_REALIZED" && isValidRealizedPnlEvent(e));
+}
+
 export async function getAllPnlRecords(): Promise<RealizedPnlRecord[]> {
   const events = await getEvents();
-  return events
-    .filter((e) => e.type === "PNL_REALIZED")
+  return listValidRealizedPnlEvents(events)
     .map(recordFromEvent)
     .filter((r): r is RealizedPnlRecord => r != null)
     .sort((a, b) => b.calculatedAt.localeCompare(a.calculatedAt));
@@ -51,7 +69,7 @@ export async function getPnlRecordByTradeId(tradeId: string): Promise<RealizedPn
 
 export async function hasPnlRealized(tradeId: string): Promise<boolean> {
   const events = await getEvents();
-  return events.some((e) => e.type === "PNL_REALIZED" && e.tradeId === tradeId);
+  return hasValidPnlRealized(tradeId, events);
 }
 
 export function buildPnlSummary(records: RealizedPnlRecord[]) {
