@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type {
   BlockedSignalRecord,
@@ -48,9 +49,18 @@ const EMPTY: PolymarketStoreData = {
   commentary: [],
 };
 
+function defaultStoreDir(): string {
+  if (process.env.POLYMARKET_DATA_DIR?.trim()) {
+    return process.env.POLYMARKET_DATA_DIR.trim();
+  }
+  if (process.env.VERCEL) {
+    return path.join(os.tmpdir(), "polymarket");
+  }
+  return path.join(process.cwd(), "data", "polymarket");
+}
+
 function storePath(): string {
-  const dir = process.env.POLYMARKET_DATA_DIR?.trim() || path.join(process.cwd(), "data", "polymarket");
-  return path.join(dir, "polymarket-store.json");
+  return path.join(defaultStoreDir(), "polymarket-store.json");
 }
 
 function ensureDir(file: string): void {
