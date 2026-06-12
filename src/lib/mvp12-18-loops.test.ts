@@ -100,8 +100,9 @@ describe("MVP 12-18 loops", () => {
       swarmAgreement: "AGREE",
       regime: "UNKNOWN",
     });
-    assert.equal(rules.blocked, true);
-    assert.ok(rules.triggered.some((t) => t.code === "CONSECUTIVE_LOSSES"));
+    const consecutive = rules.triggered.find((t) => t.code === "CONSECUTIVE_LOSSES");
+    assert.ok(consecutive);
+    assert.equal(consecutive?.severity, "WARN");
   });
 
   it("REPEATED_SETUP_FAILURE is advisory during evidence collection", async () => {

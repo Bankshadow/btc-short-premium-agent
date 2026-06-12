@@ -47,6 +47,9 @@ export async function evaluateNoTradeRules(input: {
 }): Promise<RuleEvaluationResult> {
   const triggered: NoTradeRuleTrigger[] = [];
   const events = await getEvents();
+  const evidenceProgress = buildEvidenceProgressFromEvents(events);
+  const evidenceCollectionActive =
+    evidenceProgress.validTrades < EVIDENCE_REQUIRED_TRADES;
   const mission = buildMissionSnapshot(events);
 
   const health = await runEngineHealthCheck();
@@ -92,11 +95,11 @@ export async function evaluateNoTradeRules(input: {
   }
 
   const consecutiveLosses = countConsecutiveLosses(events);
-  if (consecutiveLosses >= MAX_CONSECUTIVE_LOSSES) {
+  if (consecutiveLosses >= MAX_CONSECUTIVE_LOSSES && input.proposedVerdict === "TRADE") {
     triggered.push({
       code: "CONSECUTIVE_LOSSES",
       message: `${consecutiveLosses} consecutive losses recorded.`,
-      severity: "BLOCK",
+      severity: evidenceCollectionActive ? "WARN" : "BLOCK",
     });
   }
 
@@ -117,9 +120,6 @@ export async function evaluateNoTradeRules(input: {
   }
 
   const setupFailures = countRepeatedSetupFailures(events);
-  const evidenceProgress = buildEvidenceProgressFromEvents(events);
-  const evidenceCollectionActive =
-    evidenceProgress.validTrades < EVIDENCE_REQUIRED_TRADES;
   if (setupFailures >= 2 && input.proposedVerdict === "TRADE") {
     triggered.push({
       code: "REPEATED_SETUP_FAILURE",
