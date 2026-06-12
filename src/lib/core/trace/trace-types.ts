@@ -23,4 +23,8 @@ export interface TraceReport {
   invalidTransitions: string[];
   recommendation: string;
   liveLocked: true;
+  evidenceValidation?: import("@/lib/evidence/evidence-types").EvidenceTradeValidation | null;
+  evidenceMissingEvents?: string[];
+  evidenceRejectedReasons?: string[];
+  readinessImpact?: string | null;
 }

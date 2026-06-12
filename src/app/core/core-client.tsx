@@ -14,6 +14,7 @@ import {
   staleTradeRequiredAction,
 } from "@/lib/core/stale-trade-display";
 import { mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+import { evidenceReadinessTone, evidenceStatusLabel } from "@/lib/evidence/evidence-ui";
 
 function statusTone(status: string): "safe" | "blocked" | "wait" {
   if (status === "OK") return "safe";
@@ -185,6 +186,10 @@ export function CoreClient({ initialUi }: { initialUi: UiProjectionData }) {
       ? ui.health.rawWarningCount
       : (ui.health.warnings?.reduce((sum, w) => sum + (w.count ?? 1), 0) ?? 0);
   const staleWarnings = ui.trades.staleOpenWarnings;
+  const pendingPnlCount = ui.trades.closed.filter(
+    (t) => t.status === "CLOSED_PENDING_PNL" || t.pnlStatus === "PENDING_DATA",
+  ).length;
+  const realizedPnlCount = ui.trades.closed.filter((t) => t.pnlStatus === "REALIZED").length;
   const latestTradeId =
     ui.trades.open[0]?.tradeId ?? ui.trades.closed[0]?.tradeId ?? null;
 
@@ -226,8 +231,30 @@ export function CoreClient({ initialUi }: { initialUi: UiProjectionData }) {
         {" · "}
         trades={ui.mission.openTrades} open / {ui.mission.closedTrades} closed
         {" · "}
+        realized PnL={realizedPnlCount} / pending PnL={pendingPnlCount}
+        {" · "}
         health={healthStatus}
       </section>
+
+      <SectionCard title="Evidence readiness" tone="warning">
+        <p className="text-sm text-[var(--muted)]">
+          Status: {evidenceStatusLabel(ui.evidence.readinessStatus)} · Progress: {ui.evidence.progressPct ?? 0}
+          % · Valid: {ui.evidence.valid} · Rejected: {ui.evidence.rejected} · Pending PnL:{" "}
+          {ui.evidence.pending ?? 0}
+        </p>
+        {(ui.evidence.blockingReasons?.length ?? 0) > 0 ? (
+          <ul className="mt-2 list-disc pl-5 text-sm text-[var(--danger)]">
+            {ui.evidence.blockingReasons!.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-[var(--muted)]">No critical evidence safety blockers.</p>
+        )}
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          Latest validated: {ui.evidence.trades?.[0]?.validatedAt ?? "—"}
+        </p>
+      </SectionCard>
 
       <SectionCard title="Next action" tone="warning">
         <p className="text-sm text-[var(--muted)]">{nextAction}</p>
@@ -242,6 +269,7 @@ export function CoreClient({ initialUi }: { initialUi: UiProjectionData }) {
           <MetricCard label="Equity" value={`$${ui.mission.currentEquity.toLocaleString()}`} />
           <MetricCard label="Net PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} />
           <MetricCard label="Evidence" value={`${ui.evidence.valid}/${ui.evidence.required}`} />
+          <MetricCard label="Evidence readiness" value={evidenceStatusLabel(ui.evidence.readinessStatus)} />
           <MetricCard
             label="Trades"
             value={`${ui.mission.openTrades} open / ${ui.mission.closedTrades} closed`}

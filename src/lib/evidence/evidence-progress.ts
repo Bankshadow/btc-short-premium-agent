@@ -1,94 +1,153 @@
 import { appendEvent, getEvents } from "@/lib/journal/journal-query";
-import { PNL_PENDING_MESSAGE } from "@/lib/core/trade-reconciliation";
-import { listClosedTradeIds, validateTradeEvidence } from "./evidence-validator";
-import type { EvidenceProgress } from "./evidence-types";
+import { newEventId } from "@/lib/journal/journal-types";
+import { buildEvidenceProgress, buildEvidenceProgressFromEvents } from "./evidence-progress-engine";
+import type { EvidenceProgress, EvidenceTradeValidation } from "./evidence-types";
+import { listClosedTradeIds, validateEvidenceTrade } from "./evidence-validator";
 import { buildClosedTradesFromEvents } from "@/lib/trades/trade-store";
 
-const EVIDENCE_TARGET = 12;
+export { buildEvidenceProgress, buildEvidenceProgressFromEvents };
 
-export async function recalculateEvidenceProgress(): Promise<EvidenceProgress> {
+function lastSummaryEvent(
+  tradeId: string,
+  events: Awaited<ReturnType<typeof getEvents>>,
+): { type: string; payload: Record<string, unknown> } | null {
+  const summary = events
+    .filter(
+      (e) =>
+        (e.type === "EVIDENCE_TRADE_VALIDATED" || e.type === "EVIDENCE_TRADE_REJECTED") &&
+        e.tradeId === tradeId,
+    )
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+  return summary ? { type: summary.type, payload: summary.payload } : null;
+}
+
+function shouldWriteTradeSummary(
+  validation: EvidenceTradeValidation,
+  previous: { type: string; payload: Record<string, unknown> } | null,
+): boolean {
+  if (!previous) return true;
+  const prevStatus = previous.type === "EVIDENCE_TRADE_VALIDATED" ? "VALID" : "REJECTED";
+  const nextStatus = validation.isValid ? "VALID" : "REJECTED";
+  if (prevStatus !== nextStatus) return true;
+  const prevReasons = JSON.stringify(previous.payload.rejectionReasons ?? previous.payload.rejectedReasons ?? []);
+  const nextReasons = JSON.stringify(validation.rejectedReasons);
+  return prevReasons !== nextReasons;
+}
+
+export async function runEvidenceValidation(input?: {
+  tradeId?: string;
+  validateAll?: boolean;
+  writeEvents?: boolean;
+}): Promise<{
+  ok: boolean;
+  validationId: string;
+  progress: EvidenceProgress;
+  validated: EvidenceTradeValidation[];
+  rejected: EvidenceTradeValidation[];
+  eventsWritten: number;
+}> {
+  const writeEvents = input?.writeEvents !== false;
   const events = await getEvents();
-  const tradeIds = listClosedTradeIds(events);
-  const trades = tradeIds.map((id) => validateTradeEvidence(id, events));
-  const validTrades = trades.filter((t) => t.status === "VALID");
-  const rejectedTrades = trades.filter((t) => t.status === "REJECTED");
-  const valid = Math.min(validTrades.length, EVIDENCE_TARGET);
-
-  for (const t of trades) {
-    await appendEvent({
-      type: t.status === "VALID" ? "EVIDENCE_TRADE_VALIDATED" : "EVIDENCE_TRADE_REJECTED",
-      environment: "testnet",
-      tradeId: t.tradeId,
-      payload: {
-        tradeId: t.tradeId,
-        rejectionReasons: t.rejectionReasons,
-        validatedAt: t.validatedAt,
-      },
-    });
-  }
-
-  const progress: EvidenceProgress = {
-    valid,
-    required: EVIDENCE_TARGET,
-    rejected: rejectedTrades.length,
-    trades,
-    readinessStatus:
-      valid >= EVIDENCE_TARGET ? "COMPLETE" : rejectedTrades.length > 0 ? "BLOCKED" : "COLLECTING",
-    message:
-      valid >= EVIDENCE_TARGET
-        ? "Evidence target reached — live remains locked."
-        : `${valid}/${EVIDENCE_TARGET} valid evidence trades collected.`,
-  };
-
-  await appendEvent({
-    type: "EVIDENCE_PROGRESS_UPDATED",
-    environment: "testnet",
-    payload: {
-      valid: progress.valid,
-      required: progress.required,
-      rejected: progress.rejected,
-      readinessStatus: progress.readinessStatus,
-    },
-  });
-
-  return progress;
-}
-
-function evidenceProgressMessage(
-  valid: number,
-  rejectedTrades: ReturnType<typeof validateTradeEvidence>[],
-): string {
-  if (valid >= EVIDENCE_TARGET) {
-    return "Evidence target reached — live remains locked.";
-  }
-  const pendingPnl = rejectedTrades.some((t) =>
-    t.rejectionReasons.some((r) =>
-      ["MISSING_REALIZED_PNL", "PNL_PENDING_DATA", "MISSING_ENTRY_PRICE", "MISSING_EXIT_PRICE", "ZERO_QTY"].includes(r),
-    ),
-  );
-  const base = `${valid}/${EVIDENCE_TARGET} valid evidence trades collected.`;
-  return pendingPnl ? `${base} ${PNL_PENDING_MESSAGE}` : base;
-}
-
-export function buildEvidenceProgressFromEvents(events: Awaited<ReturnType<typeof getEvents>>): EvidenceProgress {
   const closedViews = buildClosedTradesFromEvents(events);
   const closedById = new Map(closedViews.map((t) => [t.tradeId, t]));
-  const tradeIds = listClosedTradeIds(events);
-  const trades = tradeIds.map((id) =>
-    validateTradeEvidence(id, events, closedById.get(id)),
-  );
-  const validTrades = trades.filter((t) => t.status === "VALID");
-  const rejectedTrades = trades.filter((t) => t.status === "REJECTED");
-  const valid = Math.min(validTrades.length, EVIDENCE_TARGET);
-  return {
-    valid,
-    required: EVIDENCE_TARGET,
-    rejected: rejectedTrades.length,
-    trades,
-    readinessStatus:
-      valid >= EVIDENCE_TARGET ? "COMPLETE" : rejectedTrades.length > 0 ? "BLOCKED" : "COLLECTING",
-    message: evidenceProgressMessage(valid, rejectedTrades),
-  };
+
+  let tradeIds = listClosedTradeIds(events);
+  if (input?.tradeId) {
+    tradeIds = tradeIds.includes(input.tradeId) ? [input.tradeId] : [input.tradeId];
+  } else if (!input?.validateAll) {
+    tradeIds = tradeIds.slice(0, 1);
+  }
+
+  const validationId = newEventId("ev-val");
+  let eventsWritten = 0;
+
+  if (writeEvents) {
+    await appendEvent({
+      type: "EVIDENCE_VALIDATION_STARTED",
+      environment: "testnet",
+      payload: {
+        validationId,
+        tradeIds,
+        validateAll: Boolean(input?.validateAll),
+        safeToReplay: true,
+      },
+    });
+    eventsWritten += 1;
+  }
+
+  const validated: EvidenceTradeValidation[] = [];
+  const rejected: EvidenceTradeValidation[] = [];
+
+  for (const tradeId of tradeIds) {
+    const validation = validateEvidenceTrade({
+      tradeId,
+      events,
+      closedTrade: closedById.get(tradeId),
+    });
+    if (validation.isValid) validated.push(validation);
+    else rejected.push(validation);
+
+    if (writeEvents && shouldWriteTradeSummary(validation, lastSummaryEvent(tradeId, events))) {
+      await appendEvent({
+        type: validation.isValid ? "EVIDENCE_TRADE_VALIDATED" : "EVIDENCE_TRADE_REJECTED",
+        environment: "testnet",
+        tradeId,
+        runId: validation.runId ?? undefined,
+        decisionLogId: validation.decisionLogId ?? undefined,
+        positionId: validation.positionId ?? undefined,
+        payload: {
+          validationId,
+          tradeId,
+          isValid: validation.isValid,
+          rejectedReasons: validation.rejectedReasons,
+          rejectionReasons: validation.rejectionReasons,
+          missingEvents: validation.missingEvents,
+          safeToReplay: true,
+          validatedAt: validation.validatedAt,
+        },
+      });
+      eventsWritten += 1;
+    }
+  }
+
+  const progress = buildEvidenceProgress(await getEvents());
+
+  if (writeEvents) {
+    await appendEvent({
+      type: "EVIDENCE_PROGRESS_UPDATED",
+      environment: "testnet",
+      payload: {
+        validationId,
+        valid: progress.valid,
+        required: progress.required,
+        rejected: progress.rejected,
+        pending: progress.pending,
+        progressPct: progress.progressPct,
+        readinessStatus: progress.readinessStatus,
+        safeToReplay: true,
+      },
+    });
+    await appendEvent({
+      type: "EVIDENCE_READINESS_UPDATED",
+      environment: "testnet",
+      payload: {
+        validationId,
+        readinessStatus: progress.readinessStatus,
+        blockingReasons: progress.blockingReasons,
+        progressPct: progress.progressPct,
+        validTrades: progress.validTrades,
+        safeToReplay: true,
+      },
+    });
+    eventsWritten += 2;
+  }
+
+  return { ok: true, validationId, progress, validated, rejected, eventsWritten };
+}
+
+export async function recalculateEvidenceProgress(): Promise<EvidenceProgress> {
+  const result = await runEvidenceValidation({ validateAll: true, writeEvents: true });
+  return result.progress;
 }
 
 export async function getEvidenceProgressView(): Promise<EvidenceProgress> {

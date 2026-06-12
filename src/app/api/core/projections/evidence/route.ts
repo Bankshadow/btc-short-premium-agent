@@ -15,10 +15,14 @@ export async function GET() {
       validTrades: evidence.valid,
       requiredTrades: evidence.required,
       progressPct,
-      rejectedTrades: evidence.trades
-        .filter((t) => t.status === "REJECTED")
+      rejectedTradeIds: evidence.trades
+        .filter((t) => t.status === "REJECTED" || t.status === "PENDING")
         .map((t) => t.tradeId),
-      readiness: evidence.readinessStatus === "COMPLETE" ? "READY" : "NOT_READY",
+      readiness:
+        evidence.readinessStatus === "READY_FOR_TESTNET_CONTINUATION" ||
+        evidence.readinessStatus === "READY_FOR_CONTROLLED_TESTNET_AUTO_REVIEW"
+          ? "READY"
+          : "NOT_READY",
     };
   });
 }

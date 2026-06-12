@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import { useUiProjectionData } from "@/components/use-projection-bundle";
 import { aggregateEvidenceRejectionReasons, mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+import { evidenceReadinessTone, evidenceStatusLabel } from "@/lib/evidence/evidence-ui";
 import { computeReadyForMvp5 } from "@/lib/core/mvp5-readiness";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { defaultBinanceDiagnostics, zeroReportsSummary } from "@/lib/core/zero-state";
@@ -209,18 +210,40 @@ export function ReportsClient({ initialUi }: { initialUi: UiProjectionData }) {
       </SectionCard>
 
       <ProgressCard
-        title="Evidence progress (projection)"
+        title="Evidence 12 Trades"
         current={ui.evidence.valid}
         required={ui.evidence.required}
-        statusLabel={ui.evidence.readinessStatus ?? "COLLECTING"}
-        tone={ui.evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
-        message={ui.evidence.message ?? undefined}
+        statusLabel={evidenceStatusLabel(ui.evidence.readinessStatus)}
+        tone={evidenceReadinessTone(ui.evidence.readinessStatus)}
+        message={
+          ui.evidence.message ??
+          "Evidence requires full lifecycle: execution, close, realized PnL, and learning."
+        }
       />
+
+      <SectionCard title="Evidence 12 Trades summary">
+        <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard label="Valid / Required" value={`${ui.evidence.valid}/${ui.evidence.required}`} />
+          <MetricCard label="Progress" value={`${ui.evidence.progressPct ?? 0}%`} />
+          <MetricCard label="Readiness" value={evidenceStatusLabel(ui.evidence.readinessStatus)} />
+          <MetricCard label="Rejected" value={String(ui.evidence.rejected)} />
+          <MetricCard label="Pending PnL" value={String(ui.evidence.pending ?? pendingPnlCount)} />
+        </div>
+        <p className="mt-3 text-sm text-[var(--muted)]">
+          Evidence requires full lifecycle: execution, close, realized PnL, and learning. Live trading
+          is not ready.
+        </p>
+        {(ui.evidence.blockingReasons?.length ?? 0) > 0 ? (
+          <p className="mt-2 text-sm text-[var(--danger)]">
+            Blocking: {ui.evidence.blockingReasons?.join(", ")}
+          </p>
+        ) : null}
+      </SectionCard>
 
       <SectionCard title="Evidence trade details">
         <p className="text-sm text-[var(--muted)] mb-3">
-          {ui.evidence.rejected} rejected · {ui.evidence.required - ui.evidence.valid} remaining · health{" "}
-          {coreHealthStatus}
+          {ui.evidence.rejected} rejected · {ui.evidence.pending ?? 0} pending PnL ·{" "}
+          {ui.evidence.required - ui.evidence.valid} remaining · health {coreHealthStatus}
         </p>
         {evidenceRejectionReasons.length > 0 ? (
           <div className="mb-3 flex flex-wrap gap-2">
@@ -233,12 +256,19 @@ export function ReportsClient({ initialUi }: { initialUi: UiProjectionData }) {
         ) : null}
         {(ui.evidence.trades?.length ?? 0) > 0 ? (
           <div className="space-y-2">
-            {ui.evidence.trades!.slice(0, 8).map((t) => (
+            {ui.evidence.trades!.slice(0, 12).map((t) => (
               <div key={t.tradeId} className="rounded border border-[var(--border)] p-2 text-xs">
-                <Badge tone={t.status === "VALID" ? "safe" : "blocked"}>{t.status}</Badge>
+                <Badge tone={t.status === "VALID" ? "safe" : t.status === "PENDING" ? "wait" : "blocked"}>
+                  {t.status === "VALID" ? "Evidence valid" : t.status === "PENDING" ? "Evidence pending" : "Evidence rejected"}
+                </Badge>
                 <span className="ml-2 font-mono">{t.tradeId}</span>
-                {t.status === "REJECTED" && t.rejectionReasons.length > 0 ? (
-                  <p className="mt-1 text-[var(--danger)]">{t.rejectionReasons.join("; ")}</p>
+                {t.status !== "VALID" && (t.rejectedReasons?.length ?? t.rejectionReasons?.length ?? 0) > 0 ? (
+                  <p className="mt-1 text-[var(--danger)]">
+                    {(t.rejectedReasons ?? t.rejectionReasons ?? []).slice(0, 4).join("; ")}
+                  </p>
+                ) : null}
+                {t.missingEvents?.length ? (
+                  <p className="mt-1 text-[var(--muted)]">Missing: {t.missingEvents.slice(0, 4).join(", ")}</p>
                 ) : null}
               </div>
             ))}

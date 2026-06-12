@@ -1,4 +1,4 @@
-import { buildEvidenceProgressFromEvents } from "@/lib/evidence/evidence-progress";
+import { buildEvidenceProgressFromEvents } from "@/lib/evidence/evidence-progress-engine";
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import type { EvidenceProgress } from "@/lib/evidence/evidence-types";
 

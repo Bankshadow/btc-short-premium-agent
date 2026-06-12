@@ -89,6 +89,9 @@ async function repairTradePnl(
     if (result.ok) {
       return { status: "applied", message: result.message };
     }
+    if (result.status === "PNL_PENDING_DATA") {
+      return { status: "applied", message: result.message };
+    }
     return { status: "failed", message: result.message };
   } catch (err) {
     return {

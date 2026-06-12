@@ -67,7 +67,8 @@ export type DefaultEvidenceProjection = EvidenceProgress &
     validTrades: number;
     requiredTrades: number;
     progressPct: number;
-    rejectedTrades: string[];
+    /** @deprecated Use rejectedList */
+    rejectedTradeIds: string[];
     readiness: string;
   };
 
@@ -169,6 +170,7 @@ export function getDefaultPositionProjection(): DefaultPositionProjection {
 export function getDefaultPnlProjection(): DefaultPnlProjection {
   return {
     realizedCount: 0,
+    pendingCount: 0,
     totalNetPnl: 0,
     realizedPnl: 0,
     unrealizedPnl: 0,
@@ -183,13 +185,23 @@ export function getDefaultEvidenceProjection(): DefaultEvidenceProjection {
     valid: 0,
     required: 12,
     rejected: 0,
+    pending: 0,
+    pendingTrades: 0,
     trades: [],
-    readinessStatus: "COLLECTING",
+    readinessStatus: "NOT_READY",
     message: "0/12 valid evidence trades collected.",
     validTrades: 0,
     requiredTrades: 12,
     progressPct: 0,
-    rejectedTrades: [],
+    rejectedTrades: 0,
+    validTradeIds: [],
+    rejectedList: [],
+    pendingList: [],
+    latestValidatedAt: null,
+    blockingReasons: [],
+    warnings: [],
+    liveLocked: true,
+    rejectedTradeIds: [],
     readiness: "NOT_READY",
     zeroState: true,
   };

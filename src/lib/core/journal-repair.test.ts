@@ -131,28 +131,35 @@ describe("journal repair", () => {
     assert.equal(hasTradeChainEvent("EXECUTION_REVIEWED", TRADE_ID, events), true);
   });
 
-  it("zero-fill reconciliation records breakeven PnL without fake prices", async () => {
+  it("zero-fill reconciliation emits PNL_PENDING_DATA without fake realized PnL", async () => {
     await seedReconciliationClosedTrade();
     const result = await calculatePnlForTrade(TRADE_ID);
-    assert.equal(result.ok, true);
-    assert.equal(result.record?.netPnl, 0);
-    assert.equal(result.record?.result, "BREAKEVEN");
+    assert.equal(result.ok, false);
+    assert.equal(result.status, "PNL_PENDING_DATA");
+    assert.ok(result.reasons?.includes("ZERO_QTY"));
     const events = await getEvents();
-    const pnl = events.find((e) => e.type === "PNL_REALIZED" && e.tradeId === TRADE_ID);
-    assert.equal((pnl?.payload as { source?: string }).source, "ZERO_FILL_RECONCILIATION");
+    assert.ok(events.some((e) => e.type === "PNL_PENDING_DATA" && e.tradeId === TRADE_ID));
+    assert.equal(
+      events.some((e) => e.type === "PNL_REALIZED" && e.tradeId === TRADE_ID),
+      false,
+    );
   });
 
-  it("runJournalRepair backfills CLOSE_REVIEWED and post-trade loop", async () => {
+  it("runJournalRepair backfills CLOSE_REVIEWED and records pending PnL reasons", async () => {
     await seedReconciliationClosedTrade();
     const report = await runJournalRepair({ tradeIds: [TRADE_ID] });
     assert.equal(report.ok, true);
     assert.equal(report.trades[0]?.closeReviewedBackfill, "applied");
     assert.equal(report.trades[0]?.pnlRepair, "applied");
-    assert.equal(report.trades[0]?.postTradeLoop, "applied");
+    assert.equal(report.trades[0]?.postTradeLoop, "skipped");
 
     const events = await getEvents();
     assert.ok(events.some((e) => e.type === "CLOSE_REVIEWED" && e.tradeId === TRADE_ID));
-    assert.ok(events.some((e) => e.type === "LEARNING_RECORD_CREATED" && e.tradeId === TRADE_ID));
+    assert.ok(events.some((e) => e.type === "PNL_PENDING_DATA" && e.tradeId === TRADE_ID));
+    assert.equal(
+      events.some((e) => e.type === "LEARNING_RECORD_CREATED" && e.tradeId === TRADE_ID),
+      false,
+    );
 
     const evidence = validateTradeEvidence(TRADE_ID, events);
     assert.equal(evidence.status, "REJECTED");

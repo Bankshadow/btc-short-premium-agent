@@ -108,11 +108,23 @@ export function buildClosedTradesFromEvents(events: JournalEvent[]): ClosedTrade
         e.tradeId === evt.tradeId,
     );
     const order = orderEvt ? orderPayload(orderEvt) : {};
+    const closeOrderEvt = events.find(
+      (e) => e.type === "CLOSE_ORDER_EXECUTED" && e.tradeId === evt.tradeId,
+    );
+    const closeOrder = closeOrderEvt
+      ? (closeOrderEvt.payload as { avgPrice?: number | string; orderId?: string })
+      : {};
+    const pendingEvt = [...events]
+      .filter((e) => e.type === "PNL_PENDING_DATA" && e.tradeId === evt.tradeId)
+      .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+    const pendingPayload = pendingEvt?.payload as { reasons?: string[] } | undefined;
     const pnl = pnlEvt ? pnlPayload(pnlEvt) : {};
     const closedMeta = closedPayload(evt);
     const entryPrice =
       order.entryPrice ?? (order.avgPrice != null ? Number(order.avgPrice) : null);
-    const exitPrice = pnl.exitPrice ?? null;
+    const exitPrice =
+      pnl.exitPrice ??
+      (closeOrder.avgPrice != null ? Number(closeOrder.avgPrice) : null);
     const hasPnlEvent = Boolean(pnlEvt);
     const missingFillData =
       entryPrice == null || exitPrice == null || !hasPnlEvent || closedMeta.realizedPnlPending;
@@ -133,7 +145,8 @@ export function buildClosedTradesFromEvents(events: JournalEvent[]): ClosedTrade
       result: pendingPnl ? "PENDING_PNL" : String(pnl.result ?? "UNKNOWN"),
       status: pendingPnl ? "CLOSED_PENDING_PNL" : "CLOSED",
       pnlStatus: pendingPnl ? "PENDING_DATA" : "REALIZED",
-      closeOrderId: closedMeta.closeOrderId ?? null,
+      pnlPendingReasons: pendingPnl ? pendingPayload?.reasons ?? [] : [],
+      closeOrderId: closedMeta.closeOrderId ?? closeOrder.orderId ?? null,
       openedAt: orderEvt?.timestamp ?? evt.timestamp,
       closedAt: evt.timestamp,
       learningId:

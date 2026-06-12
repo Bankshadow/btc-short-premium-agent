@@ -26,7 +26,11 @@ Regression is green (239/239 tests), build passes. Production loading fix: `getD
 
 See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md).
 
-**Journal repair (2026-06-11):** See [CORE_ENGINE_JOURNAL_REPAIR.md](./CORE_ENGINE_JOURNAL_REPAIR.md). Repairs zero-fill reconciliation trades, backfills `CLOSE_REVIEWED`, runs post-trade loop. **Requires deploy + `POST /api/journal/repair` on production.**
+**MVP 8 (2026-06-11):** See [MVP8_EVIDENCE_12_TRADES_PLAN.md](./MVP8_EVIDENCE_12_TRADES_PLAN.md) and [MVP8_EVIDENCE_12_TRADES_IMPLEMENTATION.md](./MVP8_EVIDENCE_12_TRADES_IMPLEMENTATION.md). Strict 12-trade evidence progress with full lifecycle + PnL + learning validation. APIs: `GET /api/evidence/progress`, `POST /api/evidence/validate`, `GET /api/evidence/rejected`. Never marks live ready.
+
+**MVP 6 (2026-06-11):** See [MVP6_PNL_FILL_DATA_PLAN.md](./MVP6_PNL_FILL_DATA_PLAN.md) and [MVP6_PNL_FILL_DATA_IMPLEMENTATION.md](./MVP6_PNL_FILL_DATA_IMPLEMENTATION.md). Strict PnL pipeline: `PNL_PENDING_DATA` with reasons when fill data incomplete; no fake zero-fill `PNL_REALIZED`. APIs: `POST /api/pnl/calculate`, `GET /api/pnl/pending`. UI binding verified (`REAL_BUNDLE`) before implementation.
+
+**Journal repair (2026-06-11):** See [CORE_ENGINE_JOURNAL_REPAIR.md](./CORE_ENGINE_JOURNAL_REPAIR.md). Repairs zero-fill reconciliation trades, backfills `CLOSE_REVIEWED`, runs post-trade loop when PnL realized. **Requires deploy + `POST /api/journal/repair` on production.**
 
 **Hotfix 3 (2026-06-11):** See [CORE_ENGINE_HOTFIX3_PROJECTION_MAPPING_STATUS.md](./CORE_ENGINE_HOTFIX3_PROJECTION_MAPPING_STATUS.md). Dashboard bundle mapping, Binance status consistency, stale trade soft warning, PnL pending labels.
 

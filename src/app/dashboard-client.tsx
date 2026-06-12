@@ -27,6 +27,7 @@ import {
 import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { deriveLifecycleDisplay } from "@/lib/ui/lifecycle-display";
+import { evidenceReadinessTone, evidenceStatusLabel } from "@/lib/evidence/evidence-ui";
 import { mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
 
 export function DashboardClient({ initialUi }: { initialUi: UiProjectionData }) {
@@ -126,6 +127,10 @@ export function DashboardClient({ initialUi }: { initialUi: UiProjectionData }) 
         closedTrades={ui.mission.closedTrades}
         {" · "}
         evidence={ui.evidence.valid}/{ui.evidence.required}
+        {" · "}
+        readiness={evidenceStatusLabel(ui.evidence.readinessStatus)}
+        {" · "}
+        not live-ready
         {" · "}
         health={ui.health.status}
         {" · "}
@@ -296,13 +301,20 @@ export function DashboardClient({ initialUi }: { initialUi: UiProjectionData }) 
         </SectionCard>
 
         <ProgressCard
-          title="Evidence & Learning"
+          title="Evidence 12 Trades"
           current={ui.evidence.valid}
           required={ui.evidence.required}
-          statusLabel={ui.evidence.readinessStatus ?? "COLLECTING"}
-          tone={ui.evidence.readinessStatus === "COMPLETE" ? "ok" : "warning"}
-          message={ui.evidence.message ?? undefined}
+          statusLabel={evidenceStatusLabel(ui.evidence.readinessStatus)}
+          tone={evidenceReadinessTone(ui.evidence.readinessStatus)}
+          message={
+            ui.evidence.message ??
+            "Evidence requires full lifecycle: execution, close, realized PnL, and learning."
+          }
         />
+        <p className="text-xs text-[var(--muted)]">
+          Rejected: {ui.evidence.rejected} · Pending PnL: {ui.evidence.pending ?? 0} · Progress:{" "}
+          {ui.evidence.progressPct ?? 0}% · Live trading not ready.
+        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

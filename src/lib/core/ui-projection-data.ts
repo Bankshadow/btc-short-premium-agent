@@ -51,8 +51,11 @@ export interface UiProjectionEvidence {
   valid: number;
   required: number;
   rejected: number;
+  pending?: number;
+  progressPct?: number;
   readinessStatus: string;
   message: string | null;
+  blockingReasons?: string[];
   trades?: EvidenceProgress["trades"];
 }
 
@@ -226,8 +229,11 @@ export function mapProjectionBundleToUi(
       valid: bundle.evidence.valid,
       required: bundle.evidence.required,
       rejected: bundle.evidence.rejected ?? 0,
-      readinessStatus: bundle.evidence.readinessStatus ?? "COLLECTING",
+      pending: bundle.evidence.pending ?? 0,
+      progressPct: bundle.evidence.progressPct ?? 0,
+      readinessStatus: bundle.evidence.readinessStatus ?? "NOT_READY",
       message: bundle.evidence.message ?? null,
+      blockingReasons: bundle.evidence.blockingReasons ?? [],
       trades: bundle.evidence.trades,
     },
     health: {
@@ -258,8 +264,13 @@ export function aggregateEvidenceRejectionReasons(
 ): string[] {
   const counts = new Map<string, number>();
   for (const trade of evidence.trades ?? []) {
-    if (trade.status !== "REJECTED") continue;
-    for (const reason of trade.rejectionReasons) {
+    if (trade.status !== "REJECTED" && trade.status !== "PENDING" && !("rejectedReasons" in trade)) continue;
+    const reasons = "rejectedReasons" in trade && Array.isArray(trade.rejectedReasons)
+      ? trade.rejectedReasons
+      : "rejectionReasons" in trade
+        ? (trade.rejectionReasons as string[])
+        : [];
+    for (const reason of reasons) {
       counts.set(reason, (counts.get(reason) ?? 0) + 1);
     }
   }
@@ -317,8 +328,11 @@ export function mapNormalizedToUiProjectionData(
       valid: normalized.evidence.valid,
       required: normalized.evidence.required,
       rejected: normalized.evidence.rejected ?? 0,
-      readinessStatus: normalized.evidence.readinessStatus ?? "COLLECTING",
+      pending: normalized.evidence.pending ?? 0,
+      progressPct: normalized.evidence.progressPct ?? 0,
+      readinessStatus: normalized.evidence.readinessStatus ?? "NOT_READY",
       message: normalized.evidence.message ?? null,
+      blockingReasons: normalized.evidence.blockingReasons ?? [],
       trades: normalized.evidence.trades,
     },
     health: {

@@ -37,6 +37,7 @@ export interface ClosedTrade {
   result: string;
   status: "CLOSED" | "CLOSED_PENDING_PNL";
   pnlStatus?: PnlStatus;
+  pnlPendingReasons?: string[];
   closeOrderId: string | null;
   openedAt: string;
   closedAt: string;

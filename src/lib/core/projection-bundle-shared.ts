@@ -54,11 +54,24 @@ function zeroPositionForClient(): PositionProjection {
 function zeroEvidenceForClient(): EvidenceProgress {
   return {
     valid: 0,
+    validTrades: 0,
     required: 12,
+    requiredTrades: 12,
     rejected: 0,
+    rejectedTrades: 0,
+    pending: 0,
+    pendingTrades: 0,
+    progressPct: 0,
     trades: [],
-    readinessStatus: "COLLECTING",
+    rejectedList: [],
+    pendingList: [],
+    validTradeIds: [],
+    latestValidatedAt: null,
+    blockingReasons: [],
+    warnings: [],
+    readinessStatus: "NOT_READY",
     message: "0/12 valid evidence trades collected.",
+    liveLocked: true,
   };
 }
 

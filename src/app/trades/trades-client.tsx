@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fetchJson } from "@/lib/api/fetch-json";
 import { CloseReviewModal } from "@/components/CloseReviewModal";
 import { useUiProjectionData } from "@/components/use-projection-bundle";
 import {
@@ -14,6 +15,13 @@ import {
 import { PROJECTION_FALLBACK_ACTIVE_MESSAGE } from "@/lib/core/projection-defaults";
 import { PNL_PENDING_LABEL, staleTradeBannerText } from "@/lib/core/stale-trade-display";
 import { mergePageUiProjection, type UiProjectionData } from "@/lib/core/ui-projection-data";
+
+function evidenceLabel(status: string | undefined): string {
+  if (status === "VALID") return "Evidence valid";
+  if (status === "PENDING") return "Evidence pending";
+  if (status === "REJECTED") return "Evidence rejected";
+  return "Evidence pending";
+}
 
 function pnlStatusLabel(trade: {
   status: string;
@@ -37,10 +45,28 @@ export function TradesClient({ initialUi }: { initialUi: UiProjectionData }) {
   const ctx = useUiProjectionData();
   const ui = mergePageUiProjection(initialUi, ctx);
   const [closeTradeId, setCloseTradeId] = useState<string | null>(null);
+  const [calculatingId, setCalculatingId] = useState<string | null>(null);
 
   const closeTrade = ui.trades.open.find((t) => t.tradeId === closeTradeId);
+  const pendingPnlCount = ui.trades.closed.filter(
+    (t) => t.status === "CLOSED_PENDING_PNL" || t.pnlStatus === "PENDING_DATA",
+  ).length;
+  const realizedPnlCount = ui.trades.closed.filter((t) => t.pnlStatus === "REALIZED").length;
+
+  async function calculatePnl(tradeId: string) {
+    setCalculatingId(tradeId);
+    try {
+      await fetchJson("/api/pnl/calculate", {
+        method: "POST",
+        body: JSON.stringify({ tradeId }),
+      });
+      await ui.reload();
+    } finally {
+      setCalculatingId(null);
+    }
+  }
   const evidenceByTrade = new Map(
-    (ui.evidence.trades ?? []).map((t) => [t.tradeId, t.status]),
+    (ui.evidence.trades ?? []).map((t) => [t.tradeId, t]),
   );
   const showFallbackWarning = ui.isFallback && !ui.loading;
 
@@ -65,11 +91,12 @@ export function TradesClient({ initialUi }: { initialUi: UiProjectionData }) {
         onRetry={ui.reload}
       />
 
-      <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-4">
+      <div className="ui-dashboard-metrics sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard label="Executions" value={String(ui.mission.totalTrades)} />
         <MetricCard label="Open" value={String(ui.trades.effectiveOpenCount)} />
         <MetricCard label="Closed" value={String(ui.mission.closedTrades)} />
-        <MetricCard label="Realized PnL" value={`$${ui.mission.netPnl.toFixed(2)}`} />
+        <MetricCard label="Realized PnL trades" value={String(realizedPnlCount)} />
+        <MetricCard label="Pending PnL" value={String(pendingPnlCount)} />
       </div>
 
       {ui.trades.staleOpenWarnings.length > 0 ? (
@@ -99,8 +126,14 @@ export function TradesClient({ initialUi }: { initialUi: UiProjectionData }) {
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge label={lifecycleLabel(true, Boolean(t.closePreview))} tone="warning" />
                   <StatusBadge
-                    label={evidenceByTrade.get(t.tradeId) ?? "PENDING"}
-                    tone={evidenceByTrade.get(t.tradeId) === "VALID" ? "ok" : "neutral"}
+                    label={evidenceLabel(evidenceByTrade.get(t.tradeId)?.status)}
+                    tone={
+                      evidenceByTrade.get(t.tradeId)?.status === "VALID"
+                        ? "ok"
+                        : evidenceByTrade.get(t.tradeId)?.status === "PENDING"
+                          ? "warning"
+                          : "neutral"
+                    }
                   />
                   {t.position ? (
                     <StatusBadge
@@ -150,13 +183,13 @@ export function TradesClient({ initialUi }: { initialUi: UiProjectionData }) {
                     tone={pnlStatusLabel(t) === "PNL_REALIZED" ? "ok" : "warning"}
                   />
                   <StatusBadge
-                    label={evidenceByTrade.get(t.tradeId) ?? "PENDING"}
+                    label={evidenceLabel(evidenceByTrade.get(t.tradeId)?.status)}
                     tone={
-                      evidenceByTrade.get(t.tradeId) === "VALID"
+                      evidenceByTrade.get(t.tradeId)?.status === "VALID"
                         ? "ok"
-                        : evidenceByTrade.get(t.tradeId) === "REJECTED"
+                        : evidenceByTrade.get(t.tradeId)?.status === "REJECTED"
                           ? "blocked"
-                          : "neutral"
+                          : "warning"
                     }
                   />
                   <StatusBadge
@@ -173,6 +206,26 @@ export function TradesClient({ initialUi }: { initialUi: UiProjectionData }) {
                     : ` · $${t.netPnl.toFixed(2)} net`}
                 </p>
                 <p className="text-xs text-[var(--muted)]">{t.tradeId}</p>
+                {(evidenceByTrade.get(t.tradeId)?.missingEvents?.length ?? 0) > 0 ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Missing: {evidenceByTrade.get(t.tradeId)!.missingEvents!.slice(0, 3).join(", ")}
+                  </p>
+                ) : null}
+                {(t.pnlPendingReasons?.length ?? 0) > 0 ? (
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    Reasons: {t.pnlPendingReasons?.join(", ")}
+                  </p>
+                ) : null}
+                {t.status === "CLOSED_PENDING_PNL" || t.pnlStatus === "PENDING_DATA" ? (
+                  <button
+                    type="button"
+                    className="btn mt-2"
+                    disabled={calculatingId === t.tradeId}
+                    onClick={() => void calculatePnl(t.tradeId)}
+                  >
+                    {calculatingId === t.tradeId ? "Calculating…" : "Calculate PnL"}
+                  </button>
+                ) : null}
               </div>
             ))}
           </div>

@@ -4,10 +4,10 @@ import { getEvidenceProgressView } from "@/lib/evidence/evidence-progress";
 export async function GET() {
   try {
     const progress = await getEvidenceProgressView();
-    return NextResponse.json({ ...progress, sprint: "mvp-8", liveLocked: true });
+    return NextResponse.json({ ok: true, progress, liveLocked: true });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to load evidence progress" },
+      { ok: false, error: err instanceof Error ? err.message : "Failed to load evidence progress" },
       { status: 500 },
     );
   }

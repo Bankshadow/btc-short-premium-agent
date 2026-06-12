@@ -1,27 +1,37 @@
 import { getEvents } from "@/lib/journal/journal-query";
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import type { RealizedPnlRecord } from "./pnl-types";
+import { buySellToPositionSide } from "./pnl-calculator";
 
 function recordFromEvent(evt: JournalEvent): RealizedPnlRecord | null {
   if (evt.type !== "PNL_REALIZED" || !evt.tradeId) return null;
-  const p = evt.payload as Partial<RealizedPnlRecord>;
+  const p = evt.payload as Partial<RealizedPnlRecord & { side?: string }>;
   if (p.entryPrice == null || p.exitPrice == null || p.netPnl == null) return null;
+  const rawSide = p.side;
+  const side: RealizedPnlRecord["side"] =
+    rawSide === "LONG" || rawSide === "SHORT"
+      ? rawSide
+      : buySellToPositionSide(rawSide === "BUY" || rawSide === "SELL" ? rawSide : "SELL");
   return {
     tradeId: evt.tradeId,
+    positionId: evt.positionId ?? (p.positionId as string | null) ?? null,
     runId: evt.runId ?? null,
     decisionLogId: evt.decisionLogId ?? null,
     symbol: String(p.symbol ?? ""),
-    side: (p.side as RealizedPnlRecord["side"]) ?? "SELL",
+    side,
     qty: String(p.qty ?? "0"),
     entryPrice: Number(p.entryPrice),
     exitPrice: Number(p.exitPrice),
     grossPnl: Number(p.grossPnl ?? 0),
-    feeEstimate: Number(p.feeEstimate ?? 0),
+    entryFee: Number(p.entryFee ?? 0),
+    exitFee: Number(p.exitFee ?? 0),
+    feeEstimate: Number(p.feeEstimate ?? p.entryFee ?? 0),
     netPnl: Number(p.netPnl),
     pnlPct: Number(p.pnlPct ?? 0),
     result: (p.result as RealizedPnlRecord["result"]) ?? "BREAKEVEN",
     calculatedAt: String(p.calculatedAt ?? evt.timestamp),
     status: "REALIZED",
+    environment: (p.environment as RealizedPnlRecord["environment"]) ?? "TESTNET",
   };
 }
 

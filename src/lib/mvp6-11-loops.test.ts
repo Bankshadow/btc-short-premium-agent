@@ -34,6 +34,7 @@ async function seedClosedTradeWithPrices() {
     runId: RUN_ID,
     decisionLogId: DL_ID,
     tradeId: TRADE_ID,
+    positionId: "pos-mvp6",
     payload: { symbol: "BTCUSDT", side: "SELL", qty: "0.001", entryPrice: 50000 },
   });
   await appendEvent({
@@ -115,7 +116,7 @@ describe("MVP 6-11 loops", () => {
       exitPrice: 50000,
     });
     assert.equal(r.ok, false);
-    assert.equal(r.status, "PNL_PENDING_DATA");
+    assert.equal(r.status, "PENDING_DATA");
   });
 
   it("POSITION_CLOSED leads to PNL_REALIZED", async () => {

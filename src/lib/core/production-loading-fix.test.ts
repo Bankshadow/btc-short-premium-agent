@@ -82,7 +82,8 @@ describe("Production loading fix", () => {
     assert.equal(e.requiredTrades, 12);
     assert.equal(e.progressPct, 0);
     assert.equal(e.readiness, "NOT_READY");
-    assert.deepEqual(e.rejectedTrades, []);
+    assert.equal(e.rejectedTrades, 0);
+    assert.deepEqual(e.rejectedTradeIds, []);
   });
 
   it("risk projection returns zero-state", () => {

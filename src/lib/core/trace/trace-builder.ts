@@ -1,6 +1,8 @@
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import { TRADE_LIFECYCLE_EVENT_TYPES } from "../event-types";
 import { deriveTradeLifecycleState } from "../lifecycle-state-machine";
+import { validateEvidenceTrade } from "@/lib/evidence/evidence-validator";
+import { buildClosedTradesFromEvents } from "@/lib/trades/trade-store";
 import type { TraceLinkKind, TraceReport, TraceStep } from "./trace-types";
 import { buildAllProjections } from "../projection-engine";
 
@@ -40,6 +42,7 @@ export function buildTraceReport(
   events: JournalEvent[],
   kind: TraceLinkKind,
   id: string,
+  options?: { evidenceView?: boolean },
 ): TraceReport {
   const related = events
     .filter((e) => matchesLink(e, kind, id))
@@ -78,6 +81,23 @@ export function buildTraceReport(
 
   buildAllProjections(events);
 
+  let evidenceValidation = null;
+  let evidenceMissingEvents: string[] | undefined;
+  let evidenceRejectedReasons: string[] | undefined;
+  let readinessImpact: string | null = null;
+
+  if (options?.evidenceView && tradeId) {
+    const closed = buildClosedTradesFromEvents(events).find((t) => t.tradeId === tradeId) ?? null;
+    evidenceValidation = validateEvidenceTrade({ tradeId, events, closedTrade: closed });
+    evidenceMissingEvents = evidenceValidation.missingEvents;
+    evidenceRejectedReasons = evidenceValidation.rejectedReasons;
+    readinessImpact = evidenceValidation.isValid
+      ? "Counts toward 12-trade evidence target."
+      : evidenceValidation.status === "PENDING"
+        ? "Pending PnL — does not count toward evidence."
+        : "Rejected — does not count toward evidence.";
+  }
+
   return {
     linkKind: kind,
     linkId: id,
@@ -87,6 +107,10 @@ export function buildTraceReport(
     invalidTransitions,
     recommendation,
     liveLocked: true,
+    evidenceValidation,
+    evidenceMissingEvents,
+    evidenceRejectedReasons,
+    readinessImpact,
   };
 }
 
