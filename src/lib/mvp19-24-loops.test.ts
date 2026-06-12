@@ -95,10 +95,13 @@ describe("MVP 19-24 loops", () => {
         payload: { result: "LOSS", netPnl: -10 },
       });
     }
-    assert.equal(await isPortfolioRiskBlocking(), true);
+    const report = await buildPortfolioRiskView();
+    const consecutive = report.issues.find((i) => i.code === "CONSECUTIVE_LOSSES");
+    assert.ok(consecutive);
+    assert.equal(consecutive?.severity, "WARNING");
   });
 
-  it("cooldown restores from journal after evaluate", async () => {
+  it("cooldown skipped during evidence collection after consecutive losses", async () => {
     for (let i = 0; i < 3; i++) {
       await appendEvent({
         type: "PNL_REALIZED",
@@ -109,7 +112,7 @@ describe("MVP 19-24 loops", () => {
     }
     await evaluatePortfolioRisk();
     const report = await buildPortfolioRiskView();
-    assert.ok(report.cooldownUntil);
+    assert.equal(report.cooldownUntil, null);
   });
 
   it("security check runs and writes event", async () => {

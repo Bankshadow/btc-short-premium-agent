@@ -5,6 +5,8 @@ import { getReconciliationStatus } from "@/lib/positions/position-monitor";
 import { maxPreviewNotionalUsd } from "@/lib/risk/risk-gate";
 import { getTradesSummary } from "@/lib/trades/trade-query";
 import { sumDailyPnl } from "@/lib/pnl/daily-pnl";
+import { buildEvidenceProgressFromEvents } from "@/lib/evidence/evidence-progress-engine";
+import { EVIDENCE_REQUIRED_TRADES } from "@/lib/evidence/evidence-types";
 import type { PortfolioRiskIssue, PortfolioRiskReport } from "./portfolio-risk-types";
 
 const DAILY_LOSS_LIMIT = 25;
@@ -65,6 +67,8 @@ export async function buildPortfolioRiskView(): Promise<PortfolioRiskReport> {
       : 0;
   const openExposureUsd = trades.open.reduce((s, t) => s + t.notionalUsd, 0);
   const consecutiveLosses = countConsecutiveLosses(events);
+  const evidenceCollectionActive =
+    buildEvidenceProgressFromEvents(events).validTrades < EVIDENCE_REQUIRED_TRADES;
 
   if (dailyPnl <= -DAILY_LOSS_LIMIT) {
     issues.push({ code: "DAILY_LOSS_LIMIT", message: `Daily loss $${dailyPnl.toFixed(2)} exceeds limit.`, severity: "BLOCK" });
@@ -79,7 +83,11 @@ export async function buildPortfolioRiskView(): Promise<PortfolioRiskReport> {
     issues.push({ code: "MAX_OPEN_POSITIONS", message: `${trades.open.length} open positions exceeds limit.`, severity: "BLOCK" });
   }
   if (consecutiveLosses >= MAX_CONSECUTIVE_LOSSES) {
-    issues.push({ code: "CONSECUTIVE_LOSSES", message: `${consecutiveLosses} consecutive losses.`, severity: "BLOCK" });
+    issues.push({
+      code: "CONSECUTIVE_LOSSES",
+      message: `${consecutiveLosses} consecutive losses.`,
+      severity: evidenceCollectionActive ? "WARNING" : "BLOCK",
+    });
   }
   if (cooldownUntil && Date.parse(cooldownUntil) > Date.now()) {
     issues.push({ code: "COOLDOWN_ACTIVE", message: `Cooldown active until ${cooldownUntil}.`, severity: "BLOCK" });
@@ -141,7 +149,11 @@ export async function evaluatePortfolioRisk(): Promise<PortfolioRiskReport> {
       payload: { dailyPnl: report.dailyPnl, limit: DAILY_LOSS_LIMIT },
     });
   }
-  if (blockers.some((b) => b.code === "CONSECUTIVE_LOSSES") && !cooldownUntil) {
+  if (
+    blockers.some((b) => b.code === "CONSECUTIVE_LOSSES") &&
+    !cooldownUntil &&
+    buildEvidenceProgressFromEvents(await getEvents()).validTrades >= EVIDENCE_REQUIRED_TRADES
+  ) {
     cooldownUntil = new Date(Date.now() + COOLDOWN_MS).toISOString();
     await appendEvent({
       type: "COOLDOWN_STARTED",
