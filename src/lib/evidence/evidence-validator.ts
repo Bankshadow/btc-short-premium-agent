@@ -3,6 +3,8 @@ import { hasTradeChainEvent, resolveTradeChain } from "@/lib/journal/trade-chain
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import type { ClosedTrade } from "@/lib/trades/trade-types";
 import { buildClosedTradesFromEvents } from "@/lib/trades/trade-store";
+import { resolveClosedTradeFill, parseQty as parseFillQty } from "@/lib/trades/trade-fill-resolver";
+import { isValidRealizedPnlEvent } from "@/lib/pnl/pnl-store";
 import {
   CRITICAL_RECONCILIATION_CODES,
   EVIDENCE_LIFECYCLE_REQUIREMENTS,
@@ -18,8 +20,7 @@ function uniqueReasons(reasons: EvidenceRejectedReason[]): EvidenceRejectedReaso
 }
 
 function parseQty(qty: string | undefined): number {
-  const n = Math.abs(Number.parseFloat(String(qty ?? "0")));
-  return Number.isFinite(n) ? n : 0;
+  return parseFillQty(qty);
 }
 
 function orderPayload(evt: JournalEvent) {
@@ -149,41 +150,47 @@ export function validateEvidenceTrade(input: ValidateEvidenceTradeInput): Eviden
 
   const order = orderEvt ? orderPayload(orderEvt) : {};
   const openPayload = openEvt?.payload as { entryPrice?: number | null; qty?: string; environment?: string } | undefined;
-  const qty = parseQty(order.qty ?? order.quantity ?? openPayload?.qty ?? closedTrade?.qty);
+  const closePayload = closeOrderEvt
+    ? (closeOrderEvt.payload as { avgPrice?: number | string; executedQty?: string; qty?: string })
+    : {};
+  const fill = resolveClosedTradeFill(
+    tradeId,
+    events,
+    closedEvt.timestamp,
+    order,
+    openPayload ?? {},
+    closePayload,
+  );
+  const qty = parseQty(fill.qty);
   if (qty <= 0) rejectedReasons.push("ZERO_QTY");
 
-  const entryPrice =
-    closedTrade?.entryPrice ??
-    openPayload?.entryPrice ??
-    (order.entryPrice != null ? Number(order.entryPrice) : null) ??
-    (order.avgPrice != null ? Number(order.avgPrice) : null);
+  const entryPrice = fill.entryPrice;
   if (entryPrice == null || !Number.isFinite(entryPrice) || entryPrice <= 0) {
     rejectedReasons.push("MISSING_ENTRY_PRICE");
   }
 
-  let exitPrice = closedTrade?.exitPrice ?? null;
+  let exitPrice = fill.exitPrice;
+  const pnlValid = Boolean(pnlEvt && isValidRealizedPnlEvent(pnlEvt));
   if (pnlEvt) {
     const pnl = pnlPayload(pnlEvt);
     exitPrice = pnl.exitPrice ?? exitPrice;
-    if (pnl.source === "ZERO_FILL_RECONCILIATION") rejectedReasons.push("PNL_PENDING_DATA");
-    if (pnl.result === "PENDING_PNL" || pnl.status === "PENDING_DATA" || pnl.pnlStatus === "PENDING_DATA") {
-      rejectedReasons.push("RESULT_PENDING_PNL");
+    if (!pnlValid) {
+      if (pnl.source === "ZERO_FILL_RECONCILIATION") rejectedReasons.push("PNL_PENDING_DATA");
+      if (pnl.result === "PENDING_PNL" || pnl.status === "PENDING_DATA" || pnl.pnlStatus === "PENDING_DATA") {
+        rejectedReasons.push("RESULT_PENDING_PNL");
+      }
+      const result = String(pnl.result ?? "");
+      if (!["WIN", "LOSS", "BREAKEVEN"].includes(result)) rejectedReasons.push("PNL_PENDING_DATA");
     }
-    const result = String(pnl.result ?? "");
-    if (!["WIN", "LOSS", "BREAKEVEN"].includes(result)) rejectedReasons.push("PNL_PENDING_DATA");
   } else {
     rejectedReasons.push("MISSING_PNL_REALIZED");
   }
 
-  if (closeOrderEvt) {
-    const closeAvg = (closeOrderEvt.payload as { avgPrice?: number }).avgPrice;
-    if (exitPrice == null && closeAvg != null) exitPrice = Number(closeAvg);
-  }
   if (exitPrice == null || !Number.isFinite(exitPrice) || exitPrice <= 0) {
     rejectedReasons.push("MISSING_EXIT_PRICE");
   }
 
-  if (closedTrade && !pnlEvt) {
+  if (closedTrade && !pnlValid) {
     if (closedTrade.status === "CLOSED_PENDING_PNL") rejectedReasons.push("PNL_PENDING_DATA");
     if (closedTrade.result === "PENDING_PNL") rejectedReasons.push("RESULT_PENDING_PNL");
     if (closedTrade.pnlStatus === "PENDING_DATA") rejectedReasons.push("PNL_PENDING_DATA");

@@ -135,7 +135,10 @@ export function buildClosedTradesFromEvents(events: JournalEvent[]): ClosedTrade
     const exitPrice = pnl.exitPrice ?? fill.exitPrice;
     const hasValidPnlEvent = Boolean(pnlEvt && entryPrice != null && exitPrice != null && parseQty(fill.qty) > 0);
     const missingFillData =
-      entryPrice == null || exitPrice == null || !hasValidPnlEvent || closedMeta.realizedPnlPending;
+      entryPrice == null ||
+      exitPrice == null ||
+      !hasValidPnlEvent ||
+      (Boolean(closedMeta.realizedPnlPending) && !hasValidPnlEvent);
     const pendingPnl = missingFillData;
 
     closedTrades.push({
