@@ -14,6 +14,12 @@ import type {
   RiskEventRecord,
 } from "./types";
 import type { CryptoPriceSnapshot } from "./types";
+import type {
+  BlockedSweeperRecord,
+  OrderBookSnapshot,
+  SweeperOpportunity,
+  SweeperPaperTrade,
+} from "./sweeper-types";
 
 export interface PolymarketStoreData {
   version: 1;
@@ -30,6 +36,10 @@ export interface PolymarketStoreData {
   cryptoSnapshots: CryptoPriceSnapshot[];
   health: PolymarketHealthReport | null;
   commentary: string[];
+  orderBooks: OrderBookSnapshot[];
+  sweeperOpportunities: SweeperOpportunity[];
+  blockedSweeperOpportunities: BlockedSweeperRecord[];
+  sweeperPaperTrades: SweeperPaperTrade[];
 }
 
 const EMPTY: PolymarketStoreData = {
@@ -47,6 +57,10 @@ const EMPTY: PolymarketStoreData = {
   cryptoSnapshots: [],
   health: null,
   commentary: [],
+  orderBooks: [],
+  sweeperOpportunities: [],
+  blockedSweeperOpportunities: [],
+  sweeperPaperTrades: [],
 };
 
 function defaultStoreDir(): string {
@@ -103,6 +117,14 @@ export function appendPolymarketStore(update: Partial<PolymarketStoreData>): Pol
       ? [...current.marketSnapshots, ...update.marketSnapshots].slice(-100)
       : current.marketSnapshots,
     commentary: update.commentary ?? current.commentary,
+    orderBooks: update.orderBooks ?? current.orderBooks,
+    sweeperOpportunities: update.sweeperOpportunities ?? current.sweeperOpportunities,
+    blockedSweeperOpportunities: update.blockedSweeperOpportunities
+      ? [...current.blockedSweeperOpportunities, ...update.blockedSweeperOpportunities].slice(-500)
+      : current.blockedSweeperOpportunities,
+    sweeperPaperTrades: update.sweeperPaperTrades
+      ? [...current.sweeperPaperTrades, ...update.sweeperPaperTrades].slice(-500)
+      : current.sweeperPaperTrades,
   };
   writePolymarketStore(next);
   return next;
@@ -134,6 +156,10 @@ export function buildDashboardData(store: PolymarketStoreData): PolymarketDashbo
         paperTradingEnabled: true,
       },
     commentary: store.commentary.slice(-20),
+    orderBooks: store.orderBooks,
+    sweeperOpportunities: store.sweeperOpportunities.slice(-50).reverse(),
+    blockedSweeperOpportunities: store.blockedSweeperOpportunities.slice(-50).reverse(),
+    sweeperPaperTrades: store.sweeperPaperTrades.slice(-50).reverse(),
   };
 }
 

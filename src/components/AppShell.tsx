@@ -7,6 +7,7 @@ import type { UiProjectionData } from "@/lib/core/ui-projection-data";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
+  { href: "/terminal", label: "Terminal" },
   { href: "/trades", label: "Trades" },
   { href: "/ai-status", label: "AI Status" },
   { href: "/polymarket", label: "Polymarket" },

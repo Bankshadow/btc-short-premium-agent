@@ -345,3 +345,232 @@ a {
   .ui-dashboard-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ui-page-title { font-size: 2rem; }
 }
+
+/* MVP 22 — Trading Desk Terminal */
+.terminal-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 100%;
+}
+
+.terminal-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  font-family: ui-monospace, monospace;
+}
+
+.terminal-status-title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.terminal-status-sub {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.terminal-status-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.terminal-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  letter-spacing: 0.04em;
+}
+
+.terminal-badge--safe {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.terminal-badge--block {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.terminal-badge--muted {
+  background: rgba(143, 163, 184, 0.1);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.terminal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.terminal-warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--warning);
+}
+
+.terminal-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.terminal-grid-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .terminal-grid-row--2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.terminal-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+  gap: 0.75rem;
+}
+
+.terminal-metric {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.terminal-metric--ok { border-color: rgba(34, 197, 94, 0.35); }
+.terminal-metric--warn { border-color: rgba(245, 158, 11, 0.35); }
+.terminal-metric--block { border-color: rgba(239, 68, 68, 0.35); }
+
+.terminal-metric-label {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.terminal-metric-value {
+  display: block;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 0.15rem;
+}
+
+.terminal-metric-sub {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.terminal-thesis {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.terminal-table-wrap {
+  overflow-x: auto;
+}
+
+.terminal-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
+.terminal-table th {
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.terminal-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid rgba(30, 42, 56, 0.6);
+  vertical-align: top;
+}
+
+.terminal-empty {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.terminal-footnote {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.terminal-debate-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .terminal-debate-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .terminal-debate-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.terminal-debate-col {
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.65rem;
+  background: rgba(0, 0, 0, 0.15);
+  min-height: 5rem;
+}
+
+.terminal-debate-heading {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.35rem;
+}
+
+.terminal-debate-body {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.terminal-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.75rem;
+}

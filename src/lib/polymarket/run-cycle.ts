@@ -14,6 +14,7 @@ import {
   toBlockedSignalRecord,
   toRiskEventRecord,
 } from "./risk-manager";
+import { runPolymarketSweeperCycle } from "./run-sweeper-cycle";
 import { appendPolymarketStore, buildDashboardData, readPolymarketStore } from "./store";
 import type {
   BlockedSignalRecord,
@@ -215,6 +216,13 @@ export async function runPolymarketCycle(): Promise<PolymarketCycleResult> {
       },
     });
 
+    let sweeper;
+    try {
+      sweeper = await runPolymarketSweeperCycle();
+    } catch {
+      sweeper = undefined;
+    }
+
     return {
       ok: true,
       runId,
@@ -224,6 +232,7 @@ export async function runPolymarketCycle(): Promise<PolymarketCycleResult> {
       paperTradesCreated: newPaperTrades.length,
       health,
       commentary,
+      sweeper,
     };
   } catch (err) {
     errorCount += 1;

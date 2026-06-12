@@ -161,6 +161,10 @@ export interface PolymarketDashboardData {
   cryptoSnapshots: CryptoPriceSnapshot[];
   health: PolymarketHealthReport;
   commentary: string[];
+  orderBooks: import("./sweeper-types").OrderBookSnapshot[];
+  sweeperOpportunities: import("./sweeper-types").SweeperOpportunity[];
+  blockedSweeperOpportunities: import("./sweeper-types").BlockedSweeperRecord[];
+  sweeperPaperTrades: import("./sweeper-types").SweeperPaperTrade[];
 }
 
 export interface PolymarketCycleResult {
@@ -172,4 +176,5 @@ export interface PolymarketCycleResult {
   paperTradesCreated: number;
   health: PolymarketHealthReport;
   commentary: string[];
+  sweeper?: import("./sweeper-types").SweeperScanResult;
 }
