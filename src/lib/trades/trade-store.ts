@@ -1,6 +1,7 @@
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import type { ClosedTrade, OpenTrade } from "./trade-types";
 import { resolveClosedTradeFill, resolveOpenTradeFill, parseQty } from "./trade-fill-resolver";
+import { getCanonicalPositionClosedByTrade } from "@/lib/journal/journal-close-events";
 
 function orderPayload(evt: JournalEvent) {
   return evt.payload as {
@@ -92,9 +93,10 @@ export function buildOpenTradesFromEvents(events: JournalEvent[]): OpenTrade[] {
 
 export function buildClosedTradesFromEvents(events: JournalEvent[]): ClosedTrade[] {
   const closedTrades: ClosedTrade[] = [];
+  const canonicalClosed = getCanonicalPositionClosedByTrade(events);
 
-  for (const evt of events) {
-    if (evt.type !== "POSITION_CLOSED" || !evt.tradeId) continue;
+  for (const evt of canonicalClosed.values()) {
+    if (!evt.tradeId) continue;
     const orderEvt = events.find(
       (e) => e.type === "ORDER_EXECUTED" && e.tradeId === evt.tradeId,
     );

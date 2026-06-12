@@ -146,6 +146,13 @@ async function reconcileOrphanFlatTrades(
 
   for (const trade of openTrades) {
     if (closedIds.has(trade.tradeId)) continue;
+    const hasRealCloseOrder = events.some(
+      (e) =>
+        e.tradeId === trade.tradeId &&
+        e.type === "CLOSE_ORDER_EXECUTED" &&
+        (e.payload as { source?: string }).source === "BINANCE_TESTNET",
+    );
+    if (hasRealCloseOrder) continue;
     const openedAge = now - Date.parse(trade.openedAt);
     if (openedAge < ORPHAN_RECONCILE_GRACE_MS) continue;
     if (findBinanceForTrade(trade, nonZero)) continue;

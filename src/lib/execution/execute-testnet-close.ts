@@ -140,8 +140,6 @@ export async function executeTestnetClose(
       payload: { ...orderSummary, source: "BINANCE_TESTNET" },
     });
 
-    await refreshOpenPositions({ client, getBinanceStatus: input.getBinanceStatus });
-
     let positionClosed = false;
     let remainingQty = preview.qty;
 
@@ -209,6 +207,8 @@ export async function executeTestnetClose(
 
       await calculatePnlForTrade(preview.tradeId);
     }
+
+    await refreshOpenPositions({ client, getBinanceStatus: input.getBinanceStatus });
 
     const events = await getEvents();
     const mission = buildMissionSnapshot(events);

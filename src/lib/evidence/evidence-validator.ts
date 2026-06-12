@@ -3,6 +3,7 @@ import { hasTradeChainEvent, resolveTradeChain } from "@/lib/journal/trade-chain
 import type { JournalEvent } from "@/lib/journal/journal-types";
 import type { ClosedTrade } from "@/lib/trades/trade-types";
 import { buildClosedTradesFromEvents } from "@/lib/trades/trade-store";
+import { findCanonicalPositionClosed, listDuplicatePositionClosedTradeIds } from "@/lib/journal/journal-close-events";
 import { resolveClosedTradeFill, parseQty as parseFillQty } from "@/lib/trades/trade-fill-resolver";
 import { isValidRealizedPnlEvent } from "@/lib/pnl/pnl-store";
 import {
@@ -111,7 +112,7 @@ export function validateEvidenceTrade(input: ValidateEvidenceTradeInput): Eviden
   const rejectedReasons: EvidenceRejectedReason[] = [];
   const warnings: string[] = [];
 
-  const closedEvt = events.find((e) => e.type === "POSITION_CLOSED" && e.tradeId === tradeId);
+  const closedEvt = findCanonicalPositionClosed(tradeId, events);
   if (!closedEvt) {
     rejectedReasons.push("TRADE_NOT_CLOSED");
     return finalizeValidation({
@@ -349,9 +350,5 @@ export function listClosedTradeIds(events: JournalEvent[]): string[] {
 }
 
 export function listDuplicateTradeIds(events: JournalEvent[]): string[] {
-  const counts = new Map<string, number>();
-  for (const evt of events.filter((e) => e.type === "POSITION_CLOSED" && e.tradeId)) {
-    counts.set(evt.tradeId!, (counts.get(evt.tradeId!) ?? 0) + 1);
-  }
-  return [...counts.entries()].filter(([, c]) => c > 1).map(([id]) => id);
+  return listDuplicatePositionClosedTradeIds(events);
 }
