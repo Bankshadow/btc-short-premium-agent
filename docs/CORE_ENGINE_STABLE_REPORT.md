@@ -28,6 +28,8 @@ See [CORE_ENGINE_HOTFIX2_UI_PROJECTION_SYNC.md](./CORE_ENGINE_HOTFIX2_UI_PROJECT
 
 **MVP 8 (2026-06-11):** See [MVP8_EVIDENCE_12_TRADES_PLAN.md](./MVP8_EVIDENCE_12_TRADES_PLAN.md) and [MVP8_EVIDENCE_12_TRADES_IMPLEMENTATION.md](./MVP8_EVIDENCE_12_TRADES_IMPLEMENTATION.md). Strict 12-trade evidence progress with full lifecycle + PnL + learning validation. APIs: `GET /api/evidence/progress`, `POST /api/evidence/validate`, `GET /api/evidence/rejected`. Never marks live ready.
 
+**MVP 21 Polymarket (2026-06-12):** See [MVP21_POLYMARKET_PLAN.md](./MVP21_POLYMARKET_PLAN.md) and [MVP21_POLYMARKET_IMPLEMENTATION.md](./MVP21_POLYMARKET_IMPLEMENTATION.md). Paper-only Polymarket mispricing desk (mock adapters): fair probability, mispricing signals, simulated paper trades, risk log. Route: `/polymarket`. APIs: `/api/polymarket/*`. **Not** the same as portfolio-risk MVP 21. No real-money execution.
+
 **MVP 6 (2026-06-11):** See [MVP6_PNL_FILL_DATA_PLAN.md](./MVP6_PNL_FILL_DATA_PLAN.md) and [MVP6_PNL_FILL_DATA_IMPLEMENTATION.md](./MVP6_PNL_FILL_DATA_IMPLEMENTATION.md). Strict PnL pipeline: `PNL_PENDING_DATA` with reasons when fill data incomplete; no fake zero-fill `PNL_REALIZED`. APIs: `POST /api/pnl/calculate`, `GET /api/pnl/pending`. UI binding verified (`REAL_BUNDLE`) before implementation.
 
 **Journal repair (2026-06-11):** See [CORE_ENGINE_JOURNAL_REPAIR.md](./CORE_ENGINE_JOURNAL_REPAIR.md). Repairs zero-fill reconciliation trades, backfills `CLOSE_REVIEWED`, runs post-trade loop when PnL realized. **Requires deploy + `POST /api/journal/repair` on production.**
